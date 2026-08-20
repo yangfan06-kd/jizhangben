@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>记账本</title>
+<style>
+  /* ===== 颜色变量：改这里就能换整套配色 ===== */
+  :root {
+    --bg: #EFF1F3;          /* 页面背景：浅灰 */
+    --card: #FFFFFF;        /* 卡片背景：白 */
+    --ink: #1E2227;         /* 主文字：深墨色 */
+    --muted: #6B7280;       /* 次要文字：灰 */
+    --line: #E2E5E9;        /* 分隔线、边框 */
+    --income: #C03A3A;      /* 收入：红（中国传统：红=涨/收） */
+    --expense: #147D5A;     /* 支出：绿（中国传统：绿=跌/支） */
+    --dark: #16211D;        /* 深色卡片/主按钮：深青墨 */
+    --dark-line: #2A3730;   /* 深色卡片里的分隔线 */
+    --mint: #5ED3A8;        /* 深色卡片里的绿色 */
+    --coral: #FF7A6E;       /* 深色卡片里的红色 */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.5;
+    padding: 24px 16px 48px;
+  }
+
+  .app { max-width: 680px; margin: 0 auto; }
+
+  /* ===== 标题 ===== */
+  header { margin-bottom: 20px; }
+  header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  header .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 2px;
+  }
+
+  /* ===== 统计卡片（深色，是本页的视觉中心） ===== */
+  .stats {
+    background: var(--dark);
+    color: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .stat-balance-label {
+    color: #8CA39B;
+    font-size: 13px;
+  }
+  .stat-balance {
+    font-size: 44px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    margin: 4px 0 18px;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  .stat-row {
+    display: flex;
+    gap: 12px;
+    border-top: 1px solid var(--dark-line);
+    padding-top: 16px;
+  }
+  .stat { flex: 1; }
+  .stat .label { color: #8CA39B; font-size: 13px; }
+  .stat .value {
+    font-size: 20px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  .value.income { color: var(--coral); }
+  .value.expense { color: var(--mint); }
+
+  /* ===== 通用卡片 ===== */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+
+  /* ===== 表单字段 ===== */
+  .field { margin-bottom: 16px; }
+  .field-label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
+
+  input[type="number"], input[type="text"], input[type="date"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 16px;
+    font-family: inherit;
+    color: var(--ink);
+    background: #FAFBFC;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--ink);
+    background: #fff;
+  }
+  input[type="number"] {
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== 可点选的"按钮块"（类型、类别） ===== */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;         /* 胶囊形 */
+    background: #fff;
+    color: var(--ink);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+    font-family: inherit;
+  }
+  .chip:hover { border-color: var(--ink); }
+  .chip.selected {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  /* 收入和支出选中时，用红/绿强化含义 */
+  .chip.selected.chip-income { background: var(--income); border-color: var(--income); }
+  .chip.selected.chip-expense { background: var(--expense); border-color: var(--expense); }
+
+  /* ===== 按钮 ===== */
+  .btn-primary {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: var(--dark);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-primary:hover { opacity: 0.92; }
+  .btn-ghost {
+    display: none;               /* 默认隐藏，编辑时才出现 */
+    margin-top: 8px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .form-msg {
+    margin-top: 10px;
+    font-size: 14px;
+    color: var(--expense);
+    min-height: 20px;
+  }
+
+  /* ===== 明细列表 ===== */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .row:last-child { border-bottom: none; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-top { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: #F0F1F3;
+    color: var(--muted);
+  }
+  .badge.income { background: #FBE9E8; color: var(--income); }
+  .badge.expense { background: #E4F2EC; color: var(--expense); }
+  .row-cat { font-size: 14px; font-weight: 600; }
+  .row-note { font-size: 13px; color: var(--muted); }
+  .row-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .row-amount {
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    white-space: nowrap;
+  }
+  .row-amount.income { color: var(--income); }
+  .row-amount.expense { color: var(--expense); }
+  .row-amount.neutral { color: var(--ink); }
+  .row-actions { display: flex; gap: 6px; }
+  .mini-btn {
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--muted);
+    font-family: inherit;
+  }
+  .mini-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .mini-btn.danger:hover { border-color: var(--income); color: var(--income); }
+
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 24px 0;
+    font-size: 14px;
+  }
+  .empty.small { padding: 12px 0; font-size: 13px; }
+
+  /* ===== 分类汇总 ===== */
+  .cat-row { margin-bottom: 12px; }
+  .cat-row:last-child { margin-bottom: 0; }
+  .cat-top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .cat-top .expense { font-family: "SF Mono", "Cascadia Mono", Consolas, monospace; }
+  .bar {
+    height: 6px;
+    background: #F0F1F3;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--expense);
+    border-radius: 999px;
+    transition: width .3s;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <h1>记账本</h1>
+    <div class="subtitle">记下每一笔，清楚每一分</div>
+  </header>
+
+  <!-- 统计卡片：本月结余 / 收入 / 支出 -->
+  <section class="stats">
+    <div class="stat-balance-label">本月结余</div>
+    <div class="stat-balance" id="balance">¥0.00</div>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="label">本月收入</div>
+        <div class="value income" id="incomeTotal">+¥0.00</div>
+      </div>
+      <div class="stat">
+        <div class="label">本月支出</div>
+        <div class="value expense" id="expenseTotal">−¥0.00</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 记一笔 -->
+  <section class="card">
+    <h2>记一笔</h2>
+
+    <div class="field">
+      <div class="field-label">类型</div>
+      <div class="chips" id="typeChips"></div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">金额</div>
+      <input id="amount" type="number" min="0" step="0.01" placeholder="0.00">
+    </div>
+
+    <div class="field">
+      <div class="field-label">类别</div>
+      <div class="chips" id="categoryChips"></div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <div class="field-label">备注</div>
+        <input id="note" type="text" placeholder="选填">
+      </div>
+      <div class="field">
+        <div class="field-label">日期</div>
+        <input id="date" type="date">
+      </div>
+    </div>
+
+    <button id="saveBtn" class="btn-primary">保存这笔账</button>
+    <button id="cancelBtn" class="btn-ghost">取消修改</button>
+    <div id="formMsg" class="form-msg"></div>
+  </section>
+
+  <!-- 明细 -->
+  <section class="card">
+    <h2>明细</h2>
+    <div id="list"></div>
+    <div class="empty" id="empty">还没有账目，先记一笔吧</div>
+  </section>
+
+  <!-- 本月分类支出 -->
+  <section class="card">
+    <h2>本月分类支出</h2>
+    <div id="categorySummary"></div>
+  </section>
+
+</div>
+
+<script>
+  // ============ 数据 ============
+  const STORAGE_KEY = "jizhangben_records";   // localStorage 的钥匙（键名）
+  const TYPES = ["支出", "收入", "转账", "余额", "借贷", "代付", "报销", "退款"];
+  const CATEGORIES = ["餐饮", "交通", "购物", "娱乐", "居住", "医疗", "教育", "其他"];
+
+  let records = [];            // 所有账目（数组，每项是一个对象）
+  let selectedType = null;     // 当前选中的"类型"
+  let selectedCategory = null; // 当前选中的"类别"
+  let editingId = null;        // 正在编辑的那笔账的 id；null 表示"新增"
+
+  // 从 localStorage 读取
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      records = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      records = [];
+    }
+  }
+  // 写回 localStorage
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  // ============ 工具函数 ============
+  // 今天的日期，格式 YYYY-MM-DD（比如 2026-08-20）
+  function todayStr() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+  // 判断某笔账是不是"本月"的
+  function isThisMonth(dateStr) {
+    const now = new Date();
+    const d = new Date(dateStr);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+  // 转义特殊字符，防止备注里的 < > 等破坏页面（好习惯）
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+  // 金额显示：收入带 + 红、支出带 − 绿、其他不加符号
+  function amountText(r) {
+    const n = Number(r.amount).toFixed(2);
+    if (r.type === "收入") return { text: "+¥" + n, cls: "income" };
+    if (r.type === "支出") return { text: "−¥" + n, cls: "expense" };
+    return { text: "¥" + n, cls: "neutral" };
+  }
+
+  // ============ 渲染：类型 / 类别按钮 ============
+  function renderTypeChips() {
+    const box = document.getElementById("typeChips");
+    box.innerHTML = "";
+    TYPES.forEach(t => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      if (t === "收入") b.classList.add("chip-income");
+      if (t === "支出") b.classList.add("chip-expense");
+      if (t === selectedType) b.classList.add("selected");
+      b.textContent = t;
+      b.onclick = () => { selectedType = t; renderTypeChips(); };
+      box.appendChild(b);
+    });
+  }
+
+  function renderCategoryChips() {
+    const box = document.getElementById("categoryChips");
+    box.innerHTML = "";
+    CATEGORIES.forEach(c => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      if (c === selectedCategory) b.classList.add("selected");
+      b.textContent = c;
+      b.onclick = () => { selectedCategory = c; renderCategoryChips(); };
+      box.appendChild(b);
+    });
+  }
+
+  // ============ 渲染：统计卡片 ============
+  function renderStats() {
+    const month = records.filter(r => isThisMonth(r.date));
+    const income = month.filter(r => r.type === "收入").reduce((s, r) => s + Number(r.amount), 0);
+    const expense = month.filter(r => r.type === "支出").reduce((s, r) => s + Number(r.amount), 0);
+    const balance = income - expense;
+
+    document.getElementById("incomeTotal").textContent = "+¥" + income.toFixed(2);
+    document.getElementById("expenseTotal").textContent = "−¥" + expense.toFixed(2);
+    document.getElementById("balance").textContent =
+      (balance < 0 ? "−¥" : "¥") + Math.abs(balance).toFixed(2);
+  }
+
+  // ============ 渲染：明细列表 ============
+  function renderList() {
+    const list = document.getElementById("list");
+    const empty = document.getElementById("empty");
+    list.innerHTML = "";
+
+    if (records.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+
+    // 按日期从新到旧排（同一天按 id 大的在前 = 后记的在前）
+    const sorted = [...records].sort((a, b) =>
+      b.date.localeCompare(a.date) || b.id - a.id
+    );
+
+    sorted.forEach(r => {
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const amt = amountText(r);
+      const badgeCls = (r.type === "收入") ? "income" : (r.type === "支出") ? "expense" : "";
+
+      row.innerHTML = `
+        <div class="row-main">
+          <div class="row-top">
+            <span class="badge ${badgeCls}">${esc(r.type)}</span>
+            <span class="row-cat">${esc(r.category)}</span>
+          </div>
+          <div class="row-note">${esc(r.note || "")}</div>
+          <div class="row-date">${esc(r.date)}</div>
+        </div>
+        <div class="row-amount ${amt.cls}">${amt.text}</div>
+        <div class="row-actions">
+          <button class="mini-btn" data-id="${r.id}" data-act="edit">改</button>
+          <button class="mini-btn danger" data-id="${r.id}" data-act="del">删</button>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    // 给"改""删"按钮绑事件
+    list.querySelectorAll(".mini-btn").forEach(btn => {
+      btn.onclick = () => {
+        const id = Number(btn.dataset.id);
+        if (btn.dataset.act === "edit") startEdit(id);
+        else deleteRec(id);
+      };
+    });
+  }
+
+  // ============ 渲染：本月分类支出 ============
+  function renderCategorySummary() {
+    const box = document.getElementById("categorySummary");
+    box.innerHTML = "";
+
+    const month = records.filter(r => isThisMonth(r.date) && r.type === "支出");
+    const map = {};
+    month.forEach(r => { map[r.category] = (map[r.category] || 0) + Number(r.amount); });
+    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((s, e) => s + e[1], 0);
+
+    if (entries.length === 0) {
+      box.innerHTML = '<div class="empty small">本月还没有支出记录</div>';
+      return;
+    }
+
+    entries.forEach(([cat, amt]) => {
+      const pct = total ? (amt / total * 100) : 0;
+      const div = document.createElement("div");
+      div.className = "cat-row";
+      div.innerHTML = `
+        <div class="cat-top">
+          <span>${esc(cat)}</span>
+          <span class="expense">¥${amt.toFixed(2)}</span>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+      `;
+      box.appendChild(div);
+    });
+  }
+
+  // 一次刷新所有
+  function render() {
+    renderStats();
+    renderList();
+    renderCategorySummary();
+  }
+
+  // ============ 交互：记一笔 / 改 / 删 ============
+  let msgTimer = null;
+  function showMsg(text) {
+    const m = document.getElementById("formMsg");
+    m.textContent = text;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => { m.textContent = ""; }, 3000);
+  }
+
+  function resetForm() {
+    selectedType = null;
+    selectedCategory = null;
+    editingId = null;
+    document.getElementById("amount").value = "";
+    document.getElementById("note").value = "";
+    document.getElementById("date").value = todayStr();
+    document.getElementById("saveBtn").textContent = "保存这笔账";
+    document.getElementById("cancelBtn").style.display = "none";
+    document.getElementById("formMsg").textContent = "";
+    renderTypeChips();
+    renderCategoryChips();
+  }
+
+  function handleSave() {
+    const amount = parseFloat(document.getElementById("amount").value);
+    const note = document.getElementById("note").value.trim();
+    const date = document.getElementById("date").value;
+
+    // 逐个检查，缺什么就提示什么
+    if (!selectedType) { showMsg("请先选择一个类型"); return; }
+    if (!selectedCategory) { showMsg("请先选择一个类别"); return; }
+    if (isNaN(amount) || amount <= 0) { showMsg("请输入大于 0 的金额"); return; }
+    if (!date) { showMsg("请选择日期"); return; }
+
+    if (editingId) {
+      // 编辑模式：更新那笔账
+      const rec = records.find(r => r.id === editingId);
+      rec.type = selectedType;
+      rec.amount = amount;
+      rec.category = selectedCategory;
+      rec.note = note;
+      rec.date = date;
+      showMsg("已保存修改");
+    } else {
+      // 新增模式
+      records.push({
+        id: Date.now(),        // 用当前时间戳当唯一 id
+        type: selectedType,
+        amount: amount,
+        category: selectedCategory,
+        note: note,
+        date: date
+      });
+      showMsg("已记一笔");
+    }
+
+    save();
+    resetForm();
+    render();
+  }
+
+  function startEdit(id) {
+    const r = records.find(x => x.id === id);
+    if (!r) return;
+    editingId = id;
+    selectedType = r.type;
+    selectedCategory = r.category;
+    document.getElementById("amount").value = r.amount;
+    document.getElementById("note").value = r.note;
+    document.getElementById("date").value = r.date;
+    document.getElementById("saveBtn").textContent = "保存修改";
+    document.getElementById("cancelBtn").style.display = "block";
+    renderTypeChips();
+    renderCategoryChips();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    resetForm();
+  }
+
+  function deleteRec(id) {
+    if (!confirm("确定删除这笔账吗？")) return;
+    records = records.filter(r => r.id !== id);
+    save();
+    render();
+  }
+
+  // ============ 启动 ============
+  document.getElementById("saveBtn").onclick = handleSave;
+  document.getElementById("cancelBtn").onclick = cancelEdit;
+  document.getElementById("date").value = todayStr();
+
+  load();
+  renderTypeChips();
+  renderCategoryChips();
+  render();
+</script>
+</body>
+</html>
