@@ -211,6 +211,44 @@
   .row-cat { font-size: 14px; font-weight: 600; }
   .row-note { font-size: 13px; color: var(--muted); }
   .row-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .date-head {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    padding: 16px 0 4px;
+  }
+  .date-head:first-child { padding-top: 0; }
+
+  /* ===== 明细阶段汇总 ===== */
+  .period-summary {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .period-stat {
+    flex: 1;
+    background: #F7F8F9;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .period-stat .label { font-size: 12px; color: var(--muted); }
+  .period-stat .value {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    margin-top: 2px;
+  }
+  .period-stat .value.income { color: var(--income); }
+  .period-stat .value.expense { color: var(--expense); }
+  .period-stat .value.debt { color: var(--ink); }
+
+  /* ===== 统计图 ===== */
+  .chart-legend { display: flex; flex-direction: column; gap: 6px; }
+  .chart-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .chart-legend-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .row-amount {
     font-size: 16px;
     font-weight: 600;
@@ -243,28 +281,68 @@
   }
   .empty.small { padding: 12px 0; font-size: 13px; }
 
-  /* ===== 分类汇总 ===== */
-  .cat-row { margin-bottom: 12px; }
-  .cat-row:last-child { margin-bottom: 0; }
-  .cat-top {
+  /* ===== 下拉框（账户） ===== */
+  select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 16px;
+    font-family: inherit;
+    color: var(--ink);
+    background: #FAFBFC;
+  }
+  select:focus { outline: none; border-color: var(--ink); background: #fff; }
+
+  /* ===== 净资产行 ===== */
+  .stat-networth {
+    border-top: 1px solid var(--dark-line);
+    margin-top: 16px;
+    padding-top: 14px;
     display: flex;
     justify-content: space-between;
-    font-size: 13px;
-    margin-bottom: 4px;
+    align-items: baseline;
   }
-  .cat-top .expense { font-family: "SF Mono", "Cascadia Mono", Consolas, monospace; }
-  .bar {
-    height: 6px;
+  .stat-networth .label { color: #8CA39B; font-size: 13px; }
+  .stat-networth .value {
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  /* ===== 账户列表 ===== */
+  .acc-group-label { font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+  .acc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .acc-row:last-child { border-bottom: none; }
+  .acc-main { flex: 1; min-width: 0; }
+  .acc-name { font-size: 15px; font-weight: 600; }
+  .acc-kind {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
     background: #F0F1F3;
-    border-radius: 999px;
-    overflow: hidden;
+    color: var(--muted);
   }
-  .bar-fill {
-    height: 100%;
-    background: var(--expense);
-    border-radius: 999px;
-    transition: width .3s;
+  .acc-kind.liab { background: #FBE9E8; color: var(--income); }
+  .acc-init { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .acc-balance {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    white-space: nowrap;
   }
+  .acc-balance.neg { color: var(--income); }
+  .acc-msg { margin-top: 10px; font-size: 14px; color: var(--expense); min-height: 20px; }
 </style>
 </head>
 <body>
@@ -289,6 +367,10 @@
         <div class="value expense" id="expenseTotal">−¥0.00</div>
       </div>
     </div>
+    <div class="stat-networth">
+      <span class="label">净资产（资金 − 负债）</span>
+      <span class="value" id="netWorth">¥0.00</span>
+    </div>
   </section>
 
   <!-- 记一笔 -->
@@ -310,6 +392,26 @@
       <div class="chips" id="categoryChips"></div>
     </div>
 
+    <div class="field">
+      <div class="field-label">账户</div>
+      <select id="accountSel"><option value="">请选择账户</option></select>
+    </div>
+
+    <div class="field" id="depositDirField" style="display:none;">
+      <div class="field-label">押金方向</div>
+      <div class="chips" id="depositDirChips"></div>
+    </div>
+
+    <div class="field" id="depositTargetField" style="display:none;">
+      <div class="field-label">对象（谁对谁押）</div>
+      <input id="depositTarget" type="text" placeholder="如：房东、中介、张三">
+    </div>
+
+    <div class="field" id="toAccountField" style="display:none;">
+      <div class="field-label">转入账户（转账）</div>
+      <select id="toAccountSel"><option value="">请选择转入账户</option></select>
+    </div>
+
     <div class="field-row">
       <div class="field">
         <div class="field-label">备注</div>
@@ -326,17 +428,70 @@
     <div id="formMsg" class="form-msg"></div>
   </section>
 
+  <!-- 账户 -->
+  <section class="card">
+    <h2>账户</h2>
+    <div id="accountList"></div>
+
+    <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+      <div class="field-label">新增账户</div>
+      <div class="field-row" style="margin-top:8px;">
+        <div class="field">
+          <input id="accName" type="text" placeholder="账户名，如 招行卡">
+        </div>
+        <div class="field">
+          <select id="accKind">
+            <option value="资金">资金</option>
+            <option value="负债">负债</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <input id="accInitial" type="number" min="0" step="0.01" placeholder="本金（初始余额）">
+      </div>
+      <button id="accSaveBtn" class="btn-primary">添加账户</button>
+      <button id="accCancelBtn" class="btn-ghost">取消修改</button>
+      <div id="accMsg" class="acc-msg"></div>
+    </div>
+  </section>
+
   <!-- 明细 -->
   <section class="card">
     <h2>明细</h2>
+    <div class="field-row" style="margin-bottom:12px;">
+      <div class="field" style="margin-bottom:0;">
+        <div class="field-label">从</div>
+        <input id="fromDate" type="date">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <div class="field-label">到</div>
+        <input id="toDate" type="date">
+      </div>
+    </div>
+    <div class="field-row" style="margin-bottom:12px;">
+      <div class="field" style="margin-bottom:0;">
+        <div class="field-label">账户</div>
+        <select id="filterAccountSel"><option value="">全部账户</option></select>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <div class="field-label">类别</div>
+        <select id="filterCategorySel"><option value="">全部类别</option></select>
+      </div>
+    </div>
+    <div id="periodSummary" class="period-summary"></div>
     <div id="list"></div>
     <div class="empty" id="empty">还没有账目，先记一笔吧</div>
-  </section>
 
-  <!-- 本月分类支出 -->
-  <section class="card">
-    <h2>本月分类支出</h2>
-    <div id="categorySummary"></div>
+    <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:12px; flex-wrap:wrap;">
+        <span class="field-label" style="margin:0;">统计图（按类别）</span>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+          <div class="chips" id="chartKindChips"></div>
+          <div class="chips" id="chartTypeChips"></div>
+        </div>
+      </div>
+      <div id="chartBox"></div>
+    </div>
   </section>
 
 </div>
@@ -344,13 +499,36 @@
 <script>
   // ============ 数据 ============
   const STORAGE_KEY = "jizhangben_records";   // localStorage 的钥匙（键名）
-  const TYPES = ["支出", "收入", "转账", "余额", "借贷", "代付", "报销", "退款"];
+  const ACCOUNTS_KEY = "jizhangben_accounts"; // 账户的钥匙（键名）
+  const TYPES = ["支出", "收入", "转账", "余额", "借贷", "代付", "报销", "退款", "押金"];
   const CATEGORIES = ["餐饮", "交通", "购物", "娱乐", "居住", "医疗", "教育", "其他"];
+  // 这些类型会影响账户余额（需要选账户）
+  const FLOW_TYPES = ["支出", "收入", "转账", "代付", "报销", "退款", "押金"];
+  // 押金的 4 个方向：
+  // side = 归到收入侧还是支出侧；sign = 对该侧的增减；flow = 钱进来还是出去
+  const DEPOSIT_DIRS = [
+    { key: "收",    label: "主动收",      side: "income",  sign: 1,  flow: "in"  },  // 收押金：收入 +
+    { key: "退",    label: "我退给别人",  side: "income",  sign: -1, flow: "out" },  // 退押金：收入 −
+    { key: "付",    label: "主动付给别人", side: "expense", sign: 1,  flow: "out" },  // 付押金：支出 +
+    { key: "退回", label: "别人退回",    side: "expense", sign: -1, flow: "in"  }   // 退回：支出 −（退款）
+  ];
+  // 统计图配色（按分类轮流取）
+  const CHART_COLORS = ["#C03A3A", "#147D5A", "#3A6EA5", "#E0A63A", "#8A5CC0", "#2FA3A3", "#D15A8A", "#6B7280"];
+  // 综合图配色：收入用红色系，支出用绿色系
+  const INCOME_COLORS = ["#C03A3A", "#D96C5A", "#E08A6E", "#E8A88A", "#A83333", "#8A2A2A"];
+  const EXPENSE_COLORS = ["#147D5A", "#3FA37E", "#6BC4A3", "#2E8B6E", "#1E6B4E", "#0E4D38"];
 
   let records = [];            // 所有账目（数组，每项是一个对象）
   let selectedType = null;     // 当前选中的"类型"
   let selectedCategory = null; // 当前选中的"类别"
+  let selectedDepositDir = null; // 押金方向：付 / 收
   let editingId = null;        // 正在编辑的那笔账的 id；null 表示"新增"
+  let fromDate = "";           // 明细筛选：起始日期（空 = 不限）
+  let toDate = "";             // 明细筛选：结束日期（空 = 不限）
+  let filterAccount = "";      // 明细筛选：账户（空 = 全部）
+  let filterCategory = "";     // 明细筛选：类别（空 = 全部）
+  let chartType = "bar";       // 统计图类型：bar=柱形 / pie=扇形
+  let chartKind = "expense";   // 统计图口径：expense=支出 / income=收入 / combined=综合
 
   // 从 localStorage 读取
   function load() {
@@ -364,6 +542,32 @@
   // 写回 localStorage
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  // ============ 账户数据 ============
+  const DEFAULT_ACCOUNTS = [
+    { id: 1, name: "现金", kind: "资金", initial: 0 },
+    { id: 2, name: "银行卡", kind: "资金", initial: 0 },
+    { id: 3, name: "支付宝", kind: "资金", initial: 0 },
+    { id: 4, name: "微信", kind: "资金", initial: 0 },
+    { id: 5, name: "信用卡", kind: "负债", initial: 0 },
+    { id: 6, name: "花呗", kind: "负债", initial: 0 },
+    { id: 7, name: "京东白条", kind: "负债", initial: 0 }
+  ];
+  let accounts = [];           // 所有账户
+  let editingAccountId = null; // 正在编辑的账户 id
+
+  function loadAccounts() {
+    try {
+      const raw = localStorage.getItem(ACCOUNTS_KEY);
+      accounts = raw ? JSON.parse(raw) : null;
+    } catch (e) { accounts = null; }
+    if (!accounts || accounts.length === 0) {
+      accounts = JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)); // 深拷贝一份
+    }
+  }
+  function saveAccounts() {
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
   }
 
   // ============ 工具函数 ============
@@ -380,18 +584,208 @@
     const d = new Date(dateStr);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }
+  // 把 2026-08-20 显示成 2026年8月20日
+  function formatDate(dateStr) {
+    const [y, m, d] = dateStr.split("-");
+    return y + "年" + Number(m) + "月" + Number(d) + "日";
+  }
   // 转义特殊字符，防止备注里的 < > 等破坏页面（好习惯）
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => (
       { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
     ));
   }
-  // 金额显示：收入带 + 红、支出带 − 绿、其他不加符号
+  // 是否属于"收入侧"（收入 + 押金里归收入的方向）
+  function isIncome(r) {
+    if (r.type === "收入") return true;
+    if (r.type === "押金") {
+      const d = DEPOSIT_DIRS.find(x => x.key === r.depositDir);
+      return d && d.side === "income";
+    }
+    return false;
+  }
+  // 是否属于"支出侧"（支出 + 押金里归支出的方向）
+  function isExpense(r) {
+    if (r.type === "支出") return true;
+    if (r.type === "押金") {
+      const d = DEPOSIT_DIRS.find(x => x.key === r.depositDir);
+      return d && d.side === "expense";
+    }
+    return false;
+  }
+  // 押金方向 → 完整信息
+  function depositInfo(dir) {
+    return DEPOSIT_DIRS.find(x => x.key === dir) || null;
+  }
+  // 押金方向 → 显示文字
+  function depositLabel(dir) {
+    const d = depositInfo(dir);
+    return d ? d.label : (dir || "");
+  }
+  // 这笔账对"收入"的贡献：正=增加收入，负=减少收入
+  function incomeEffect(r) {
+    if (r.type === "收入") return Number(r.amount) || 0;
+    if (r.type === "押金") {
+      const d = depositInfo(r.depositDir);
+      if (d && d.side === "income") return d.sign * (Number(r.amount) || 0);
+      return 0;
+    }
+    return 0;
+  }
+  // 这笔账对"支出"的贡献：正=增加支出，负=减少支出（退款）
+  function expenseEffect(r) {
+    if (r.type === "支出") return Number(r.amount) || 0;
+    if (r.type === "押金") {
+      const d = depositInfo(r.depositDir);
+      if (d && d.side === "expense") return d.sign * (Number(r.amount) || 0);
+      return 0;
+    }
+    return 0;
+  }
+  // 金额显示：收入侧红、支出侧绿；钱进来 +、钱出去 −
   function amountText(r) {
     const n = Number(r.amount).toFixed(2);
     if (r.type === "收入") return { text: "+¥" + n, cls: "income" };
+    if (r.type === "押金") {
+      const d = depositInfo(r.depositDir);
+      const cls = (d && d.side === "income") ? "income" : "expense";
+      const plus = (d && d.flow === "in");
+      return { text: (plus ? "+¥" : "−¥") + n, cls: cls };
+    }
     if (r.type === "支出") return { text: "−¥" + n, cls: "expense" };
     return { text: "¥" + n, cls: "neutral" };
+  }
+
+  // 这笔账的资金方向：in=进账户 / out=出账户 / transfer=转账 / none=不影响
+  function flowDir(r) {
+    const type = r.type;
+    if (type === "押金") {
+      const d = depositInfo(r.depositDir);
+      return (d && d.flow === "in") ? "in" : "out";
+    }
+    if (type === "收入" || type === "报销" || type === "退款") return "in";
+    if (type === "支出" || type === "代付") return "out";
+    if (type === "转账") return "transfer";
+    return "none";
+  }
+
+  // 账户 id → 名字
+  function accountName(id) {
+    const a = accounts.find(x => x.id === id);
+    return a ? a.name : "未指定";
+  }
+
+  // 计算每个账户的当前余额（本金 + 之后的收支）
+  function computeBalances() {
+    const bal = {};
+    accounts.forEach(a => { bal[a.id] = Number(a.initial) || 0; });
+    records.forEach(r => {
+      const dir = flowDir(r);
+      if (dir === "none") return;
+      const amt = Number(r.amount) || 0;
+      const a = accounts.find(x => x.id === r.account);
+      if (!a) return;
+      if (dir === "in") {
+        bal[a.id] += (a.kind === "负债") ? -amt : amt;
+      } else if (dir === "out") {
+        bal[a.id] += (a.kind === "负债") ? amt : -amt;
+      } else { // transfer：钱从 a 出、进 b
+        const b = accounts.find(x => x.id === r.toAccount);
+        if (b) {
+          bal[a.id] += (a.kind === "负债") ? amt : -amt;
+          bal[b.id] += (b.kind === "负债") ? -amt : amt;
+        }
+      }
+    });
+    return bal;
+  }
+
+  // 给下拉框填账户（按资金/负债分组）
+  function fillAccountSelect(sel, placeholder) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">' + placeholder + '</option>';
+    ["资金", "负债"].forEach(kind => {
+      const group = accounts.filter(a => a.kind === kind);
+      if (group.length === 0) return;
+      const og = document.createElement("optgroup");
+      og.label = (kind === "资金") ? "资金账户" : "负债账户";
+      group.forEach(a => {
+        const op = document.createElement("option");
+        op.value = a.id;
+        op.textContent = a.name;
+        og.appendChild(op);
+      });
+      sel.appendChild(og);
+    });
+    if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
+  }
+
+  function renderAccountSelects() {
+    fillAccountSelect(document.getElementById("accountSel"), "请选择账户");
+    fillAccountSelect(document.getElementById("toAccountSel"), "请选择转入账户");
+    fillAccountFilter();
+  }
+
+  // 明细筛选用的账户下拉（带"全部账户"）
+  function fillAccountFilter() {
+    const sel = document.getElementById("filterAccountSel");
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">全部账户</option>';
+    ["资金", "负债"].forEach(kind => {
+      const group = accounts.filter(a => a.kind === kind);
+      if (group.length === 0) return;
+      const og = document.createElement("optgroup");
+      og.label = (kind === "资金") ? "资金账户" : "负债账户";
+      group.forEach(a => {
+        const op = document.createElement("option");
+        op.value = a.id;
+        op.textContent = a.name;
+        og.appendChild(op);
+      });
+      sel.appendChild(og);
+    });
+    if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
+  }
+
+  // 明细筛选用的类别下拉（带"全部类别"）
+  function fillCategoryFilter() {
+    const sel = document.getElementById("filterCategorySel");
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">全部类别</option>';
+    CATEGORIES.forEach(c => {
+      const op = document.createElement("option");
+      op.value = c;
+      op.textContent = c;
+      sel.appendChild(op);
+    });
+    if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
+  }
+
+  // 根据当前类型，显示/隐藏对应字段
+  function updateFormFields() {
+    document.getElementById("toAccountField").style.display =
+      (selectedType === "转账") ? "block" : "none";
+    const isDep = (selectedType === "押金");
+    document.getElementById("depositDirField").style.display = isDep ? "block" : "none";
+    document.getElementById("depositTargetField").style.display = isDep ? "block" : "none";
+    if (isDep) renderDepositDirChips();
+  }
+
+  // 押金方向按钮（4 个：主动收 / 别人退回 / 主动付给别人 / 我退给别人）
+  function renderDepositDirChips() {
+    const box = document.getElementById("depositDirChips");
+    box.innerHTML = "";
+    DEPOSIT_DIRS.forEach(d => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      if (d.side === "income") b.classList.add("chip-income");
+      else b.classList.add("chip-expense");
+      if (selectedDepositDir === d.key) b.classList.add("selected");
+      b.textContent = d.label;
+      b.onclick = () => { selectedDepositDir = d.key; renderDepositDirChips(); };
+      box.appendChild(b);
+    });
   }
 
   // ============ 渲染：类型 / 类别按钮 ============
@@ -406,7 +800,7 @@
       if (t === "支出") b.classList.add("chip-expense");
       if (t === selectedType) b.classList.add("selected");
       b.textContent = t;
-      b.onclick = () => { selectedType = t; renderTypeChips(); };
+      b.onclick = () => { selectedType = t; renderTypeChips(); updateFormFields(); };
       box.appendChild(b);
     });
   }
@@ -428,14 +822,71 @@
   // ============ 渲染：统计卡片 ============
   function renderStats() {
     const month = records.filter(r => isThisMonth(r.date));
-    const income = month.filter(r => r.type === "收入").reduce((s, r) => s + Number(r.amount), 0);
-    const expense = month.filter(r => r.type === "支出").reduce((s, r) => s + Number(r.amount), 0);
+    const income = month.reduce((s, r) => s + incomeEffect(r), 0);
+    const expense = month.reduce((s, r) => s + expenseEffect(r), 0);
     const balance = income - expense;
 
-    document.getElementById("incomeTotal").textContent = "+¥" + income.toFixed(2);
-    document.getElementById("expenseTotal").textContent = "−¥" + expense.toFixed(2);
+    document.getElementById("incomeTotal").textContent =
+      (income < 0 ? "−¥" : "+¥") + Math.abs(income).toFixed(2);
+    document.getElementById("expenseTotal").textContent =
+      (expense < 0 ? "+¥" : "−¥") + Math.abs(expense).toFixed(2);
     document.getElementById("balance").textContent =
       (balance < 0 ? "−¥" : "¥") + Math.abs(balance).toFixed(2);
+
+    // 净资产 = 所有资金账户余额 − 所有负债账户欠款
+    const bal = computeBalances();
+    let net = 0;
+    accounts.forEach(a => { net += (a.kind === "负债") ? -bal[a.id] : bal[a.id]; });
+    document.getElementById("netWorth").textContent =
+      (net < 0 ? "−¥" : "¥") + Math.abs(net).toFixed(2);
+  }
+
+  // ============ 明细时间段筛选（自定义起止日期） ============
+  function filterByPeriod(recs) {
+    return recs.filter(r => {
+      if (fromDate && r.date < fromDate) return false;
+      if (toDate && r.date > toDate) return false;
+      if (filterAccount && String(r.account) !== filterAccount) return false;
+      if (filterCategory && r.category !== filterCategory) return false;
+      return true;
+    });
+  }
+
+  // 这个账户是不是负债账户
+  function isLiabAccount(id) {
+    const a = accounts.find(x => x.id === id);
+    return a && a.kind === "负债";
+  }
+
+  // 所选阶段的汇总：总收入 / 总支出 / 新增负债
+  function renderPeriodSummary() {
+    const box = document.getElementById("periodSummary");
+    const shown = filterByPeriod(records);
+    const income = shown.reduce((s, r) => s + incomeEffect(r), 0);
+    const expense = shown.reduce((s, r) => s + expenseEffect(r), 0);
+    // 新增负债 = 支出侧的钱进出负债账户（付押金用花呗算新增，退回算减少）
+    const debt = shown.reduce((s, r) => {
+      const e = expenseEffect(r);
+      return (e !== 0 && isLiabAccount(r.account)) ? s + e : s;
+    }, 0);
+    const incomeText = (income < 0 ? "−¥" : "+¥") + Math.abs(income).toFixed(2);
+    const expenseText = (expense < 0 ? "+¥" : "−¥") + Math.abs(expense).toFixed(2);
+    const debtText = (debt < 0 ? "−¥" : "¥") + Math.abs(debt).toFixed(2);
+
+    box.innerHTML = `
+      <div class="period-stat">
+        <div class="label">总收入</div>
+        <div class="value income">${incomeText}</div>
+      </div>
+      <div class="period-stat">
+        <div class="label">总支出</div>
+        <div class="value expense">${expenseText}</div>
+      </div>
+      <div class="period-stat">
+        <div class="label">新增负债</div>
+        <div class="value debt">${debtText}</div>
+      </div>
+    `;
   }
 
   // ============ 渲染：明细列表 ============
@@ -444,40 +895,69 @@
     const empty = document.getElementById("empty");
     list.innerHTML = "";
 
-    if (records.length === 0) {
+    // 先按时间段筛选
+    const shown = filterByPeriod(records);
+
+    if (shown.length === 0) {
       empty.style.display = "block";
+      empty.textContent = (records.length === 0)
+        ? "还没有账目，先记一笔吧"
+        : "这个时间段没有账目";
       return;
     }
     empty.style.display = "none";
 
     // 按日期从新到旧排（同一天按 id 大的在前 = 后记的在前）
-    const sorted = [...records].sort((a, b) =>
+    const sorted = [...shown].sort((a, b) =>
       b.date.localeCompare(a.date) || b.id - a.id
     );
 
-    sorted.forEach(r => {
-      const row = document.createElement("div");
-      row.className = "row";
+    // 按日期分组，一组一个日期标题
+    const groups = {};
+    sorted.forEach(r => { (groups[r.date] = groups[r.date] || []).push(r); });
 
-      const amt = amountText(r);
-      const badgeCls = (r.type === "收入") ? "income" : (r.type === "支出") ? "expense" : "";
+    Object.keys(groups).forEach(date => {
+      const head = document.createElement("div");
+      head.className = "date-head";
+      head.textContent = formatDate(date);
+      list.appendChild(head);
 
-      row.innerHTML = `
-        <div class="row-main">
-          <div class="row-top">
-            <span class="badge ${badgeCls}">${esc(r.type)}</span>
-            <span class="row-cat">${esc(r.category)}</span>
+      groups[date].forEach(r => {
+        const row = document.createElement("div");
+        row.className = "row";
+
+        const amt = amountText(r);
+        const isDep = (r.type === "押金");
+        const badgeText = isDep ? depositLabel(r.depositDir) : r.type;
+        const badgeCls = isIncome(r) ? "income" : isExpense(r) ? "expense" : "";
+        let accLabel = accountName(r.account);
+        if (r.type === "转账" && r.toAccount) {
+          accLabel = accountName(r.account) + " → " + accountName(r.toAccount);
+        }
+        const accHtml = r.account ? `<div class="row-date">${esc(accLabel)}</div>` : "";
+        // 押金显示"对象"，备注跟在后面
+        let noteText = r.note || "";
+        if (isDep && r.depositTarget) {
+          noteText = "对象：" + r.depositTarget + (noteText ? " · " + noteText : "");
+        }
+
+        row.innerHTML = `
+          <div class="row-main">
+            <div class="row-top">
+              <span class="badge ${badgeCls}">${esc(badgeText)}</span>
+              <span class="row-cat">${esc(r.category)}</span>
+            </div>
+            <div class="row-note">${esc(noteText)}</div>
+            ${accHtml}
           </div>
-          <div class="row-note">${esc(r.note || "")}</div>
-          <div class="row-date">${esc(r.date)}</div>
-        </div>
-        <div class="row-amount ${amt.cls}">${amt.text}</div>
-        <div class="row-actions">
-          <button class="mini-btn" data-id="${r.id}" data-act="edit">改</button>
-          <button class="mini-btn danger" data-id="${r.id}" data-act="del">删</button>
-        </div>
-      `;
-      list.appendChild(row);
+          <div class="row-amount ${amt.cls}">${amt.text}</div>
+          <div class="row-actions">
+            <button class="mini-btn" data-id="${r.id}" data-act="edit">改</button>
+            <button class="mini-btn danger" data-id="${r.id}" data-act="del">删</button>
+          </div>
+        `;
+        list.appendChild(row);
+      });
     });
 
     // 给"改""删"按钮绑事件
@@ -490,42 +970,284 @@
     });
   }
 
-  // ============ 渲染：本月分类支出 ============
-  function renderCategorySummary() {
-    const box = document.getElementById("categorySummary");
+  // ============ 渲染：账户列表 ============
+  function renderAccountList() {
+    const box = document.getElementById("accountList");
     box.innerHTML = "";
+    const bal = computeBalances();
 
-    const month = records.filter(r => isThisMonth(r.date) && r.type === "支出");
+    ["资金", "负债"].forEach(kind => {
+      const group = accounts.filter(a => a.kind === kind);
+      if (group.length === 0) return;
+      const glabel = document.createElement("div");
+      glabel.className = "acc-group-label";
+      glabel.textContent = (kind === "资金") ? "资金账户" : "负债账户";
+      box.appendChild(glabel);
+
+      group.forEach(a => {
+        const b = bal[a.id];
+        const row = document.createElement("div");
+        row.className = "acc-row";
+        row.innerHTML = `
+          <div class="acc-main">
+            <div>
+              <span class="acc-name">${esc(a.name)}</span>
+              <span class="acc-kind ${kind === "负债" ? "liab" : ""}">${kind}</span>
+            </div>
+            <div class="acc-init">本金 ${Number(a.initial || 0).toFixed(2)}</div>
+          </div>
+          <div class="acc-balance ${b < 0 ? "neg" : ""}">${kind === "负债" ? "欠款 ¥" : "¥"}${b.toFixed(2)}</div>
+          <div class="row-actions">
+            <button class="mini-btn" data-id="${a.id}" data-act="edit">改</button>
+            <button class="mini-btn danger" data-id="${a.id}" data-act="del">删</button>
+          </div>
+        `;
+        box.appendChild(row);
+      });
+    });
+
+    box.querySelectorAll(".mini-btn").forEach(btn => {
+      btn.onclick = () => {
+        const id = Number(btn.dataset.id);
+        if (btn.dataset.act === "edit") startEditAccount(id);
+        else deleteAccount(id);
+      };
+    });
+  }
+
+  // ============ 统计图（按明细筛选，收入/支出/综合按类别） ============
+  function renderChartKindChips() {
+    const box = document.getElementById("chartKindChips");
+    box.innerHTML = "";
+    ["支出", "收入", "综合"].forEach(k => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      const val = (k === "支出") ? "expense" : (k === "收入") ? "income" : "combined";
+      if (chartKind === val) b.classList.add("selected");
+      b.textContent = k;
+      b.onclick = () => {
+        chartKind = val;
+        renderChartKindChips();
+        renderChart();
+      };
+      box.appendChild(b);
+    });
+  }
+
+  function renderChartTypeChips() {
+    const box = document.getElementById("chartTypeChips");
+    box.innerHTML = "";
+    ["柱形", "扇形"].forEach(t => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      if ((t === "柱形") === (chartType === "bar")) b.classList.add("selected");
+      b.textContent = t;
+      b.onclick = () => {
+        chartType = (t === "柱形") ? "bar" : "pie";
+        renderChartTypeChips();
+        renderChart();
+      };
+      box.appendChild(b);
+    });
+  }
+
+  function renderChart() {
+    const box = document.getElementById("chartBox");
+
+    // 综合：收入 + 支出两种颜色一起显示
+    if (chartKind === "combined") {
+      const shown = filterByPeriod(records);
+      const incomeMap = {}, expenseMap = {};
+      shown.forEach(r => {
+        const eff = incomeEffect(r);
+        if (eff > 0) incomeMap[r.category] = (incomeMap[r.category] || 0) + eff;
+        else if (expenseEffect(r) > 0) expenseMap[r.category] = (expenseMap[r.category] || 0) + expenseEffect(r);
+      });
+      const cats = Array.from(new Set([...Object.keys(incomeMap), ...Object.keys(expenseMap)]));
+      if (cats.length === 0) {
+        box.innerHTML = '<div class="empty small">这个筛选条件下没有收入和支出，画不出图</div>';
+        return;
+      }
+      if (chartType === "bar") renderCombinedBarChart(box, cats, incomeMap, expenseMap);
+      else renderCombinedPieChart(box, cats, incomeMap, expenseMap);
+      return;
+    }
+
+    const targetType = (chartKind === "income") ? "收入" : "支出";
+    const shown = filterByPeriod(records).filter(r =>
+      chartKind === "income" ? (incomeEffect(r) > 0) : (expenseEffect(r) > 0)
+    );
     const map = {};
-    month.forEach(r => { map[r.category] = (map[r.category] || 0) + Number(r.amount); });
+    shown.forEach(r => { map[r.category] = (map[r.category] || 0) + Number(r.amount); });
     const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
     const total = entries.reduce((s, e) => s + e[1], 0);
 
     if (entries.length === 0) {
-      box.innerHTML = '<div class="empty small">本月还没有支出记录</div>';
+      box.innerHTML = '<div class="empty small">这个筛选条件下没有' + targetType + '，画不出图</div>';
       return;
     }
+    if (chartType === "bar") renderBarChart(box, entries);
+    else renderPieChart(box, entries, total);
+  }
 
-    entries.forEach(([cat, amt]) => {
-      const pct = total ? (amt / total * 100) : 0;
-      const div = document.createElement("div");
-      div.className = "cat-row";
-      div.innerHTML = `
-        <div class="cat-top">
-          <span>${esc(cat)}</span>
-          <span class="expense">¥${amt.toFixed(2)}</span>
-        </div>
-        <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-      `;
-      box.appendChild(div);
+  // ============ 综合图：柱形（每类两根柱子：红=收入，绿=支出） ============
+  function renderCombinedBarChart(box, cats, incomeMap, expenseMap) {
+    const W = 600, H = 280, padT = 30, padB = 34, padL = 8, padR = 8;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+    const max = Math.max(
+      ...Object.values(incomeMap),
+      ...Object.values(expenseMap),
+      0
+    );
+    const n = cats.length;
+    const slot = chartW / n;
+    const barW = Math.min(22, slot * 0.28);
+    const gap = 4;
+    const incTotal = Object.values(incomeMap).reduce((s, v) => s + v, 0);
+    const expTotal = Object.values(expenseMap).reduce((s, v) => s + v, 0);
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">`;
+    cats.forEach((cat, i) => {
+      const inc = incomeMap[cat] || 0;
+      const exp = expenseMap[cat] || 0;
+      const cx = padL + slot * i + slot / 2;
+      const hIn = max ? (inc / max) * chartH : 0;
+      const hEx = max ? (exp / max) * chartH : 0;
+      const xIn = cx - barW - gap / 2;
+      const xEx = cx + gap / 2;
+      const incPct = incTotal ? (inc / incTotal * 100) : 0;
+      const expPct = expTotal ? (exp / expTotal * 100) : 0;
+      if (inc > 0) {
+        const yIn = padT + (chartH - hIn);
+        svg += `<rect x="${xIn.toFixed(1)}" y="${yIn.toFixed(1)}" width="${barW}" height="${hIn.toFixed(1)}" rx="3" fill="#C03A3A"/>`;
+        svg += `<text x="${(xIn + barW / 2).toFixed(1)}" y="${(yIn - 5).toFixed(1)}" font-size="9" text-anchor="middle" fill="#C03A3A">${inc.toFixed(0)} · ${incPct.toFixed(0)}%</text>`;
+      }
+      if (exp > 0) {
+        const yEx = padT + (chartH - hEx);
+        svg += `<rect x="${xEx.toFixed(1)}" y="${yEx.toFixed(1)}" width="${barW}" height="${hEx.toFixed(1)}" rx="3" fill="#147D5A"/>`;
+        svg += `<text x="${(xEx + barW / 2).toFixed(1)}" y="${(yEx - 5).toFixed(1)}" font-size="9" text-anchor="middle" fill="#147D5A">${exp.toFixed(0)} · ${expPct.toFixed(0)}%</text>`;
+      }
+      svg += `<text x="${cx.toFixed(1)}" y="${H - padB + 16}" font-size="10" text-anchor="middle" fill="#6B7280">${esc(cat)}</text>`;
     });
+    svg += `</svg>`;
+
+    const legend = `<div class="chart-legend" style="margin-bottom:8px;">
+      <div class="chart-legend-item"><span class="dot" style="background:#C03A3A"></span>收入</div>
+      <div class="chart-legend-item"><span class="dot" style="background:#147D5A"></span>支出</div>
+    </div>`;
+
+    box.innerHTML = legend + svg;
+  }
+
+  // ============ 综合图：扇形（单饼：收入红色系、支出绿色系，混在一起 + 图例） ============
+  function renderCombinedPieChart(box, cats, incomeMap, expenseMap) {
+    const entries = [];
+    let incIdx = 0, expIdx = 0;
+    Object.keys(incomeMap).forEach(cat => {
+      const amt = incomeMap[cat];
+      if (amt > 0) entries.push({ cat, amt, kind: "income", color: INCOME_COLORS[incIdx++ % INCOME_COLORS.length] });
+    });
+    Object.keys(expenseMap).forEach(cat => {
+      const amt = expenseMap[cat];
+      if (amt > 0) entries.push({ cat, amt, kind: "expense", color: EXPENSE_COLORS[expIdx++ % EXPENSE_COLORS.length] });
+    });
+
+    const total = entries.reduce((s, e) => s + e.amt, 0);
+    const cx = 100, cy = 100, r = 88;
+    let angle = -Math.PI / 2;
+    let slices = "";
+    entries.forEach(e => {
+      const frac = total ? e.amt / total : 0;
+      const end = angle + frac * Math.PI * 2;
+      const x1 = cx + r * Math.cos(angle), y1 = cy + r * Math.sin(angle);
+      const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
+      const large = frac > 0.5 ? 1 : 0;
+      slices += `<path d="M${cx} ${cy} L${x1.toFixed(2)} ${y1.toFixed(2)} A${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${e.color}"/>`;
+      angle = end;
+    });
+
+    const legend = entries.map(e => {
+      const pct = total ? (e.amt / total * 100) : 0;
+      return `<div class="chart-legend-item"><span class="dot" style="background:${e.color}"></span>${e.kind === "income" ? "收入·" : "支出·"}${esc(e.cat)} ¥${e.amt.toFixed(2)} · ${pct.toFixed(1)}%</div>`;
+    }).join("");
+
+    box.innerHTML = `
+      <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+        <svg viewBox="0 0 200 200" width="160" height="160" xmlns="http://www.w3.org/2000/svg">${slices}</svg>
+        <div class="chart-legend">${legend}</div>
+      </div>`;
+  }
+
+  function renderBarChart(box, entries) {
+    const W = 600, H = 260, padT = 24, padB = 34, padL = 8, padR = 8;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+    const max = entries[0][1];
+    const total = entries.reduce((s, e) => s + e[1], 0);
+    const n = entries.length;
+    const slot = chartW / n;
+    const barW = Math.min(48, slot * 0.6);
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg">`;
+    entries.forEach(([cat, amt], i) => {
+      const h = max ? (amt / max) * chartH : 0;
+      const x = padL + slot * i + (slot - barW) / 2;
+      const y = padT + (chartH - h);
+      const color = CHART_COLORS[i % CHART_COLORS.length];
+      const pct = total ? (amt / total * 100) : 0;
+      svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="4" fill="${color}"/>`;
+      svg += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - padB + 16}" font-size="11" text-anchor="middle" fill="#6B7280">${esc(cat)}</text>`;
+      svg += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 6).toFixed(1)}" font-size="10" text-anchor="middle" fill="#1E2227">${amt.toFixed(0)} · ${pct.toFixed(0)}%</text>`;
+    });
+    svg += `</svg>`;
+    box.innerHTML = svg;
+  }
+
+  function renderPieChart(box, entries, total) {
+    const cx = 100, cy = 100, r = 88;
+    let angle = -Math.PI / 2;
+    let slices = "";
+    entries.forEach(([cat, amt], i) => {
+      const frac = total ? amt / total : 0;
+      const end = angle + frac * Math.PI * 2;
+      const x1 = cx + r * Math.cos(angle), y1 = cy + r * Math.sin(angle);
+      const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
+      const large = frac > 0.5 ? 1 : 0;
+      slices += `<path d="M${cx} ${cy} L${x1.toFixed(2)} ${y1.toFixed(2)} A${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${CHART_COLORS[i % CHART_COLORS.length]}"/>`;
+      angle = end;
+    });
+    const legend = entries.map(([cat, amt], i) => {
+      const pct = total ? (amt / total * 100) : 0;
+      return `<div class="chart-legend-item"><span class="dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></span>${esc(cat)} ¥${amt.toFixed(2)} · ${pct.toFixed(1)}%</div>`;
+    }).join("");
+
+    box.innerHTML = `
+      <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+        <svg viewBox="0 0 200 200" width="160" height="160" xmlns="http://www.w3.org/2000/svg">${slices}</svg>
+        <div class="chart-legend">${legend}</div>
+      </div>`;
+  }
+
+  // 筛选变化时，刷新明细列表 + 汇总 + 统计图
+  function refreshDetail() {
+    renderList();
+    renderPeriodSummary();
+    renderChart();
   }
 
   // 一次刷新所有
   function render() {
+    renderPeriodSummary();
     renderStats();
     renderList();
-    renderCategorySummary();
+    renderAccountList();
+    renderAccountSelects();
+    renderChartKindChips();
+    renderChartTypeChips();
+    renderChart();
   }
 
   // ============ 交互：记一笔 / 改 / 删 ============
@@ -540,27 +1262,45 @@
   function resetForm() {
     selectedType = null;
     selectedCategory = null;
+    selectedDepositDir = null;
     editingId = null;
     document.getElementById("amount").value = "";
     document.getElementById("note").value = "";
     document.getElementById("date").value = todayStr();
+    document.getElementById("accountSel").value = "";
+    document.getElementById("toAccountSel").value = "";
+    document.getElementById("depositTarget").value = "";
     document.getElementById("saveBtn").textContent = "保存这笔账";
     document.getElementById("cancelBtn").style.display = "none";
     document.getElementById("formMsg").textContent = "";
     renderTypeChips();
     renderCategoryChips();
+    updateFormFields();
   }
 
   function handleSave() {
     const amount = parseFloat(document.getElementById("amount").value);
     const note = document.getElementById("note").value.trim();
     const date = document.getElementById("date").value;
+    const account = Number(document.getElementById("accountSel").value) || null;
+    const toAccount = Number(document.getElementById("toAccountSel").value) || null;
+    const depositDir = (selectedType === "押金") ? selectedDepositDir : null;
+    const depositTarget = document.getElementById("depositTarget").value.trim();
 
     // 逐个检查，缺什么就提示什么
     if (!selectedType) { showMsg("请先选择一个类型"); return; }
     if (!selectedCategory) { showMsg("请先选择一个类别"); return; }
     if (isNaN(amount) || amount <= 0) { showMsg("请输入大于 0 的金额"); return; }
     if (!date) { showMsg("请选择日期"); return; }
+    if (FLOW_TYPES.includes(selectedType) && !account) { showMsg("请选择账户"); return; }
+    if (selectedType === "转账") {
+      if (!toAccount) { showMsg("转账需要选择转入账户"); return; }
+      if (account === toAccount) { showMsg("转出和转入账户不能相同"); return; }
+    }
+    if (selectedType === "押金") {
+      if (!depositDir) { showMsg("请选择押金方向（主动收/别人退回/主动付/我退）"); return; }
+      if (!depositTarget) { showMsg("请填写押金对象（谁对谁押）"); return; }
+    }
 
     if (editingId) {
       // 编辑模式：更新那笔账
@@ -570,6 +1310,10 @@
       rec.category = selectedCategory;
       rec.note = note;
       rec.date = date;
+      rec.account = account;
+      rec.toAccount = (selectedType === "转账") ? toAccount : null;
+      rec.depositDir = depositDir;
+      rec.depositTarget = (selectedType === "押金") ? depositTarget : null;
       showMsg("已保存修改");
     } else {
       // 新增模式
@@ -579,7 +1323,11 @@
         amount: amount,
         category: selectedCategory,
         note: note,
-        date: date
+        date: date,
+        account: account,
+        toAccount: (selectedType === "转账") ? toAccount : null,
+        depositDir: depositDir,
+        depositTarget: (selectedType === "押金") ? depositTarget : null
       });
       showMsg("已记一笔");
     }
@@ -595,13 +1343,18 @@
     editingId = id;
     selectedType = r.type;
     selectedCategory = r.category;
+    selectedDepositDir = r.depositDir || null;
     document.getElementById("amount").value = r.amount;
     document.getElementById("note").value = r.note;
     document.getElementById("date").value = r.date;
+    document.getElementById("accountSel").value = r.account || "";
+    document.getElementById("toAccountSel").value = r.toAccount || "";
+    document.getElementById("depositTarget").value = r.depositTarget || "";
     document.getElementById("saveBtn").textContent = "保存修改";
     document.getElementById("cancelBtn").style.display = "block";
     renderTypeChips();
     renderCategoryChips();
+    updateFormFields();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -616,14 +1369,98 @@
     render();
   }
 
+  // ============ 账户：新增 / 修改 / 删除 ============
+  let accMsgTimer = null;
+  function showAccMsg(text) {
+    const m = document.getElementById("accMsg");
+    m.textContent = text;
+    clearTimeout(accMsgTimer);
+    accMsgTimer = setTimeout(() => { m.textContent = ""; }, 3000);
+  }
+
+  function resetAccountForm() {
+    editingAccountId = null;
+    document.getElementById("accName").value = "";
+    document.getElementById("accKind").value = "资金";
+    document.getElementById("accInitial").value = "";
+    document.getElementById("accSaveBtn").textContent = "添加账户";
+    document.getElementById("accCancelBtn").style.display = "none";
+    document.getElementById("accMsg").textContent = "";
+  }
+
+  function handleAccountSave() {
+    const name = document.getElementById("accName").value.trim();
+    const kind = document.getElementById("accKind").value;
+    const initial = parseFloat(document.getElementById("accInitial").value) || 0;
+    if (!name) { showAccMsg("请填写账户名"); return; }
+
+    if (editingAccountId) {
+      const a = accounts.find(x => x.id === editingAccountId);
+      a.name = name;
+      a.kind = kind;
+      a.initial = initial;
+      showAccMsg("已保存修改");
+    } else {
+      accounts.push({ id: Date.now(), name: name, kind: kind, initial: initial });
+      showAccMsg("已添加账户");
+    }
+    saveAccounts();
+    resetAccountForm();
+    render();
+  }
+
+  function startEditAccount(id) {
+    const a = accounts.find(x => x.id === id);
+    if (!a) return;
+    editingAccountId = id;
+    document.getElementById("accName").value = a.name;
+    document.getElementById("accKind").value = a.kind;
+    document.getElementById("accInitial").value = a.initial;
+    document.getElementById("accSaveBtn").textContent = "保存修改";
+    document.getElementById("accCancelBtn").style.display = "block";
+  }
+
+  function deleteAccount(id) {
+    const a = accounts.find(x => x.id === id);
+    if (!a) return;
+    if (!confirm("确定删除账户「" + a.name + "」吗？\n（用它记过的账会显示为“未指定”）")) return;
+    accounts = accounts.filter(x => x.id !== id);
+    saveAccounts();
+    resetAccountForm();
+    render();
+  }
+
   // ============ 启动 ============
   document.getElementById("saveBtn").onclick = handleSave;
   document.getElementById("cancelBtn").onclick = cancelEdit;
   document.getElementById("date").value = todayStr();
+  document.getElementById("fromDate").onchange = () => {
+    fromDate = document.getElementById("fromDate").value;
+    refreshDetail();
+  };
+  document.getElementById("toDate").onchange = () => {
+    toDate = document.getElementById("toDate").value;
+    refreshDetail();
+  };
+  document.getElementById("filterAccountSel").onchange = () => {
+    filterAccount = document.getElementById("filterAccountSel").value;
+    refreshDetail();
+  };
+  document.getElementById("filterCategorySel").onchange = () => {
+    filterCategory = document.getElementById("filterCategorySel").value;
+    refreshDetail();
+  };
+
+  document.getElementById("accSaveBtn").onclick = handleAccountSave;
+  document.getElementById("accCancelBtn").onclick = resetAccountForm;
 
   load();
+  loadAccounts();
   renderTypeChips();
   renderCategoryChips();
+  renderAccountSelects();
+  fillCategoryFilter();
+  updateFormFields();
   render();
 </script>
 </body>
