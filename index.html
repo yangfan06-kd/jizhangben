@@ -82,6 +82,33 @@
   .value.income { color: var(--coral); }
   .value.expense { color: var(--mint); }
 
+  /* ===== 导航切换（记一笔 / 账户 / 明细） ===== */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 0;
+    text-align: center;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .tab:hover { border-color: var(--ink); }
+  .tab.active {
+    background: var(--dark);
+    color: #fff;
+    border-color: var(--dark);
+  }
+
   /* ===== 通用卡片 ===== */
   .card {
     background: var(--card);
@@ -152,6 +179,18 @@
   /* 收入和支出选中时，用红/绿强化含义 */
   .chip.selected.chip-income { background: var(--income); border-color: var(--income); }
   .chip.selected.chip-expense { background: var(--expense); border-color: var(--expense); }
+  /* 展开/收起、自定义新增 */
+  .chip-toggle { color: var(--muted); border-style: dashed; }
+  .chip-add { color: var(--expense); border-style: dashed; font-weight: 600; }
+  .custom-add { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .custom-add input { flex: 1; }
+  .custom-add .mini-btn { padding: 8px 14px; white-space: nowrap; }
+  .custom-side { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .custom-side-label { font-size: 13px; color: var(--muted); }
+  .custom-side-chip { padding: 5px 12px; font-size: 13px; }
+  .chip-del { margin-left: 6px; font-weight: 700; color: #B9BEC6; line-height: 1; }
+  .chip-del:hover { color: var(--income); }
+  .chip.selected .chip-del { color: rgba(255,255,255,0.85); }
 
   /* ===== 按钮 ===== */
   .btn-primary {
@@ -373,13 +412,21 @@
     </div>
   </section>
 
+  <!-- 导航切换 -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="record">记一笔</button>
+    <button class="tab" data-tab="account">账户</button>
+    <button class="tab" data-tab="detail">明细</button>
+  </nav>
+
   <!-- 记一笔 -->
-  <section class="card">
+  <section class="card" id="panelRecord">
     <h2>记一笔</h2>
 
     <div class="field">
       <div class="field-label">类型</div>
       <div class="chips" id="typeChips"></div>
+      <div id="typeCustomBox"></div>
     </div>
 
     <div class="field">
@@ -390,6 +437,7 @@
     <div class="field">
       <div class="field-label">类别</div>
       <div class="chips" id="categoryChips"></div>
+      <div id="categoryCustomBox"></div>
     </div>
 
     <div class="field">
@@ -429,7 +477,7 @@
   </section>
 
   <!-- 账户 -->
-  <section class="card">
+  <section class="card" id="panelAccount" style="display:none;">
     <h2>账户</h2>
     <div id="accountList"></div>
 
@@ -456,7 +504,7 @@
   </section>
 
   <!-- 明细 -->
-  <section class="card">
+  <section class="card" id="panelDetail" style="display:none;">
     <h2>明细</h2>
     <div class="field-row" style="margin-bottom:12px;">
       <div class="field" style="margin-bottom:0;">
@@ -479,8 +527,11 @@
       </div>
     </div>
     <div id="periodSummary" class="period-summary"></div>
-    <div id="list"></div>
-    <div class="empty" id="empty">还没有账目，先记一笔吧</div>
+    <button id="detailToggle" class="chip chip-toggle" style="margin-bottom:8px;">▾ 展开明细</button>
+    <div id="listWrap">
+      <div id="list"></div>
+      <div class="empty" id="empty">还没有账目，先记一笔吧</div>
+    </div>
 
     <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:12px; flex-wrap:wrap;">
@@ -502,6 +553,8 @@
   const ACCOUNTS_KEY = "jizhangben_accounts"; // 账户的钥匙（键名）
   const TYPES = ["支出", "收入", "转账", "余额", "借贷", "代付", "报销", "退款", "押金"];
   const CATEGORIES = ["餐饮", "交通", "购物", "娱乐", "居住", "医疗", "教育", "其他"];
+  const CUSTOM_TYPES_KEY = "jizhangben_custom_types";            // 自定义类型的钥匙
+  const CUSTOM_CATEGORIES_KEY = "jizhangben_custom_categories";  // 自定义类别的钥匙
   // 这些类型会影响账户余额（需要选账户）
   const FLOW_TYPES = ["支出", "收入", "转账", "代付", "报销", "退款", "押金"];
   // 押金的 4 个方向：
@@ -522,6 +575,14 @@
   let selectedType = null;     // 当前选中的"类型"
   let selectedCategory = null; // 当前选中的"类别"
   let selectedDepositDir = null; // 押金方向：付 / 收
+  let customTypes = [];         // 用户自己加的类型（{name, side}）
+  let customCategories = [];    // 用户自己加的类别
+  let customTypeSideDraft = "neutral"; // 新增自定义类型时选的"怎么算"
+  let typesExpanded = false;    // 类型是否展开显示全部
+  let categoriesExpanded = false; // 类别是否展开显示全部
+  const COLLAPSE_COUNT = 5;     // 折叠时默认显示几个
+  let detailExpanded = false;   // 明细列表是否展开
+  let activeTab = "record";     // 当前显示的大类：record=记一笔 / account=账户 / detail=明细
   let editingId = null;        // 正在编辑的那笔账的 id；null 表示"新增"
   let fromDate = "";           // 明细筛选：起始日期（空 = 不限）
   let toDate = "";             // 明细筛选：结束日期（空 = 不限）
@@ -542,6 +603,47 @@
   // 写回 localStorage
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+
+  // 自定义类型 / 类别：读写（存在 localStorage，下次打开还在）
+  function loadCustomTypes() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CUSTOM_TYPES_KEY)) || [];
+      // 兼容旧数据：以前存的是纯字符串，现在统一成 {name, side}
+      customTypes = raw.map(t => (typeof t === "string" ? { name: t, side: "neutral" } : t));
+    } catch (e) { customTypes = []; }
+  }
+  function saveCustomTypes() {
+    localStorage.setItem(CUSTOM_TYPES_KEY, JSON.stringify(customTypes));
+  }
+  function loadCustomCategories() {
+    try { customCategories = JSON.parse(localStorage.getItem(CUSTOM_CATEGORIES_KEY)) || []; }
+    catch (e) { customCategories = []; }
+  }
+  function saveCustomCategories() {
+    localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(customCategories));
+  }
+  // 实际可选的类型 / 类别 = 内置 + 自定义
+  function allTypes() { return TYPES.concat(customTypes.map(t => (typeof t === "string" ? t : t.name))); }
+  function allCategories() { return CATEGORIES.concat(customCategories); }
+  // 查一个自定义类型的信息（兼容旧的纯字符串）
+  function customTypeInfo(name) {
+    const t = customTypes.find(x => (typeof x === "string" ? x : x.name) === name);
+    if (!t) return null;
+    return (typeof t === "string") ? { name: t, side: "neutral" } : t;
+  }
+  // 一个类型名属于收入侧 / 支出侧 / 中性
+  function typeSide(name) {
+    if (name === "收入") return "income";
+    if (name === "支出") return "expense";
+    const ct = customTypeInfo(name);
+    return ct ? ct.side : "neutral";
+  }
+  // 这个类型要不要选账户（影响余额的都要）
+  function needsAccount(type) {
+    if (FLOW_TYPES.includes(type)) return true;
+    const ct = customTypeInfo(type);
+    return !!(ct && (ct.side === "income" || ct.side === "expense"));
   }
 
   // ============ 账户数据 ============
@@ -595,23 +697,25 @@
       { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
     ));
   }
-  // 是否属于"收入侧"（收入 + 押金里归收入的方向）
+  // 是否属于"收入侧"（收入 + 押金里归收入的方向 + 自定义算收入的类型）
   function isIncome(r) {
     if (r.type === "收入") return true;
     if (r.type === "押金") {
       const d = DEPOSIT_DIRS.find(x => x.key === r.depositDir);
       return d && d.side === "income";
     }
-    return false;
+    const ct = customTypeInfo(r.type);
+    return !!(ct && ct.side === "income");
   }
-  // 是否属于"支出侧"（支出 + 押金里归支出的方向）
+  // 是否属于"支出侧"（支出 + 押金里归支出的方向 + 自定义算支出的类型）
   function isExpense(r) {
     if (r.type === "支出") return true;
     if (r.type === "押金") {
       const d = DEPOSIT_DIRS.find(x => x.key === r.depositDir);
       return d && d.side === "expense";
     }
-    return false;
+    const ct = customTypeInfo(r.type);
+    return !!(ct && ct.side === "expense");
   }
   // 押金方向 → 完整信息
   function depositInfo(dir) {
@@ -630,6 +734,8 @@
       if (d && d.side === "income") return d.sign * (Number(r.amount) || 0);
       return 0;
     }
+    const ct = customTypeInfo(r.type);
+    if (ct && ct.side === "income") return Number(r.amount) || 0;
     return 0;
   }
   // 这笔账对"支出"的贡献：正=增加支出，负=减少支出（退款）
@@ -640,6 +746,8 @@
       if (d && d.side === "expense") return d.sign * (Number(r.amount) || 0);
       return 0;
     }
+    const ct = customTypeInfo(r.type);
+    if (ct && ct.side === "expense") return Number(r.amount) || 0;
     return 0;
   }
   // 金额显示：收入侧红、支出侧绿；钱进来 +、钱出去 −
@@ -653,6 +761,11 @@
       return { text: (plus ? "+¥" : "−¥") + n, cls: cls };
     }
     if (r.type === "支出") return { text: "−¥" + n, cls: "expense" };
+    const ct = customTypeInfo(r.type);
+    if (ct) {
+      if (ct.side === "income") return { text: "+¥" + n, cls: "income" };
+      if (ct.side === "expense") return { text: "−¥" + n, cls: "expense" };
+    }
     return { text: "¥" + n, cls: "neutral" };
   }
 
@@ -666,6 +779,11 @@
     if (type === "收入" || type === "报销" || type === "退款") return "in";
     if (type === "支出" || type === "代付") return "out";
     if (type === "转账") return "transfer";
+    const ct = customTypeInfo(type);
+    if (ct) {
+      if (ct.side === "income") return "in";
+      if (ct.side === "expense") return "out";
+    }
     return "none";
   }
 
@@ -752,7 +870,7 @@
     const sel = document.getElementById("filterCategorySel");
     const cur = sel.value;
     sel.innerHTML = '<option value="">全部类别</option>';
-    CATEGORIES.forEach(c => {
+    allCategories().forEach(c => {
       const op = document.createElement("option");
       op.value = c;
       op.textContent = c;
@@ -792,31 +910,195 @@
   function renderTypeChips() {
     const box = document.getElementById("typeChips");
     box.innerHTML = "";
-    TYPES.forEach(t => {
+    const list = allTypes();
+    const collapsed = list.slice(0, COLLAPSE_COUNT);
+    let visible = typesExpanded ? list : collapsed;
+    // 选中的那项即使被折叠，也要露出来，方便看清当前选的是什么
+    if (!typesExpanded && selectedType && list.includes(selectedType) && !visible.includes(selectedType)) {
+      visible = visible.concat([selectedType]);
+    }
+    visible.forEach(t => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "chip";
-      if (t === "收入") b.classList.add("chip-income");
-      if (t === "支出") b.classList.add("chip-expense");
+      const side = typeSide(t);
+      if (side === "income") b.classList.add("chip-income");
+      if (side === "expense") b.classList.add("chip-expense");
       if (t === selectedType) b.classList.add("selected");
       b.textContent = t;
+      if (isCustomType(t)) {
+        const x = document.createElement("span");
+        x.className = "chip-del";
+        x.textContent = "×";
+        x.title = "删除这个自定义类型";
+        x.onclick = (e) => { e.stopPropagation(); removeCustom("type", t); };
+        b.appendChild(x);
+      }
       b.onclick = () => { selectedType = t; renderTypeChips(); updateFormFields(); };
       box.appendChild(b);
     });
+    if (list.length > COLLAPSE_COUNT) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "chip chip-toggle";
+      toggle.textContent = typesExpanded ? "▴ 收起" : "▾ 展开";
+      toggle.onclick = () => { typesExpanded = !typesExpanded; renderTypeChips(); };
+      box.appendChild(toggle);
+    }
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "chip chip-add";
+    add.textContent = "＋自定义";
+    add.onclick = () => renderCustomBox("type");
+    box.appendChild(add);
   }
 
   function renderCategoryChips() {
     const box = document.getElementById("categoryChips");
     box.innerHTML = "";
-    CATEGORIES.forEach(c => {
+    const list = allCategories();
+    const collapsed = list.slice(0, COLLAPSE_COUNT);
+    let visible = categoriesExpanded ? list : collapsed;
+    if (!categoriesExpanded && selectedCategory && list.includes(selectedCategory) && !visible.includes(selectedCategory)) {
+      visible = visible.concat([selectedCategory]);
+    }
+    visible.forEach(c => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "chip";
       if (c === selectedCategory) b.classList.add("selected");
       b.textContent = c;
+      if (isCustomCategory(c)) {
+        const x = document.createElement("span");
+        x.className = "chip-del";
+        x.textContent = "×";
+        x.title = "删除这个自定义类别";
+        x.onclick = (e) => { e.stopPropagation(); removeCustom("category", c); };
+        b.appendChild(x);
+      }
       b.onclick = () => { selectedCategory = c; renderCategoryChips(); };
       box.appendChild(b);
     });
+    if (list.length > COLLAPSE_COUNT) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "chip chip-toggle";
+      toggle.textContent = categoriesExpanded ? "▴ 收起" : "▾ 展开";
+      toggle.onclick = () => { categoriesExpanded = !categoriesExpanded; renderCategoryChips(); };
+      box.appendChild(toggle);
+    }
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "chip chip-add";
+    add.textContent = "＋自定义";
+    add.onclick = () => renderCustomBox("category");
+    box.appendChild(add);
+  }
+
+  // 点「＋自定义」后，在下方显示一个输入行（类型多一行"怎么算"）
+  function renderCustomBox(kind) {
+    document.getElementById("typeCustomBox").innerHTML = "";
+    document.getElementById("categoryCustomBox").innerHTML = "";
+    const isType = (kind === "type");
+    const box = document.getElementById(isType ? "typeCustomBox" : "categoryCustomBox");
+    const label = isType ? "新类型" : "新类别";
+    const example = isType ? "工资" : "宠物";
+    let html = `
+      <div class="custom-add">
+        <input id="customInput" type="text" placeholder="${label}名称，如：${example}">
+        <button class="mini-btn" id="customOk">添加</button>
+        <button class="mini-btn" id="customCancel">取消</button>
+      </div>`;
+    if (isType) {
+      customTypeSideDraft = "neutral";
+      html += `
+      <div class="custom-side">
+        <span class="custom-side-label">怎么算：</span>
+        <button class="chip custom-side-chip" data-side="income">算收入</button>
+        <button class="chip custom-side-chip" data-side="expense">算支出</button>
+        <button class="chip custom-side-chip selected" data-side="neutral">中性</button>
+      </div>`;
+    }
+    box.innerHTML = html;
+    const input = document.getElementById("customInput");
+    input.focus();
+    document.getElementById("customOk").onclick = () => addCustom(kind);
+    document.getElementById("customCancel").onclick = () => { box.innerHTML = ""; };
+    input.onkeydown = (e) => { if (e.key === "Enter") addCustom(kind); };
+    if (isType) {
+      box.querySelectorAll(".custom-side-chip").forEach(chip => {
+        chip.onclick = () => {
+          customTypeSideDraft = chip.dataset.side;
+          box.querySelectorAll(".custom-side-chip").forEach(c => c.classList.remove("selected"));
+          chip.classList.add("selected");
+        };
+      });
+    }
+  }
+
+  // 新增一个自定义类型 / 类别
+  function addCustom(kind) {
+    const input = document.getElementById("customInput");
+    const name = (input.value || "").trim();
+    const isType = (kind === "type");
+    if (!name) { alert(isType ? "请先输入新类型名称" : "请先输入新类别名称"); return; }
+    const list = isType ? allTypes() : allCategories();
+    if (list.includes(name)) { alert("「" + name + "」已经存在了"); return; }
+    if (isType) {
+      customTypes.push({ name: name, side: customTypeSideDraft });
+      saveCustomTypes();
+      selectedType = name;
+    } else {
+      customCategories.push(name);
+      saveCustomCategories();
+      selectedCategory = name;
+    }
+    document.getElementById(isType ? "typeCustomBox" : "categoryCustomBox").innerHTML = "";
+    renderTypeChips();
+    renderCategoryChips();
+    if (isType) updateFormFields();
+  }
+
+  // 是不是自定义（只有自定义的才能删）
+  function isCustomType(name) {
+    return customTypes.some(x => (typeof x === "string" ? x : x.name) === name);
+  }
+  function isCustomCategory(name) {
+    return customCategories.includes(name);
+  }
+
+  // 删除一个自定义类型 / 类别
+  function removeCustom(kind, name) {
+    const used = (kind === "type")
+      ? records.filter(r => r.type === name).length
+      : records.filter(r => r.category === name).length;
+    let msg = "删除「" + name + "」吗？";
+    if (used > 0) {
+      msg += (kind === "type")
+        ? "\n已有 " + used + " 笔账用它，删除后这些账还在，但不再算收入/支出（变中性）。"
+        : "\n已有 " + used + " 笔账用它，删除后这些账还在，只是以后不能再选它。";
+    }
+    if (!confirm(msg)) return;
+    if (kind === "type") {
+      customTypes = customTypes.filter(x => (typeof x === "string" ? x : x.name) !== name);
+      saveCustomTypes();
+      if (selectedType === name) selectedType = null;
+    } else {
+      customCategories = customCategories.filter(c => c !== name);
+      saveCustomCategories();
+      if (selectedCategory === name) selectedCategory = null;
+      if (filterCategory === name) {
+        filterCategory = "";
+        document.getElementById("filterCategorySel").value = "";
+      }
+    }
+    document.getElementById("typeCustomBox").innerHTML = "";
+    document.getElementById("categoryCustomBox").innerHTML = "";
+    renderTypeChips();
+    renderCategoryChips();
+    if (kind === "type") updateFormFields();
+    if (kind === "category") fillCategoryFilter();
+    refreshDetail();
   }
 
   // ============ 渲染：统计卡片 ============
@@ -893,16 +1175,32 @@
   function renderList() {
     const list = document.getElementById("list");
     const empty = document.getElementById("empty");
+    const toggle = document.getElementById("detailToggle");
+    const wrap = document.getElementById("listWrap");
     list.innerHTML = "";
 
     // 先按时间段筛选
     const shown = filterByPeriod(records);
 
+    // 没有任何账目时，只提示，不显示"展开"按钮
+    if (records.length === 0) {
+      toggle.style.display = "none";
+      wrap.style.display = "block";
+      empty.style.display = "block";
+      empty.textContent = "还没有账目，先记一笔吧";
+      return;
+    }
+    // 有账目：默认收起，点按钮才展开
+    toggle.style.display = "inline-block";
+    toggle.textContent = detailExpanded
+      ? "▴ 收起明细"
+      : "▾ 展开明细（共 " + shown.length + " 笔）";
+    wrap.style.display = detailExpanded ? "block" : "none";
+    if (!detailExpanded) return;
+
     if (shown.length === 0) {
       empty.style.display = "block";
-      empty.textContent = (records.length === 0)
-        ? "还没有账目，先记一笔吧"
-        : "这个时间段没有账目";
+      empty.textContent = "这个时间段没有账目";
       return;
     }
     empty.style.display = "none";
@@ -1250,6 +1548,18 @@
     renderChart();
   }
 
+  // 切换大类（记一笔 / 账户 / 明细），一次只显示一个
+  function switchTab(tab) {
+    activeTab = tab;
+    document.getElementById("panelRecord").style.display = (tab === "record") ? "block" : "none";
+    document.getElementById("panelAccount").style.display = (tab === "account") ? "block" : "none";
+    document.getElementById("panelDetail").style.display = (tab === "detail") ? "block" : "none";
+    document.querySelectorAll(".tab").forEach(b => {
+      b.classList.toggle("active", b.dataset.tab === tab);
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   // ============ 交互：记一笔 / 改 / 删 ============
   let msgTimer = null;
   function showMsg(text) {
@@ -1273,6 +1583,8 @@
     document.getElementById("saveBtn").textContent = "保存这笔账";
     document.getElementById("cancelBtn").style.display = "none";
     document.getElementById("formMsg").textContent = "";
+    document.getElementById("typeCustomBox").innerHTML = "";
+    document.getElementById("categoryCustomBox").innerHTML = "";
     renderTypeChips();
     renderCategoryChips();
     updateFormFields();
@@ -1292,7 +1604,7 @@
     if (!selectedCategory) { showMsg("请先选择一个类别"); return; }
     if (isNaN(amount) || amount <= 0) { showMsg("请输入大于 0 的金额"); return; }
     if (!date) { showMsg("请选择日期"); return; }
-    if (FLOW_TYPES.includes(selectedType) && !account) { showMsg("请选择账户"); return; }
+    if (needsAccount(selectedType) && !account) { showMsg("请选择账户"); return; }
     if (selectedType === "转账") {
       if (!toAccount) { showMsg("转账需要选择转入账户"); return; }
       if (account === toAccount) { showMsg("转出和转入账户不能相同"); return; }
@@ -1355,6 +1667,7 @@
     renderTypeChips();
     renderCategoryChips();
     updateFormFields();
+    switchTab("record");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1433,6 +1746,13 @@
   // ============ 启动 ============
   document.getElementById("saveBtn").onclick = handleSave;
   document.getElementById("cancelBtn").onclick = cancelEdit;
+  document.getElementById("detailToggle").onclick = () => {
+    detailExpanded = !detailExpanded;
+    renderList();
+  };
+  document.querySelectorAll(".tab").forEach(b => {
+    b.onclick = () => switchTab(b.dataset.tab);
+  });
   document.getElementById("date").value = todayStr();
   document.getElementById("fromDate").onchange = () => {
     fromDate = document.getElementById("fromDate").value;
@@ -1456,6 +1776,8 @@
 
   load();
   loadAccounts();
+  loadCustomTypes();
+  loadCustomCategories();
   renderTypeChips();
   renderCategoryChips();
   renderAccountSelects();
