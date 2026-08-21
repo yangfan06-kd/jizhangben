@@ -44,6 +44,15 @@
     font-size: 14px;
     margin-top: 2px;
   }
+  /* 账本切换条（顶部下拉） */
+  .book-bar {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    align-items: center;
+  }
+  .book-bar select { flex: 1; }
+  .book-bar .mini-btn { padding: 10px 16px; white-space: nowrap; }
 
   /* ===== 统计卡片（深色，是本页的视觉中心） ===== */
   .stats {
@@ -382,6 +391,26 @@
   }
   .acc-balance.neg { color: var(--income); }
   .acc-msg { margin-top: 10px; font-size: 14px; color: var(--expense); min-height: 20px; }
+  .acc-msg.warn { color: var(--income); }
+
+  /* ===== 总览（跨账本） ===== */
+  .ov-income { color: var(--income); }
+  .ov-expense { color: var(--expense); }
+  .overview-total {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .overview-total .label { color: var(--muted); font-size: 13px; }
+  .overview-total .value {
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
 </style>
 </head>
 <body>
@@ -390,6 +419,10 @@
   <header>
     <h1>记账本</h1>
     <div class="subtitle">记下每一笔，清楚每一分</div>
+    <div class="book-bar">
+      <select id="bookSel" title="切换账本"></select>
+      <button id="bookManageBtn" class="mini-btn" type="button">管理</button>
+    </div>
   </header>
 
   <!-- 统计卡片：本月结余 / 收入 / 支出 -->
@@ -417,7 +450,32 @@
     <button class="tab active" data-tab="record">记一笔</button>
     <button class="tab" data-tab="account">账户</button>
     <button class="tab" data-tab="detail">明细</button>
+    <button class="tab" data-tab="overview">总览</button>
   </nav>
+
+  <!-- 账本管理 -->
+  <section class="card" id="panelBook" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h2 style="margin:0;">账本管理</h2>
+      <button id="bookBackBtn" class="mini-btn" type="button">← 返回</button>
+    </div>
+    <div id="bookList"></div>
+
+    <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+      <div class="field-label">新增 / 修改账本</div>
+      <div class="field-row" style="margin-top:8px;">
+        <div class="field">
+          <input id="bookName" type="text" placeholder="账本名称，如 孩子的账">
+        </div>
+        <div class="field">
+          <input id="bookCategory" type="text" placeholder="分类标签，如 家庭">
+        </div>
+      </div>
+      <button id="bookSaveBtn" class="btn-primary" type="button">添加账本</button>
+      <button id="bookCancelBtn" class="btn-ghost" type="button">取消修改</button>
+      <div id="bookMsg" class="acc-msg"></div>
+    </div>
+  </section>
 
   <!-- 记一笔 -->
   <section class="card" id="panelRecord">
@@ -526,6 +584,9 @@
         <select id="filterCategorySel"><option value="">全部类别</option></select>
       </div>
     </div>
+    <div class="field" style="margin-bottom:12px;">
+      <input id="searchInput" type="text" placeholder="搜索备注 / 类别 / 类型">
+    </div>
     <div id="periodSummary" class="period-summary"></div>
     <button id="detailToggle" class="chip chip-toggle" style="margin-bottom:8px;">▾ 展开明细</button>
     <div id="listWrap">
@@ -545,6 +606,13 @@
     </div>
   </section>
 
+  <!-- 总览（跨账本） -->
+  <section class="card" id="panelOverview" style="display:none;">
+    <h2>总览（所有账本）</h2>
+    <div id="overviewList"></div>
+    <div id="overviewTotal" class="overview-total"></div>
+  </section>
+
 </div>
 
 <script>
@@ -555,6 +623,11 @@
   const CATEGORIES = ["餐饮", "交通", "购物", "娱乐", "居住", "医疗", "教育", "其他"];
   const CUSTOM_TYPES_KEY = "jizhangben_custom_types";            // 自定义类型的钥匙
   const CUSTOM_CATEGORIES_KEY = "jizhangben_custom_categories";  // 自定义类别的钥匙
+  const BOOKS_KEY = "jizhangben_books";              // 所有账本的清单（每个账本：{id, name, category}）
+  const CURRENT_BOOK_KEY = "jizhangben_current_book"; // 当前打开的是哪个账本
+  // 每个账本的账目 / 账户单独存一把钥匙（带账本 id），这样各账本互不干扰
+  function recordsKey(id) { return "jizhangben_records_" + id; }
+  function accountsKey(id) { return "jizhangben_accounts_" + id; }
   // 这些类型会影响账户余额（需要选账户）
   const FLOW_TYPES = ["支出", "收入", "转账", "代付", "报销", "退款", "押金"];
   // 押金的 4 个方向：
@@ -588,21 +661,51 @@
   let toDate = "";             // 明细筛选：结束日期（空 = 不限）
   let filterAccount = "";      // 明细筛选：账户（空 = 全部）
   let filterCategory = "";     // 明细筛选：类别（空 = 全部）
+  let searchKey = "";          // 明细搜索关键字（按备注/类别/类型）
   let chartType = "bar";       // 统计图类型：bar=柱形 / pie=扇形
   let chartKind = "expense";   // 统计图口径：expense=支出 / income=收入 / combined=综合
 
-  // 从 localStorage 读取
+  // 从 localStorage 读取（读当前账本的账目）
   function load() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(recordsKey(currentBookId));
       records = raw ? JSON.parse(raw) : [];
     } catch (e) {
       records = [];
     }
   }
-  // 写回 localStorage
+  // 写回 localStorage（写进当前账本自己的钥匙）
   function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    localStorage.setItem(recordsKey(currentBookId), JSON.stringify(records));
+  }
+
+  // ============ 账本数据（多账本） ============
+  function loadBooks() {
+    try {
+      books = JSON.parse(localStorage.getItem(BOOKS_KEY)) || [];
+    } catch (e) { books = []; }
+    if (!Array.isArray(books)) books = [];
+
+    // 第一次升级：老数据存在旧钥匙里，搬进一个默认账本
+    if (books.length === 0) {
+      const defaultBook = { id: Date.now(), name: "我的账本", category: "个人" };
+      books = [defaultBook];
+      const oldRecords = localStorage.getItem(STORAGE_KEY);
+      const oldAccounts = localStorage.getItem(ACCOUNTS_KEY);
+      if (oldRecords != null) localStorage.setItem(recordsKey(defaultBook.id), oldRecords);
+      if (oldAccounts != null) localStorage.setItem(accountsKey(defaultBook.id), oldAccounts);
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ACCOUNTS_KEY);
+      saveBooks();
+    }
+
+    // 上次打开的是哪个账本（没有或已被删，就用第一个）
+    let cur = null;
+    try { cur = JSON.parse(localStorage.getItem(CURRENT_BOOK_KEY)); } catch (e) { cur = null; }
+    currentBookId = books.some(b => b.id === cur) ? cur : books[0].id;
+  }
+  function saveBooks() {
+    localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
   }
 
   // 自定义类型 / 类别：读写（存在 localStorage，下次打开还在）
@@ -659,9 +762,13 @@
   let accounts = [];           // 所有账户
   let editingAccountId = null; // 正在编辑的账户 id
 
+  let books = [];              // 所有账本 [{id, name, category}]
+  let currentBookId = null;    // 当前打开哪个账本
+  let editingBookId = null;    // 正在编辑的账本 id
+
   function loadAccounts() {
     try {
-      const raw = localStorage.getItem(ACCOUNTS_KEY);
+      const raw = localStorage.getItem(accountsKey(currentBookId));
       accounts = raw ? JSON.parse(raw) : null;
     } catch (e) { accounts = null; }
     if (!accounts || accounts.length === 0) {
@@ -669,7 +776,7 @@
     }
   }
   function saveAccounts() {
-    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    localStorage.setItem(accountsKey(currentBookId), JSON.stringify(accounts));
   }
 
   // ============ 工具函数 ============
@@ -794,21 +901,21 @@
   }
 
   // 计算每个账户的当前余额（本金 + 之后的收支）
-  function computeBalances() {
+  function computeBalancesFor(accs, recs) {
     const bal = {};
-    accounts.forEach(a => { bal[a.id] = Number(a.initial) || 0; });
-    records.forEach(r => {
+    accs.forEach(a => { bal[a.id] = Number(a.initial) || 0; });
+    recs.forEach(r => {
       const dir = flowDir(r);
       if (dir === "none") return;
       const amt = Number(r.amount) || 0;
-      const a = accounts.find(x => x.id === r.account);
+      const a = accs.find(x => x.id === r.account);
       if (!a) return;
       if (dir === "in") {
         bal[a.id] += (a.kind === "负债") ? -amt : amt;
       } else if (dir === "out") {
         bal[a.id] += (a.kind === "负债") ? amt : -amt;
       } else { // transfer：钱从 a 出、进 b
-        const b = accounts.find(x => x.id === r.toAccount);
+        const b = accs.find(x => x.id === r.toAccount);
         if (b) {
           bal[a.id] += (a.kind === "负债") ? amt : -amt;
           bal[b.id] += (b.kind === "负债") ? -amt : amt;
@@ -816,6 +923,10 @@
       }
     });
     return bal;
+  }
+  // 当前账本的余额
+  function computeBalances() {
+    return computeBalancesFor(accounts, records);
   }
 
   // 给下拉框填账户（按资金/负债分组）
@@ -1133,6 +1244,13 @@
       return true;
     });
   }
+  // 搜索关键字：匹配备注 / 类别 / 类型（不区分大小写）
+  function matchesSearch(r) {
+    const k = searchKey.trim().toLowerCase();
+    if (!k) return true;
+    const hay = ((r.note || "") + " " + r.category + " " + r.type).toLowerCase();
+    return hay.includes(k);
+  }
 
   // 这个账户是不是负债账户
   function isLiabAccount(id) {
@@ -1179,8 +1297,9 @@
     const wrap = document.getElementById("listWrap");
     list.innerHTML = "";
 
-    // 先按时间段筛选
+    // 先按时间段筛选，再按搜索关键字筛选
     const shown = filterByPeriod(records);
+    const filtered = shown.filter(matchesSearch);
 
     // 没有任何账目时，只提示，不显示"展开"按钮
     if (records.length === 0) {
@@ -1194,7 +1313,7 @@
     toggle.style.display = "inline-block";
     toggle.textContent = detailExpanded
       ? "▴ 收起明细"
-      : "▾ 展开明细（共 " + shown.length + " 笔）";
+      : "▾ 展开明细（共 " + filtered.length + " 笔）";
     wrap.style.display = detailExpanded ? "block" : "none";
     if (!detailExpanded) return;
 
@@ -1203,10 +1322,15 @@
       empty.textContent = "这个时间段没有账目";
       return;
     }
+    if (filtered.length === 0) {
+      empty.style.display = "block";
+      empty.textContent = "没有找到匹配的账目";
+      return;
+    }
     empty.style.display = "none";
 
     // 按日期从新到旧排（同一天按 id 大的在前 = 后记的在前）
-    const sorted = [...shown].sort((a, b) =>
+    const sorted = [...filtered].sort((a, b) =>
       b.date.localeCompare(a.date) || b.id - a.id
     );
 
@@ -1311,6 +1435,63 @@
         else deleteAccount(id);
       };
     });
+  }
+
+  // ============ 总览（跨账本） ============
+  // 读某个账本的账目 / 账户（不动当前内存里的数据）
+  function readBookRecords(id) {
+    try {
+      const raw = localStorage.getItem(recordsKey(id));
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+  function readBookAccounts(id) {
+    try {
+      const raw = localStorage.getItem(accountsKey(id));
+      let accs = raw ? JSON.parse(raw) : null;
+      if (!accs || accs.length === 0) accs = JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS));
+      return accs;
+    } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)); }
+  }
+
+  function renderOverview() {
+    const box = document.getElementById("overviewList");
+    const totalBox = document.getElementById("overviewTotal");
+    box.innerHTML = "";
+    if (books.length === 0) {
+      box.innerHTML = '<div class="empty small">还没有账本</div>';
+      totalBox.style.display = "none";
+      return;
+    }
+    let totalNet = 0;
+    books.forEach(b => {
+      const recs = readBookRecords(b.id);
+      const accs = readBookAccounts(b.id);
+      const bal = computeBalancesFor(accs, recs);
+      let net = 0;
+      accs.forEach(a => { net += (a.kind === "负债") ? -bal[a.id] : bal[a.id]; });
+      totalNet += net;
+      const month = recs.filter(r => isThisMonth(r.date));
+      const income = month.reduce((s, r) => s + incomeEffect(r), 0);
+      const expense = month.reduce((s, r) => s + expenseEffect(r), 0);
+
+      const row = document.createElement("div");
+      row.className = "acc-row";
+      row.innerHTML = `
+        <div class="acc-main">
+          <div>
+            <span class="acc-name">${esc(b.name)}</span>
+            <span class="acc-kind">${esc(b.category)}</span>
+            ${b.id === currentBookId ? '<span class="acc-kind">当前</span>' : ''}
+          </div>
+          <div class="acc-init">本月 <span class="ov-income">${income < 0 ? "−¥" : "+¥"}${Math.abs(income).toFixed(2)}</span> · <span class="ov-expense">${expense < 0 ? "+¥" : "−¥"}${Math.abs(expense).toFixed(2)}</span></div>
+        </div>
+        <div class="acc-balance ${net < 0 ? "neg" : ""}">${net < 0 ? "−¥" : "¥"}${Math.abs(net).toFixed(2)}</div>
+      `;
+      box.appendChild(row);
+    });
+    totalBox.style.display = "block";
+    totalBox.innerHTML = `<span class="label">全部账本净资产合计</span><span class="value">${totalNet < 0 ? "−¥" : "¥"}${Math.abs(totalNet).toFixed(2)}</span>`;
   }
 
   // ============ 统计图（按明细筛选，收入/支出/综合按类别） ============
@@ -1546,14 +1727,18 @@
     renderChartKindChips();
     renderChartTypeChips();
     renderChart();
+    renderOverview();
   }
 
   // 切换大类（记一笔 / 账户 / 明细），一次只显示一个
   function switchTab(tab) {
     activeTab = tab;
+    document.getElementById("panelBook").style.display = "none";
     document.getElementById("panelRecord").style.display = (tab === "record") ? "block" : "none";
     document.getElementById("panelAccount").style.display = (tab === "account") ? "block" : "none";
     document.getElementById("panelDetail").style.display = (tab === "detail") ? "block" : "none";
+    document.getElementById("panelOverview").style.display = (tab === "overview") ? "block" : "none";
+    if (tab === "overview") renderOverview();
     document.querySelectorAll(".tab").forEach(b => {
       b.classList.toggle("active", b.dataset.tab === tab);
     });
@@ -1614,7 +1799,8 @@
       if (!depositTarget) { showMsg("请填写押金对象（谁对谁押）"); return; }
     }
 
-    if (editingId) {
+    const wasEdit = !!editingId;
+    if (wasEdit) {
       // 编辑模式：更新那笔账
       const rec = records.find(r => r.id === editingId);
       rec.type = selectedType;
@@ -1626,7 +1812,6 @@
       rec.toAccount = (selectedType === "转账") ? toAccount : null;
       rec.depositDir = depositDir;
       rec.depositTarget = (selectedType === "押金") ? depositTarget : null;
-      showMsg("已保存修改");
     } else {
       // 新增模式
       records.push({
@@ -1641,11 +1826,12 @@
         depositDir: depositDir,
         depositTarget: (selectedType === "押金") ? depositTarget : null
       });
-      showMsg("已记一笔");
     }
 
     save();
     resetForm();
+    // 先重置再提示，否则 resetForm 会把提示清掉
+    showMsg(wasEdit ? "已保存修改" : "已记一笔");
     render();
   }
 
@@ -1707,18 +1893,19 @@
     const initial = parseFloat(document.getElementById("accInitial").value) || 0;
     if (!name) { showAccMsg("请填写账户名"); return; }
 
-    if (editingAccountId) {
+    const wasEdit = !!editingAccountId;
+    if (wasEdit) {
       const a = accounts.find(x => x.id === editingAccountId);
       a.name = name;
       a.kind = kind;
       a.initial = initial;
-      showAccMsg("已保存修改");
     } else {
       accounts.push({ id: Date.now(), name: name, kind: kind, initial: initial });
-      showAccMsg("已添加账户");
     }
     saveAccounts();
     resetAccountForm();
+    // 先重置再提示，否则 resetAccountForm 会把提示清掉
+    showAccMsg(wasEdit ? "已保存修改" : "已添加账户");
     render();
   }
 
@@ -1741,6 +1928,188 @@
     saveAccounts();
     resetAccountForm();
     render();
+  }
+
+  // ============ 账本：切换 / 增删改 ============
+  let bookMsgTimer = null;
+  function showBookMsg(text, isWarn) {
+    const m = document.getElementById("bookMsg");
+    m.textContent = text;
+    m.classList.toggle("warn", !!isWarn);
+    clearTimeout(bookMsgTimer);
+    bookMsgTimer = setTimeout(() => { m.textContent = ""; }, isWarn ? 5000 : 3000);
+  }
+
+  // 顶部下拉：按分类分组列出所有账本
+  function renderBookSelect() {
+    const sel = document.getElementById("bookSel");
+    sel.innerHTML = "";
+    const cats = [];
+    books.forEach(b => { if (!cats.includes(b.category)) cats.push(b.category); });
+    cats.forEach(cat => {
+      const group = books.filter(b => b.category === cat);
+      const og = document.createElement("optgroup");
+      og.label = cat;
+      group.forEach(b => {
+        const op = document.createElement("option");
+        op.value = String(b.id);
+        op.textContent = b.name;
+        og.appendChild(op);
+      });
+      sel.appendChild(og);
+    });
+    sel.value = String(currentBookId);
+  }
+
+  // 切换到另一个账本：记住选择，重新读这个账本的账目和账户
+  function switchBook(id) {
+    if (!books.some(b => b.id === id)) return;
+    currentBookId = id;
+    localStorage.setItem(CURRENT_BOOK_KEY, JSON.stringify(currentBookId));
+    load();
+    loadAccounts();
+    // 清掉编辑中的状态和筛选，避免串到别的账本
+    resetForm();
+    resetAccountForm();
+    fromDate = ""; toDate = ""; filterAccount = ""; filterCategory = "";
+    document.getElementById("fromDate").value = "";
+    document.getElementById("toDate").value = "";
+    document.getElementById("filterAccountSel").value = "";
+    document.getElementById("filterCategorySel").value = "";
+    searchKey = "";
+    document.getElementById("searchInput").value = "";
+    renderBookSelect();
+    renderAccountSelects();
+    fillCategoryFilter();
+    render();
+  }
+
+  function renderBookList() {
+    const box = document.getElementById("bookList");
+    box.innerHTML = "";
+    if (books.length === 0) {
+      box.innerHTML = '<div class="empty small">还没有账本，先建一个吧</div>';
+      return;
+    }
+    books.forEach(b => {
+      const row = document.createElement("div");
+      row.className = "acc-row";
+      row.innerHTML = `
+        <div class="acc-main">
+          <div>
+            <span class="acc-name">${esc(b.name)}</span>
+            <span class="acc-kind">${esc(b.category)}</span>
+            ${b.id === currentBookId ? '<span class="acc-kind">当前</span>' : ''}
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="mini-btn" data-id="${b.id}" data-act="use">用</button>
+          <button class="mini-btn" data-id="${b.id}" data-act="edit">改</button>
+          <button class="mini-btn danger" data-id="${b.id}" data-act="del">删</button>
+        </div>
+      `;
+      box.appendChild(row);
+    });
+    box.querySelectorAll(".mini-btn").forEach(btn => {
+      btn.onclick = () => {
+        const id = Number(btn.dataset.id);
+        if (btn.dataset.act === "use") { switchBook(id); toggleBookPanel(false); }
+        else if (btn.dataset.act === "edit") startEditBook(id);
+        else deleteBook(id);
+      };
+    });
+  }
+
+  function resetBookForm() {
+    editingBookId = null;
+    document.getElementById("bookName").value = "";
+    document.getElementById("bookCategory").value = "";
+    document.getElementById("bookSaveBtn").textContent = "添加账本";
+    document.getElementById("bookCancelBtn").style.display = "none";
+    document.getElementById("bookMsg").textContent = "";
+  }
+
+  function handleBookSave() {
+    const name = document.getElementById("bookName").value.trim();
+    const category = document.getElementById("bookCategory").value.trim() || "未分类";
+    if (!name) { showBookMsg("请填写账本名称"); return; }
+    // 重名提醒（不禁止）：同名账本在顶部下拉里会分不清
+    const dup = books.find(x => x.name === name && x.id !== editingBookId);
+    const wasEdit = !!editingBookId;
+    if (wasEdit) {
+      const b = books.find(x => x.id === editingBookId);
+      b.name = name;
+      b.category = category;
+    } else {
+      books.push({ id: Date.now(), name: name, category: category });
+    }
+    saveBooks();
+    resetBookForm();
+    // 先重置再提示，否则 resetBookForm 会把提示清掉
+    if (wasEdit) {
+      showBookMsg(dup ? "已保存修改（注意：还有同名账本，请留意区分）" : "已保存修改", dup);
+    } else {
+      showBookMsg(dup ? "已添加账本（注意：已有同名账本，请留意区分）" : "已添加账本", dup);
+    }
+    renderBookSelect();
+    renderBookList();
+    renderOverview();
+  }
+
+  function startEditBook(id) {
+    const b = books.find(x => x.id === id);
+    if (!b) return;
+    editingBookId = id;
+    document.getElementById("bookName").value = b.name;
+    document.getElementById("bookCategory").value = b.category;
+    document.getElementById("bookSaveBtn").textContent = "保存修改";
+    document.getElementById("bookCancelBtn").style.display = "block";
+    document.getElementById("bookMsg").textContent = "";
+  }
+
+  function deleteBook(id) {
+    const b = books.find(x => x.id === id);
+    if (!b) return;
+    if (books.length <= 1) { showBookMsg("至少要保留一个账本"); return; }
+    if (!confirm("确定删除账本「" + b.name + "」吗？\n这个账本下的所有账目和账户都会被清空。")) return;
+    books = books.filter(x => x.id !== id);
+    localStorage.removeItem(recordsKey(id));
+    localStorage.removeItem(accountsKey(id));
+    saveBooks();
+    // 如果删的是当前账本，自动切到第一个
+    if (currentBookId === id) {
+      currentBookId = books[0].id;
+      localStorage.setItem(CURRENT_BOOK_KEY, JSON.stringify(currentBookId));
+      load();
+      loadAccounts();
+      resetForm();
+      resetAccountForm();
+      fromDate = ""; toDate = ""; filterAccount = ""; filterCategory = "";
+      document.getElementById("fromDate").value = "";
+      document.getElementById("toDate").value = "";
+      document.getElementById("filterAccountSel").value = "";
+      document.getElementById("filterCategorySel").value = "";
+      searchKey = "";
+      document.getElementById("searchInput").value = "";
+    }
+    resetBookForm();
+    renderBookSelect();
+    renderBookList();
+    render();
+  }
+
+  // 打开 / 关闭账本管理面板（打开时盖住三个大类）
+  function toggleBookPanel(show) {
+    document.getElementById("panelBook").style.display = show ? "block" : "none";
+    document.getElementById("panelRecord").style.display = show ? "none" : (activeTab === "record" ? "block" : "none");
+    document.getElementById("panelAccount").style.display = show ? "none" : (activeTab === "account" ? "block" : "none");
+    document.getElementById("panelDetail").style.display = show ? "none" : (activeTab === "detail" ? "block" : "none");
+    document.getElementById("panelOverview").style.display = show ? "none" : (activeTab === "overview" ? "block" : "none");
+    if (show) {
+      document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+      renderBookList();
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   // ============ 启动 ============
@@ -1770,14 +2139,29 @@
     filterCategory = document.getElementById("filterCategorySel").value;
     refreshDetail();
   };
+  document.getElementById("searchInput").oninput = () => {
+    searchKey = document.getElementById("searchInput").value;
+    renderList();
+  };
 
   document.getElementById("accSaveBtn").onclick = handleAccountSave;
   document.getElementById("accCancelBtn").onclick = resetAccountForm;
 
-  load();
+  document.getElementById("bookSel").onchange = () => {
+    switchBook(Number(document.getElementById("bookSel").value));
+  };
+  document.getElementById("bookManageBtn").onclick = () => toggleBookPanel(true);
+  document.getElementById("bookBackBtn").onclick = () => toggleBookPanel(false);
+  document.getElementById("bookSaveBtn").onclick = handleBookSave;
+  document.getElementById("bookCancelBtn").onclick = resetBookForm;
+
+  loadBooks();   // 先读账本清单，定好当前是哪个账本
+  load();        // 再读这个账本的账目
   loadAccounts();
   loadCustomTypes();
   loadCustomCategories();
+  renderBookSelect();
+  renderBookList();
   renderTypeChips();
   renderCategoryChips();
   renderAccountSelects();
