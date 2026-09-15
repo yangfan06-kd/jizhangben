@@ -11,6 +11,62 @@ function showBookMsg(text, isWarn) {
   bookMsgTimer = setTimeout(() => { m.textContent = ""; }, isWarn ? 5000 : 3000);
 }
 
+function setBookSaveBusy(busy) {
+  uiState.bookSaveInFlight = !!busy;
+  const saveBtn = document.getElementById("bookSaveBtn");
+  const cancelBtn = document.getElementById("bookCancelBtn");
+  if (saveBtn) {
+    saveBtn.disabled = !!busy;
+    if (busy) saveBtn.textContent = "保存中…";
+    else saveBtn.textContent = uiState.editingBookId === null ? "添加账本" : "保存修改";
+  }
+  if (cancelBtn) cancelBtn.disabled = !!busy;
+}
+
+function setBookDeleteBusy(busy) {
+  uiState.bookDeleteInFlight = !!busy;
+  const saveBtn = document.getElementById("bookSaveBtn");
+  const cancelBtn = document.getElementById("bookCancelBtn");
+  if (saveBtn) {
+    saveBtn.disabled = !!busy;
+    if (busy) saveBtn.textContent = "删除中…";
+    else saveBtn.textContent = uiState.editingBookId === null ? "添加账本" : "保存修改";
+  }
+  if (cancelBtn) cancelBtn.disabled = !!busy;
+}
+
+function bookFingerprint(book) {
+  return book ? { name: book.name, category: book.category || "未分类" } : null;
+}
+
+function findLocalBookByFingerprint(fingerprint) {
+  if (!fingerprint) return null;
+  const matches = dataState.books.filter(book => (
+    book.name === fingerprint.name && (book.category || "未分类") === fingerprint.category
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function applyLocalBookDelete(id) {
+  dataState.books = dataState.books.filter(x => String(x.id) !== String(id));
+  appStorage.remove(recordsKey(id));
+  appStorage.remove(accountsKey(id));
+  saveBooks();
+  if (String(dataState.currentBookId) === String(id) && dataState.books.length > 0) {
+    dataState.currentBookId = dataState.books[0].id;
+    appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(dataState.currentBookId));
+    load();
+    loadAccounts();
+    resetForm();
+    resetAccountForm();
+    resetFilterState();
+    ["fromDate", "toDate", "filterAccountSel", "filterCategorySel", "searchInput"].forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) field.value = "";
+    });
+  }
+}
+
 // 顶部下拉：按分类分组列出所有账本
 function renderBookSelect() {
   const sel = document.getElementById("bookSel");
@@ -121,18 +177,72 @@ function resetBookForm() {
 }
 
 async function handleBookSave() {
+  if (uiState.bookSaveInFlight || uiState.bookDeleteInFlight) {
+    showBookMsg("正在处理，请稍候", true);
+    return;
+  }
   const name = document.getElementById("bookName").value.trim();
   const category = document.getElementById("bookCategory").value.trim() || "未分类";
   if (!name) { showBookMsg("请填写账本名称"); return; }
   // 重名提醒（不禁止）：同名账本在顶部下拉里会分不清
   const dup = dataState.books.find(x => x.name === name && String(x.id) !== String(uiState.editingBookId));
   const wasEdit = uiState.editingBookId !== null;
+  const originalBook = wasEdit
+    ? dataState.books.find(x => String(x.id) === String(uiState.editingBookId))
+    : null;
+  const originalFingerprint = bookFingerprint(originalBook);
   let backendFallback = false;
 
-  // 先把新账本写入后端；修改沿用本地流程，后续步骤再切换 PATCH。
+  if (wasEdit && !originalBook) {
+    showBookMsg("找不到正在编辑的账本，请重新选择", true);
+    return;
+  }
+
+  if (wasEdit && backendWritesEnabled() && originalBook && typeof originalBook.id === "string") {
+    setBookSaveBusy(true);
+    try {
+      const saved = await backendApi.updateBook(originalBook.id, { name, group_name: category });
+      if (!saved || !saved.id) throw new Error("book_response_invalid");
+      const index = dataState.books.findIndex(x => String(x.id) === String(originalBook.id));
+      if (index >= 0) dataState.books[index] = mapBackendBook(saved);
+      await refreshBackendOverviewAfterWrite();
+      const backendDup = Array.isArray(saved.warnings) && saved.warnings.some(w => w.code === "duplicate_book_name");
+      resetBookForm();
+      showBookMsg(backendDup ? "已保存到账本服务端（注意：已有同名账本，请留意区分）" : "已保存到账本服务端", backendDup);
+      renderBookSelect();
+      renderBookList();
+      renderOverview();
+    } catch (error) {
+      if (error && error.code && error.code !== "backend_request_failed") {
+        showBookMsg(error.message || "服务端拒绝了账本修改", true);
+      } else {
+        restoreLocalStateFromStorage();
+        const localBook = findLocalBookByFingerprint(originalFingerprint);
+        if (!localBook) {
+          showBookMsg("服务端不可用，本地未找到原账本，修改未保存", true);
+        } else {
+          localBook.name = name;
+          localBook.category = category;
+          saveBooks();
+          resetBookForm();
+          showBookMsg("服务端不可用，已在本地保存修改", true);
+          renderBookSelect();
+          renderBookList();
+          renderOverview();
+        }
+      }
+    } finally {
+      setBookSaveBusy(false);
+    }
+    return;
+  }
+
+  // 新账本和账本修改都优先写入后端；当前编辑对象缺少服务端 ID 时继续本地流程。
   if (!wasEdit && backendWritesEnabled()) {
+    setBookSaveBusy(true);
     try {
       const saved = await backendApi.createBook({ name, group_name: category });
+      if (!saved || !saved.id) throw new Error("book_response_invalid");
       const mapped = mapBackendBook(saved);
       dataState.books.push(mapped);
       await refreshBackendOverviewAfterWrite();
@@ -144,8 +254,14 @@ async function handleBookSave() {
       renderOverview();
       return;
     } catch (error) {
+      if (error && error.code && error.code !== "backend_request_failed") {
+        showBookMsg(error.message || "服务端拒绝创建账本", true);
+        return;
+      }
       restoreLocalStateFromStorage();
       backendFallback = true;
+    } finally {
+      setBookSaveBusy(false);
     }
   }
 
@@ -182,30 +298,67 @@ function startEditBook(id) {
   document.getElementById("bookMsg").textContent = "";
 }
 
-function deleteBook(id) {
+async function deleteBook(id) {
+  if (uiState.bookSaveInFlight) {
+    showBookMsg("正在保存，请稍候", true);
+    return;
+  }
+  if (uiState.bookDeleteInFlight) {
+    showBookMsg("正在删除，请稍候", true);
+    return;
+  }
   const b = dataState.books.find(x => String(x.id) === String(id));
   if (!b) return;
   if (dataState.books.length <= 1) { showBookMsg("至少要保留一个账本"); return; }
   if (!confirm("确定删除账本「" + b.name + "」吗？\n这个账本下的所有账目和账户都会被清空。")) return;
-  dataState.books = dataState.books.filter(x => String(x.id) !== String(id));
-  appStorage.remove(recordsKey(id));
-  appStorage.remove(accountsKey(id));
-  saveBooks();
-  // 如果删的是当前账本，自动切到第一个
-  if (String(dataState.currentBookId) === String(id)) {
-    dataState.currentBookId = dataState.books[0].id;
-    appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(dataState.currentBookId));
-    load();
-    loadAccounts();
-    resetForm();
-    resetAccountForm();
-    resetFilterState();
-    document.getElementById("fromDate").value = "";
-    document.getElementById("toDate").value = "";
-    document.getElementById("filterAccountSel").value = "";
-    document.getElementById("filterCategorySel").value = "";
-    document.getElementById("searchInput").value = "";
+  const fingerprint = bookFingerprint(b);
+  if (backendWritesEnabled() && typeof b.id === "string") {
+    setBookDeleteBusy(true);
+    try {
+      await backendApi.deleteBook(b.id);
+      dataState.books = dataState.books.filter(x => String(x.id) !== String(id));
+      let detailsRefreshed = true;
+      if (String(dataState.currentBookId) === String(id) && dataState.books.length > 0) {
+        dataState.currentBookId = dataState.books[0].id;
+        appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(dataState.currentBookId));
+        const results = await Promise.all([hydrateAccountsFromBackend(), hydrateRecordsFromBackend()]);
+        detailsRefreshed = results.every(Boolean);
+        if (!detailsRefreshed) {
+          dataState.accounts = [];
+          dataState.records = [];
+          dataState.backendRecordsLoaded = false;
+        }
+      }
+      await refreshBackendOverviewAfterWrite();
+      resetBookForm();
+      showBookMsg(detailsRefreshed ? "已删除账本（已同步服务端）" : "已删除账本（服务端已删除，明细刷新稍后重试）");
+      renderBookSelect();
+      renderBookList();
+      render();
+    } catch (error) {
+      if (error && error.code && error.code !== "backend_request_failed") {
+        showBookMsg(error.message || "服务端拒绝删除账本", true);
+      } else {
+        restoreLocalStateFromStorage();
+        const localBook = findLocalBookByFingerprint(fingerprint);
+        if (!localBook || dataState.books.length <= 1) {
+          showBookMsg("服务端不可用，本地无法安全删除这本账", true);
+        } else {
+          applyLocalBookDelete(localBook.id);
+          resetBookForm();
+          showBookMsg("服务端不可用，已在本地删除账本", true);
+          renderBookSelect();
+          renderBookList();
+          render();
+        }
+      }
+    } finally {
+      setBookDeleteBusy(false);
+    }
+    return;
   }
+
+  applyLocalBookDelete(id);
   resetBookForm();
   renderBookSelect();
   renderBookList();

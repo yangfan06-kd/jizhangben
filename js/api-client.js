@@ -62,6 +62,10 @@ const backendApi = {
     return this.postJSON("/books/" + encodeURIComponent(String(bookId)), payload, "PATCH");
   },
 
+  deleteBook(bookId) {
+    return this.postJSON("/books/" + encodeURIComponent(String(bookId)), {}, "DELETE");
+  },
+
   createAccount(bookId, payload) {
     const id = encodeURIComponent(String(bookId));
     return this.postJSON("/books/" + id + "/accounts", payload);
@@ -88,6 +92,12 @@ const backendApi = {
     const book = encodeURIComponent(String(bookId));
     const account = encodeURIComponent(String(accountId));
     return this.postJSON("/books/" + book + "/accounts/" + account, payload, "PATCH");
+  },
+
+  deleteAccount(bookId, accountId) {
+    const book = encodeURIComponent(String(bookId));
+    const account = encodeURIComponent(String(accountId));
+    return this.postJSON("/books/" + book + "/accounts/" + account, {}, "DELETE");
   }
 };
 

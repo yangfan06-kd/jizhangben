@@ -26,7 +26,11 @@ const uiState = {
   startupNotice: "",
   recordSaveInFlight: false,
   recordDeleteInFlight: false,
-  recordSaveStatus: "idle"
+  recordSaveStatus: "idle",
+  bookSaveInFlight: false,
+  bookDeleteInFlight: false,
+  accountSaveInFlight: false,
+  accountDeleteInFlight: false
 };
 
 const dataState = {

@@ -133,6 +133,199 @@ test("backendApi uses UUID-safe write paths for books and accounts", async () =>
   ]));
 });
 
+test("editing a server book uses PATCH and refreshes the overview", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    uiState.editingBookId = "book-1";
+    formElements.bookName.value = "家庭账本";
+    formElements.bookCategory.value = "家庭";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/books/book-1")) return { ok: true, json: async () => ({
+        id: "book-1", name: "家庭账本", group_name: "家庭", warnings: []
+      }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "家庭账本", group_name: "家庭", income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleBookSave()");
+  const calls = runtime.run("window.calls");
+  assert.equal(calls[0].url, "/api/books/book-1");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { name: "家庭账本", group_name: "家庭" });
+  assert.equal(runtime.run("dataState.books[0].name"), "家庭账本");
+  assert.match(runtime.run("document.getElementById('bookMsg').textContent"), /服务端/);
+});
+
+test("deleting a server book uses DELETE", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [
+      { id: "book-1", name: "日常账本", category: "个人" },
+      { id: "book-2", name: "旅行账本", category: "旅行" }
+    ];
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/books/book-2") && options.method === "DELETE") return {
+        ok: true, status: 204, json: async () => { throw new Error("no content"); }
+      };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("deleteBook('book-2')");
+  const calls = runtime.run("window.calls");
+  assert.equal(calls[0].url, "/api/books/book-2");
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.equal(runtime.run("dataState.books.length"), 1);
+  assert.equal(runtime.run("uiState.bookDeleteInFlight"), false);
+});
+
+test("editing a server account uses PATCH and refreshes the overview", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "account-1", name: "现金", kind: "资金", initial: 10, initialCents: 1000 }];
+    uiState.editingAccountId = "account-1";
+    formElements.accName.value = "工资卡";
+    formElements.accKind.value = "资金";
+    formElements.accInitial.value = "20.50";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/accounts/account-1")) return { ok: true, json: async () => ({
+        id: "account-1", book_id: "book-1", name: "工资卡", kind: "asset", initial_cents: 2050
+      }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 0, net_worth_cents: 2050 }
+        ], totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 2050 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleAccountSave()");
+  const calls = runtime.run("window.calls");
+  assert.equal(calls[0].url, "/api/books/book-1/accounts/account-1");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { name: "工资卡", kind: "asset", initial_cents: 2050 });
+  assert.equal(runtime.run("dataState.accounts[0].name"), "工资卡");
+  assert.equal(runtime.run("dataState.accounts[0].initialCents"), 2050);
+});
+
+test("deleting a server account uses DELETE and refreshes records", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "account-1", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [{ id: "record-1", type: "支出", amount: 1, amountCents: 100,
+      category: "餐饮", note: "午餐", date: "2026-09-15", account: "account-1", toAccount: null,
+      depositDir: null, depositTarget: null, depositLinkId: null, depositFinal: false }];
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/accounts/account-1") && options.method === "DELETE") return {
+        ok: true, status: 204, json: async () => { throw new Error("no content"); }
+      };
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({ items: [] }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("deleteAccount('account-1')");
+  const calls = runtime.run("window.calls");
+  assert.equal(calls[0].url, "/api/books/book-1/accounts/account-1");
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.equal(runtime.run("dataState.accounts.length"), 0);
+  assert.equal(runtime.run("dataState.records.length"), 0);
+  assert.equal(runtime.run("uiState.accountDeleteInFlight"), false);
+});
+
+test("server book conflicts stay visible instead of falling back locally", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    uiState.editingBookId = "book-1";
+    formElements.bookName.value = "日常账本";
+    formElements.bookCategory.value = "个人";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      return { ok: false, json: async () => ({ code: "book_not_found", message: "当前账本不存在" }) };
+    };
+  })()`);
+
+  await runtime.run("handleBookSave()");
+  assert.equal(runtime.run("dataState.books[0].name"), "日常账本");
+  assert.equal(runtime.run("uiState.bookSaveInFlight"), false);
+  assert.equal(runtime.run("document.getElementById('bookMsg').textContent"), "当前账本不存在");
+  assert.equal(runtime.run("window.calls.length"), 1);
+});
+
+test("account edit network failure restores local account IDs before fallback", async () => {
+  const runtime = createRuntime({
+    jizhangben_books: JSON.stringify([{ id: 1, name: "本地账本", category: "个人" }]),
+    jizhangben_current_book: JSON.stringify(1),
+    jizhangben_accounts_1: JSON.stringify([{ id: 7, name: "现金", kind: "资金", initial: 10 }])
+  });
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.currentBookId = "server-book";
+    dataState.books = [{ id: "server-book", name: "本地账本", category: "个人" }];
+    dataState.accounts = [{ id: "server-account", name: "现金", kind: "资金", initial: 10, initialCents: 1000 }];
+    uiState.editingAccountId = "server-account";
+    formElements.accName.value = "工资卡";
+    formElements.accKind.value = "资金";
+    formElements.accInitial.value = "20.50";
+    window.fetch = async () => { throw new Error("offline"); };
+  })()`);
+
+  await runtime.run("handleAccountSave()");
+  assert.equal(runtime.run("dataState.backendBooksLoaded"), false);
+  assert.equal(runtime.run("dataState.currentBookId"), 1);
+  assert.equal(runtime.run("dataState.accounts[0].id"), 7);
+  assert.equal(runtime.run("dataState.accounts[0].name"), "工资卡");
+  assert.match(runtime.run("document.getElementById('accMsg').textContent"), /服务端不可用/);
+});
+
 test("new ordinary record posts server option and account UUIDs", async () => {
   const runtime = createRuntime();
   installRecordDom(runtime);
