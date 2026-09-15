@@ -44,6 +44,12 @@ document.getElementById("bookManageBtn").onclick = () => toggleBookPanel(true);
 document.getElementById("bookBackBtn").onclick = () => toggleBookPanel(false);
 document.getElementById("bookSaveBtn").onclick = handleBookSave;
 document.getElementById("bookCancelBtn").onclick = resetBookForm;
+document.getElementById("authOpenBtn").onclick = () => openAuthPanel("login");
+document.getElementById("authLogoutBtn").onclick = logoutAuth;
+document.getElementById("authCloseBtn").onclick = closeAuthPanel;
+document.getElementById("authLoginTab").onclick = () => setAuthMode("login");
+document.getElementById("authRegisterTab").onclick = () => setAuthMode("register");
+document.getElementById("authSubmitBtn").onclick = submitAuth;
 document.getElementById("exportBtn").onclick = exportBackup;
 document.getElementById("importBtn").onclick = () => {
   document.getElementById("importFile").click();
@@ -79,5 +85,6 @@ fillCategoryFilter();
 updateFormFields();
 render();
 
-// 本地页面先立即可用，再后台尝试读取服务端账本和账户。
-startBackendReadHydration();
+// 本地页面先立即可用，再检查会话；登录用户允许服务端返回空账本替换本地兼容数据。
+renderAuthStatus();
+hydrateAuthSession();

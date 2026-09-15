@@ -57,7 +57,7 @@ def test_migrations_are_idempotent_and_enable_foreign_keys(tmp_path):
         ).fetchall()
         foreign_keys_enabled = connection.execute("PRAGMA foreign_keys").fetchone()[0]
 
-    assert [row["version"] for row in versions] == [1, 2, 3, 4]
+    assert [row["version"] for row in versions] == [1, 2, 3, 4, 5]
     assert foreign_keys_enabled == 1
 
 
@@ -380,7 +380,7 @@ def test_existing_schema_v3_upgrades_to_v4(tmp_path, monkeypatch):
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'records'"
         ).fetchone()
 
-    assert [row["version"] for row in versions] == [1, 2, 3, 4]
+    assert [row["version"] for row in versions] == [1, 2, 3, 4, 5]
     assert records_table["name"] == "records"
 
 

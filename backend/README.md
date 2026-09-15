@@ -31,25 +31,41 @@ python -m venv backend/.venv
 - 健康检查：`http://127.0.0.1:8000/api/health`
 - 接口文档：`http://127.0.0.1:8000/docs`
 
+如果前端通过另一个 HTTP 端口打开，启动服务前设置允许的来源，例如：
+
+```powershell
+$env:JIZHANGBEN_CORS_ORIGINS = "http://127.0.0.1:5500"
+& "backend/.venv/Scripts/python.exe" -m uvicorn backend.app.main:app --reload
+```
+
+登录 Cookie 只会在列出的来源之间通过跨端口请求发送。
+
 默认开发数据库保存在 `backend/data/jizhangben.db`，该文件已经被 `.gitignore` 排除。
 
-当前数据库 schema 版本为 `4`，包含：
+当前数据库 schema 版本为 `5`，包含：
 
 - `schema_migrations`：记录已经成功应用的数据库版本。
-- `users`：保存用户的公开资料；认证密码将在后续独立设计。
+- `users`：保存用户公开资料和 PBKDF2 密码哈希，不保存明文密码。
 - `books`：保存用户拥有的账本，通过外键与用户关联。
 - `accounts`：保存账本内的资金或负债账户，本金统一使用整数分。
 - `categories`：保存内置和自定义类别，归档后仍可供历史账目引用。
 - `record_types`：保存稳定类型代码、显示名称和收支行为，归档不改变历史含义。
 - `records`：保存账目金额、日期、账户流向、类别、类型和押金对应关系。
+- `sessions`：保存登录会话的哈希、所属用户和过期时间，原始会话令牌只通过 HttpOnly Cookie 返回。
 
 应用每次启动都会检查待执行迁移。已经记录的版本不会重复运行；某个迁移失败时，本次事务不会提交。
 
-阶段 3 暂时使用一个固定的本地开发用户。应用启动时会幂等检查并创建该用户，再把用户 ID 交给统一的请求依赖。这个依赖是未来登录系统的替换点，路由和服务层不会把开发用户 ID 写死在各处。
+应用启动时仍会幂等检查并创建一个固定的本地开发用户，供旧页面和自动化测试在没有 Cookie 时兼容使用；真正登录后，请求依赖会优先从会话 Cookie 解析用户，带有无效 Cookie 时直接返回 401。下一步关闭这个开发回退，所有业务请求都要求登录。
+
+部署或联调登录功能时，可以设置 `$env:JIZHANGBEN_ALLOW_DEV_FALLBACK = "0"`，让没有 Cookie 的业务请求也直接返回 401；默认值 `1` 只用于当前迁移阶段兼容旧页面。
 
 `app/services/record_service.py` 负责创建账目前的跨表校验。它会确认类别和类型属于账本所有者、账户属于当前账本，并检查转账与押金对应关系。校验和写入在同一个数据库事务内完成，业务错误提供稳定的 `code`，供后续 API 返回给网页和手机端。
 
 ## 当前业务接口
+
+`POST /api/auth/register` 接收 `email`、至少 8 位的 `password` 和 `display_name`，成功返回用户公开资料并设置 HttpOnly 会话 Cookie；同一邮箱不能重复注册。
+
+`POST /api/auth/login` 校验邮箱和密码并设置会话 Cookie；密码错误返回 `401` 和 `invalid_credentials`。`GET /api/auth/me` 返回当前登录用户，缺少或失效会话返回 `401`；`POST /api/auth/logout` 撤销当前会话并返回 `204`。
 
 `GET /api/books` 查询当前开发用户的账本，列表统一放在 `items` 字段中。
 

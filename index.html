@@ -16,9 +16,39 @@
       <select id="bookSel" title="切换账本"></select>
       <button id="bookManageBtn" class="mini-btn" type="button">管理</button>
     </div>
+    <div class="auth-bar">
+      <span id="authStatus">本地模式</span>
+      <button id="authOpenBtn" class="mini-btn" type="button">登录</button>
+      <button id="authLogoutBtn" class="mini-btn" type="button" hidden>退出</button>
+    </div>
   </header>
 
   <div id="startupNotice" class="startup-notice" role="alert" hidden></div>
+
+  <section id="authPanel" class="card auth-panel" hidden>
+    <div class="auth-panel-head">
+      <h2 id="authTitle">登录记账本</h2>
+      <button id="authCloseBtn" class="mini-btn" type="button">关闭</button>
+    </div>
+    <div class="auth-tabs">
+      <button id="authLoginTab" class="tab active" type="button">登录</button>
+      <button id="authRegisterTab" class="tab" type="button">注册</button>
+    </div>
+    <div class="field">
+      <div class="field-label">邮箱</div>
+      <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+    </div>
+    <div class="field" id="authNameField" hidden>
+      <div class="field-label">显示名称</div>
+      <input id="authDisplayName" type="text" autocomplete="name" placeholder="如：小明">
+    </div>
+    <div class="field">
+      <div class="field-label">密码</div>
+      <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 8 个字符">
+    </div>
+    <button id="authSubmitBtn" class="btn-primary" type="button">登录</button>
+    <div id="authMsg" class="form-msg"></div>
+  </section>
 
   <!-- 统计卡片：本月结余 / 收入 / 支出 -->
   <section class="stats">
@@ -259,6 +289,7 @@
 <script src="js/record-form.js"></script>
 <script src="js/account-form.js"></script>
 <script src="js/book-form.js"></script>
+<script src="js/auth-form.js"></script>
 <script src="js/view.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/overview.js"></script>

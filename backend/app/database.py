@@ -176,6 +176,24 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             "CREATE INDEX index_records_deposit_link_id ON records(deposit_link_id)",
         ),
     ),
+    (
+        5,
+        (
+            "ALTER TABLE users ADD COLUMN password_hash TEXT",
+            """
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """,
+            "CREATE INDEX index_sessions_user_id ON sessions(user_id)",
+            "CREATE INDEX index_sessions_expires_at ON sessions(expires_at)",
+        ),
+    ),
 )
 
 

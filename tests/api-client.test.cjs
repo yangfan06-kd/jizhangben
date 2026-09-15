@@ -6,13 +6,19 @@ function installFormDom(runtime) {
   runtime.run(`(() => {
     const ids = [
       "bookName", "bookCategory", "bookSaveBtn", "bookCancelBtn", "bookMsg",
-      "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg"
+      "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg",
+      "authStatus", "authOpenBtn", "authLogoutBtn", "authPanel", "authTitle", "authCloseBtn",
+      "authLoginTab", "authRegisterTab", "authNameField", "authEmail", "authDisplayName",
+      "authPassword", "authSubmitBtn", "authMsg"
     ];
     const elements = Object.fromEntries(ids.map(id => [id, {
       value: "",
       textContent: "",
       style: { display: "" },
-      classList: { toggle() {} }
+      hidden: false,
+      disabled: false,
+      focus() {},
+      classList: { toggle() {}, add() {}, remove() {} }
     }]));
     globalThis.document = { getElementById: id => elements[id] };
     globalThis.renderBookSelect = () => {};
@@ -131,6 +137,41 @@ test("backendApi uses UUID-safe write paths for books and accounts", async () =>
     ["/api/books/book%2Fwith%20space", "PATCH"],
     ["/api/books/book%2Fwith%20space/accounts/account%2Fone", "PATCH"]
   ]));
+});
+
+test("auth form login accepts an authenticated user with no server books yet", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    formElements.authEmail.value = "learner@example.com";
+    formElements.authPassword.value = "correct-horse-battery";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/auth/login")) return { ok: true, json: async () => ({
+        id: "user-1", email: "learner@example.com", display_name: "学习者"
+      }) };
+      if (url.endsWith("/books")) return { ok: true, json: async () => ({ items: [] }) };
+      if (url.endsWith("/categories")) return { ok: true, json: async () => ({ items: [
+        { id: "category-food", name: "餐饮", is_system: true }
+      ] }) };
+      if (url.endsWith("/record-types")) return { ok: true, json: async () => ({ items: [
+        { id: "type-expense", code: "expense", name: "支出", behavior: "expense", is_system: true }
+      ] }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [],
+        totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("submitAuth()");
+  assert.equal(runtime.run("dataState.authStatus"), "authenticated");
+  assert.equal(runtime.run("dataState.authUser.id"), "user-1");
+  assert.equal(runtime.run("dataState.backendBooksLoaded"), true);
+  assert.equal(runtime.run("dataState.books.length"), 0);
+  assert.equal(runtime.run("document.getElementById('authPanel').hidden"), true);
 });
 
 test("editing a server book uses PATCH and refreshes the overview", async () => {

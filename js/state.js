@@ -35,6 +35,9 @@ const uiState = {
 
 const dataState = {
   currentBookId: null,
+  authUser: null,
+  authStatus: "guest",
+  authHydrated: false,
   books: [],
   records: [],
   accounts: [],

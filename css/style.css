@@ -47,6 +47,26 @@
   .book-bar select { flex: 1; }
   .book-bar .mini-btn { padding: 10px 16px; white-space: nowrap; }
 
+  .auth-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .auth-panel { margin-bottom: 20px; }
+  .auth-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .auth-panel-head h2 { margin: 0; }
+  .auth-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .auth-tabs .tab { padding: 8px 14px; }
+
   .startup-notice {
     margin-bottom: 16px;
     padding: 12px 14px;

@@ -51,7 +51,8 @@ function createRuntime(initialStorage = {}) {
     "js/backup.js",
     "js/record-form.js",
     "js/book-form.js",
-    "js/account-form.js"
+    "js/account-form.js",
+    "js/auth-form.js"
   ];
 
   scripts.forEach(relativePath => {

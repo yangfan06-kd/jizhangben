@@ -23,6 +23,7 @@
 ```mermaid
 erDiagram
     USERS ||--o{ BOOKS : owns
+    USERS ||--o{ SESSIONS : signs_in
     USERS ||--o{ CATEGORIES : defines
     USERS ||--o{ RECORD_TYPES : defines
     BOOKS ||--o{ ACCOUNTS : contains
@@ -37,8 +38,16 @@ erDiagram
         text id PK
         text email UK
         text display_name
+        text password_hash
         datetime created_at
         datetime updated_at
+    }
+    SESSIONS {
+        text id PK
+        text user_id FK
+        text token_hash UK
+        integer expires_at
+        datetime created_at
     }
     BOOKS {
         text id PK
@@ -96,11 +105,17 @@ erDiagram
 
 ### users
 
-阶段 3 先创建一个本地开发用户，所有迁入数据归属于该用户。阶段 4 再增加密码凭据、会话和登录接口，避免现在把临时密码设计进业务表。
+阶段 3 先创建一个本地开发用户，所有迁入数据归属于该用户。schema v5 已增加密码哈希和会话表；真正登录后请求依赖按会话确定用户，迁移期间没有 Cookie 的请求仍可使用固定开发用户回退。
 
 - `email` 唯一。
 - 删除用户时级联删除该用户的数据。
-- 密码哈希以后放入单独的认证表，不保存明文密码。
+- `password_hash` 保存 PBKDF2 哈希字符串，不保存明文密码。
+
+### sessions
+
+- `token_hash` 只保存会话令牌的 SHA-256 摘要，原始令牌只通过 HttpOnly Cookie 返回一次。
+- `expires_at` 使用 Unix 秒数；读取会话时清理过期记录。
+- `user_id` 外键级联删除，用户删除后不会留下可用会话。
 
 ### books
 
@@ -154,6 +169,10 @@ erDiagram
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/api/health` | 检查后端和数据库是否可用 |
+| POST | `/api/auth/register` | 注册并建立登录会话 |
+| POST | `/api/auth/login` | 校验密码并建立登录会话 |
+| POST | `/api/auth/logout` | 撤销当前会话并清除 Cookie |
+| GET | `/api/auth/me` | 返回当前登录用户 |
 | GET / POST | `/api/books` | 查询、新建账本 |
 | GET / PATCH / DELETE | `/api/books/{book_id}` | 查询、修改、删除单个账本 |
 | GET / POST | `/api/books/{book_id}/accounts` | 查询、新建账本账户 |
@@ -245,5 +264,8 @@ backend/
 28. 网页账目删除已调用 `DELETE /api/books/{book_id}/records/{record_id}` 并处理 204 空响应；服务端押金关联锁定会保留为冲突提示，避免本地删除绕过对账约束。
 29. 网页账本修改和删除已分别调用 `PATCH /api/books/{book_id}` 与 `DELETE`；服务端成功后刷新账本列表和总览，网络失败按名称与分类回退本地。
 30. 网页账户修改和删除已分别调用账本作用域下的 `PATCH` 与 `DELETE`；账户删除后重新读取账目明细，网络失败按名称、类型和本金回退本地。
+31. schema v5 已为用户增加 PBKDF2 密码哈希，并建立带过期时间的会话表；`/api/auth/register`、`/api/auth/login`、`/api/auth/logout` 和 `/api/auth/me` 已提供统一 Cookie 会话流程。
+32. 业务依赖优先解析会话 Cookie；Cookie 无效时返回 401，迁移期间完全没有 Cookie 的请求可由 `JIZHANGBEN_ALLOW_DEV_FALLBACK` 控制是否回退固定开发用户，便于旧页面和已有接口测试平滑升级。
+33. 客户端请求携带凭据；跨端口时由 `JIZHANGBEN_CORS_ORIGINS` 显式配置允许来源并开启凭据传递，默认不允许任意跨域来源。
 
-接下来补齐三类资源的冲突和回退测试，再开始替换固定开发身份和登录权限。
+接下来验证登录状态在手机浏览器中的保持和过期，再关闭固定开发用户回退。

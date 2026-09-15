@@ -18,9 +18,17 @@ const backendApi = {
     const base = this.baseUrl();
     if (!base) throw new Error("backend_disabled");
     const response = await window.fetch(base + path, {
+      credentials: "include",
       headers: { Accept: "application/json" }
     });
-    if (!response || !response.ok) throw new Error("backend_request_failed");
+    if (!response || !response.ok) {
+      let body = null;
+      try { body = await response.json(); } catch (e) { /* ignore invalid error bodies */ }
+      const error = new Error(body && body.message ? body.message : "backend_request_failed");
+      error.code = body && body.code ? body.code : "backend_request_failed";
+      if (response && response.status) error.status = response.status;
+      throw error;
+    }
     return response.json();
   },
 
@@ -29,6 +37,7 @@ const backendApi = {
     if (!base) throw new Error("backend_disabled");
     const response = await window.fetch(base + path, {
       method,
+      credentials: "include",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json"
@@ -40,6 +49,7 @@ const backendApi = {
       try { body = await response.json(); } catch (e) { /* ignore invalid error bodies */ }
       const error = new Error(body && body.message ? body.message : "backend_request_failed");
       error.code = body && body.code ? body.code : "backend_request_failed";
+      if (response && response.status) error.status = response.status;
       throw error;
     }
     if (response.status === 204) return null;
@@ -52,6 +62,22 @@ const backendApi = {
 
   importLocalBackup(payload) {
     return this.postJSON("/backups/import-local", payload);
+  },
+
+  register(payload) {
+    return this.postJSON("/auth/register", payload);
+  },
+
+  login(payload) {
+    return this.postJSON("/auth/login", payload);
+  },
+
+  logout() {
+    return this.postJSON("/auth/logout", {});
+  },
+
+  currentUser() {
+    return this.getJSON("/auth/me");
   },
 
   createBook(payload) {
@@ -254,26 +280,32 @@ function restoreLocalStateFromStorage() {
   if (typeof renderBookList === "function") renderBookList();
   if (typeof renderAccountSelects === "function") renderAccountSelects();
   if (typeof fillCategoryFilter === "function") fillCategoryFilter();
+  if (typeof renderTypeChips === "function") renderTypeChips();
+  if (typeof renderCategoryChips === "function") renderCategoryChips();
   if (typeof updateFormFields === "function") updateFormFields();
   if (typeof render === "function") render();
 }
 
 // 只在返回了有效账本时替换内存中的账本；空响应或请求失败都保留本地数据。
-async function hydrateBooksFromBackend() {
+async function hydrateBooksFromBackend(allowEmpty = false) {
   const payload = await backendApi.getJSON("/books");
   if (!payload || !Array.isArray(payload.items)) return false;
   const books = payload.items.filter(Boolean).map(mapBackendBook).filter(b => b.id && b.name);
-  if (books.length === 0) return false;
+  if (books.length === 0 && !allowEmpty) return false;
 
   dataState.books = books;
   const selected = books.find(book => String(book.id) === String(dataState.currentBookId));
-  dataState.currentBookId = selected ? selected.id : books[0].id;
+  dataState.currentBookId = selected ? selected.id : (books[0] ? books[0].id : null);
   dataState.backendBooksLoaded = true;
   return true;
 }
 
 async function hydrateAccountsFromBackend() {
-  if (!dataState.backendBooksLoaded || !dataState.currentBookId) return false;
+  if (!dataState.backendBooksLoaded) return false;
+  if (!dataState.currentBookId) {
+    dataState.accounts = [];
+    return true;
+  }
   const bookId = encodeURIComponent(String(dataState.currentBookId));
   const payload = await backendApi.getJSON("/books/" + bookId + "/accounts");
   if (!payload || !Array.isArray(payload.items)) return false;
@@ -318,7 +350,12 @@ async function hydrateOptionsFromBackend() {
 }
 
 async function hydrateRecordsFromBackend() {
-  if (!dataState.backendBooksLoaded || !dataState.currentBookId) return false;
+  if (!dataState.backendBooksLoaded) return false;
+  if (!dataState.currentBookId) {
+    dataState.records = [];
+    dataState.backendRecordsLoaded = true;
+    return true;
+  }
   const bookId = encodeURIComponent(String(dataState.currentBookId));
   const payload = await backendApi.getJSON("/books/" + bookId + "/records");
   if (!payload || !Array.isArray(payload.items)) return false;
@@ -341,7 +378,7 @@ async function hydrateOverviewFromBackend() {
 }
 
 // 启动时异步尝试一次，不阻塞原有本地页面；任何网络错误都静默回到 localStorage。
-async function startBackendReadHydration() {
+async function startBackendReadHydration(allowEmptyBooks = false) {
   const localBooks = dataState.books;
   const localCurrentBookId = dataState.currentBookId;
   const localAccounts = dataState.accounts;
@@ -350,7 +387,7 @@ async function startBackendReadHydration() {
   const localRecords = dataState.records;
   const localOverview = dataState.backendOverview;
   try {
-    const loaded = await hydrateBooksFromBackend();
+    const loaded = await hydrateBooksFromBackend(allowEmptyBooks);
     if (!loaded) return false;
     if (!await hydrateOptionsFromBackend()) throw new Error("options_response_invalid");
     if (!await hydrateAccountsFromBackend()) throw new Error("accounts_response_invalid");
@@ -363,6 +400,8 @@ async function startBackendReadHydration() {
     renderBookList();
     renderAccountSelects();
     fillCategoryFilter();
+    if (typeof renderTypeChips === "function") renderTypeChips();
+    if (typeof renderCategoryChips === "function") renderCategoryChips();
     updateFormFields();
     render();
     return true;

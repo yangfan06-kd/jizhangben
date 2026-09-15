@@ -1,8 +1,10 @@
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
@@ -10,6 +12,7 @@ from starlette.responses import JSONResponse
 
 from .database import check_database, initialize_database, resolve_database_path
 from .routers.backups import router as backups_router
+from .routers.auth import router as auth_router
 from .routers.books import router as books_router
 from .routers.accounts import router as accounts_router
 from .routers.options import router as options_router
@@ -37,6 +40,11 @@ INVALID_REQUEST_ERROR_CODES = {
     "backup_invalid",
 }
 
+AUTH_ERROR_CODES = {
+    "authentication_required",
+    "invalid_credentials",
+}
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -46,12 +54,17 @@ class HealthResponse(BaseModel):
 
 def create_app(database_path: str | Path | None = None) -> FastAPI:
     resolved_path = resolve_database_path(database_path)
+    allow_development_fallback = os.getenv("JIZHANGBEN_ALLOW_DEV_FALLBACK", "1").lower() in {
+        "1", "true", "yes", "on"
+    }
 
     @asynccontextmanager
     async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
         initialize_database(resolved_path)
         development_user = ensure_development_user(resolved_path)
         app_instance.state.current_user_id = development_user["id"]
+        app_instance.state.allow_development_fallback = allow_development_fallback
+        app_instance.state.session_cookie_name = "jizhangben_session"
         yield
 
     application = FastAPI(
@@ -60,6 +73,22 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.database_path = resolved_path
+    application.state.allow_development_fallback = allow_development_fallback
+    application.state.session_cookie_name = "jizhangben_session"
+    cors_origins = [
+        origin.strip()
+        for origin in os.getenv("JIZHANGBEN_CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    if cors_origins:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    application.include_router(auth_router)
     application.include_router(backups_router)
     application.include_router(books_router)
     application.include_router(accounts_router)
@@ -72,7 +101,9 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
         _: Request,
         error: BusinessValidationError,
     ) -> JSONResponse:
-        if error.code in INVALID_REQUEST_ERROR_CODES:
+        if error.code in AUTH_ERROR_CODES:
+            response_status = status.HTTP_401_UNAUTHORIZED
+        elif error.code in INVALID_REQUEST_ERROR_CODES:
             response_status = status.HTTP_422_UNPROCESSABLE_CONTENT
         elif error.code in NOT_FOUND_ERROR_CODES:
             response_status = status.HTTP_404_NOT_FOUND

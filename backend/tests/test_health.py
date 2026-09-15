@@ -25,7 +25,7 @@ async def test_health_creates_and_queries_temporary_database(tmp_path):
     assert response.json() == {
         "status": "ok",
         "database": "ok",
-        "schema_version": 4,
+        "schema_version": 5,
     }
     assert database_path.exists()
 
@@ -44,4 +44,5 @@ async def test_health_creates_and_queries_temporary_database(tmp_path):
         "categories",
         "record_types",
         "records",
+        "sessions",
     } <= tables
