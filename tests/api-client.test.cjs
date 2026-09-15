@@ -7,6 +7,40 @@ test("backendApi disables requests when the page is opened as a local file", () 
   assert.equal(runtime.run("backendApi.baseUrl()"), null);
 });
 
+test("backendApi posts local migration JSON and preserves server error codes", async () => {
+  const runtime = createRuntime();
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    window.fetch = async (url, options) => {
+      window.lastRequest = { url, options };
+      return { ok: true, json: async () => ({ counts: {}, books: [], totals: {} }) };
+    };
+  })()`);
+
+  const response = await runtime.run("backendApi.previewLocalBackup({ format: 'jizhangben-backup' })");
+  const request = runtime.run("window.lastRequest");
+  assert.equal(response.books.length, 0);
+  assert.equal(request.url, "/api/backups/preview-local");
+  assert.equal(request.options.method, "POST");
+  assert.equal(request.options.headers["Content-Type"], "application/json");
+  assert.equal(request.options.body, JSON.stringify({ format: "jizhangben-backup" }));
+
+  runtime.run(`window.fetch = async () => ({
+    ok: false,
+    json: async () => ({ code: "backup_invalid", message: "备份格式无效" })
+  })`);
+  await assert.rejects(
+    () => runtime.run("backendApi.importLocalBackup({})"),
+    error => error.code === "backup_invalid" && error.message === "备份格式无效"
+  );
+});
+
+test("migration preview money formatting keeps cents exact", () => {
+  const runtime = createRuntime();
+  assert.equal(runtime.run("formatPreviewMoney(31200)"), "¥312.00");
+  assert.equal(runtime.run("formatPreviewMoney(-500)"), "−¥5.00");
+});
+
 test("backendApi maps server books and accounts to the webpage shape", () => {
   const runtime = createRuntime();
   const book = runtime.run(`mapBackendBook({

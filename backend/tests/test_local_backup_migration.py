@@ -141,6 +141,21 @@ async def test_preview_local_backup_returns_reconciliation_without_writing(tmp_p
 
 
 @pytest.mark.anyio
+async def test_import_local_backup_converts_only_when_explicitly_called(tmp_path):
+    database_path = tmp_path / "import-local.db"
+    application = create_app(database_path)
+
+    async with application.router.lifespan_context(application):
+        response = await request(application, "POST", "/api/backups/import-local", json=local_backup())
+        books = await request(application, "GET", "/api/books")
+
+    assert response.status_code == 200
+    assert response.json()["imported"]["records"] == 4
+    assert len(books.json()["items"]) == 1
+    assert books.json()["items"][0]["name"] == "脱敏日常账"
+
+
+@pytest.mark.anyio
 async def test_migration_payload_imports_and_reconciles_counts_and_totals(tmp_path):
     database_path = tmp_path / "migration.db"
     application = create_app(database_path)

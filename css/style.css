@@ -399,6 +399,22 @@
   .backup-desc { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
   .backup-actions { display: flex; gap: 8px; margin-top: 10px; }
   .backup-actions .btn-ghost { display: block; flex: 1; margin-top: 0; }
+  .migration-preview {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid #E0A63A;
+    border-radius: 10px;
+    background: #FFF9ED;
+  }
+  .migration-preview-title { font-size: 14px; font-weight: 700; }
+  .migration-counts { margin-top: 6px; font-size: 14px; }
+  .migration-totals { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .migration-book { margin-top: 10px; padding-top: 10px; border-top: 1px solid #F0D89F; }
+  .migration-book-name { font-size: 14px; font-weight: 600; }
+  .migration-book-meta, .migration-book-money { margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .migration-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .migration-actions button { display: block; flex: 1; width: auto; margin-top: 0; }
+  .migration-actions .btn-primary { padding: 10px; font-size: 14px; }
 
   /* ===== 总览（跨账本） ===== */
   .ov-income { color: var(--income); }

@@ -169,6 +169,7 @@ erDiagram
 | POST | `/api/backups/import` | 校验并事务式导入备份 |
 | POST | `/api/backups/preview` | 只读校验服务端备份并返回对账摘要 |
 | POST | `/api/backups/preview-local` | 转换网页备份、只读校验并返回对账摘要 |
+| POST | `/api/backups/import-local` | 用户确认后转换并事务式导入网页备份 |
 
 账目查询支持 `from`、`to`、`account_id`、`category_id` 和 `q` 参数，对应现在的日期、账户、类别和关键字筛选。
 

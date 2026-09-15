@@ -61,3 +61,21 @@ def post_local_backup_preview(
     except LocalBackupMigrationError as error:
         raise BusinessValidationError("backup_invalid", str(error)) from error
     return preview_backup(server_payload)
+
+
+@router.post(
+    "/api/backups/import-local",
+    response_model=BackupImportResponse,
+    responses={status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse}},
+)
+def post_local_backup_import(
+    payload: dict[str, Any],
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+) -> dict[str, object]:
+    try:
+        converted = convert_local_backup(payload)
+        server_payload = BackupPayload.model_validate(converted)
+    except LocalBackupMigrationError as error:
+        raise BusinessValidationError("backup_invalid", str(error)) from error
+    return import_backup(request.app.state.database_path, current_user_id, server_payload)

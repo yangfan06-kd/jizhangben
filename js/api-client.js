@@ -22,6 +22,35 @@ const backendApi = {
     });
     if (!response || !response.ok) throw new Error("backend_request_failed");
     return response.json();
+  },
+
+  async postJSON(path, payload) {
+    const base = this.baseUrl();
+    if (!base) throw new Error("backend_disabled");
+    const response = await window.fetch(base + path, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response || !response.ok) {
+      let body = null;
+      try { body = await response.json(); } catch (e) { /* ignore invalid error bodies */ }
+      const error = new Error(body && body.message ? body.message : "backend_request_failed");
+      error.code = body && body.code ? body.code : "backend_request_failed";
+      throw error;
+    }
+    return response.json();
+  },
+
+  previewLocalBackup(payload) {
+    return this.postJSON("/backups/preview-local", payload);
+  },
+
+  importLocalBackup(payload) {
+    return this.postJSON("/backups/import-local", payload);
   }
 };
 

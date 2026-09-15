@@ -53,6 +53,16 @@ document.getElementById("importFile").onchange = (e) => {
   if (f) importBackup(f);
   e.target.value = "";  // 清掉，方便下次再选同一个文件
 };
+document.getElementById("migrationPreviewBtn").onclick = () => {
+  document.getElementById("migrationFile").click();
+};
+document.getElementById("migrationFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  await previewMigrationFile(f);
+  e.target.value = "";
+};
+document.getElementById("migrationConfirmBtn").onclick = confirmMigrationImport;
+document.getElementById("migrationCancelBtn").onclick = clearMigrationPreview;
 
 // 先读账本清单，定好当前是哪个账本，再读该账本的数据
 loadBooks();
