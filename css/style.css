@@ -1,0 +1,453 @@
+  /* ===== 颜色变量：改这里就能换整套配色 ===== */
+  :root {
+    --bg: #EFF1F3;          /* 页面背景：浅灰 */
+    --card: #FFFFFF;        /* 卡片背景：白 */
+    --ink: #1E2227;         /* 主文字：深墨色 */
+    --muted: #6B7280;       /* 次要文字：灰 */
+    --line: #E2E5E9;        /* 分隔线、边框 */
+    --income: #C03A3A;      /* 收入：红（中国传统：红=涨/收） */
+    --expense: #147D5A;     /* 支出：绿（中国传统：绿=跌/支） */
+    --dark: #16211D;        /* 深色卡片/主按钮：深青墨 */
+    --dark-line: #2A3730;   /* 深色卡片里的分隔线 */
+    --mint: #5ED3A8;        /* 深色卡片里的绿色 */
+    --coral: #FF7A6E;       /* 深色卡片里的红色 */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.5;
+    padding: 24px 16px 48px;
+  }
+
+  .app { max-width: 680px; margin: 0 auto; }
+
+  /* ===== 标题 ===== */
+  header { margin-bottom: 20px; }
+  header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  header .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 2px;
+  }
+  /* 账本切换条（顶部下拉） */
+  .book-bar {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    align-items: center;
+  }
+  .book-bar select { flex: 1; }
+  .book-bar .mini-btn { padding: 10px 16px; white-space: nowrap; }
+
+  .startup-notice {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid #E0A63A;
+    border-radius: 10px;
+    background: #FFF7E6;
+    color: #704B00;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ===== 统计卡片（深色，是本页的视觉中心） ===== */
+  .stats {
+    background: var(--dark);
+    color: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .stat-balance-label {
+    color: #8CA39B;
+    font-size: 13px;
+  }
+  .stat-balance {
+    font-size: 44px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    margin: 4px 0 18px;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  .stat-row {
+    display: flex;
+    gap: 12px;
+    border-top: 1px solid var(--dark-line);
+    padding-top: 16px;
+  }
+  .stat { flex: 1; }
+  .stat .label { color: #8CA39B; font-size: 13px; }
+  .stat .value {
+    font-size: 20px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  .value.income { color: var(--coral); }
+  .value.expense { color: var(--mint); }
+
+  /* ===== 导航切换（记一笔 / 账户 / 明细） ===== */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 0;
+    text-align: center;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .tab:hover { border-color: var(--ink); }
+  .tab.active {
+    background: var(--dark);
+    color: #fff;
+    border-color: var(--dark);
+  }
+
+  /* ===== 通用卡片 ===== */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+
+  /* ===== 表单字段 ===== */
+  .field { margin-bottom: 16px; }
+  .field-label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
+
+  input[type="number"], input[type="text"], input[type="date"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 16px;
+    font-family: inherit;
+    color: var(--ink);
+    background: #FAFBFC;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--ink);
+    background: #fff;
+  }
+  input[type="number"] {
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== 可点选的"按钮块"（类型、类别） ===== */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;         /* 胶囊形 */
+    background: #fff;
+    color: var(--ink);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+    font-family: inherit;
+  }
+  .chip:hover { border-color: var(--ink); }
+  .chip.selected {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+  /* 收入和支出选中时，用红/绿强化含义 */
+  .chip.selected.chip-income { background: var(--income); border-color: var(--income); }
+  .chip.selected.chip-expense { background: var(--expense); border-color: var(--expense); }
+  /* 展开/收起、自定义新增 */
+  .chip-toggle { color: var(--muted); border-style: dashed; }
+  .chip-add { color: var(--expense); border-style: dashed; font-weight: 600; }
+  .custom-add { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .custom-add input { flex: 1; }
+  .custom-add .mini-btn { padding: 8px 14px; white-space: nowrap; }
+  .custom-side { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .custom-side-label { font-size: 13px; color: var(--muted); }
+  .custom-side-chip { padding: 5px 12px; font-size: 13px; }
+  .chip-del { margin-left: 6px; font-weight: 700; color: #B9BEC6; line-height: 1; }
+  .chip-del:hover { color: var(--income); }
+  .chip.selected .chip-del { color: rgba(255,255,255,0.85); }
+
+  /* ===== 按钮 ===== */
+  .btn-primary {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: var(--dark);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-primary:hover { opacity: 0.92; }
+  .btn-ghost {
+    display: none;               /* 默认隐藏，编辑时才出现 */
+    margin-top: 8px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .form-msg {
+    margin-top: 10px;
+    font-size: 14px;
+    color: var(--expense);
+    min-height: 20px;
+  }
+
+  /* ===== 明细列表 ===== */
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .row:last-child { border-bottom: none; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-top { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: #F0F1F3;
+    color: var(--muted);
+  }
+  .badge.income { background: #FBE9E8; color: var(--income); }
+  .badge.expense { background: #E4F2EC; color: var(--expense); }
+  .row-cat { font-size: 14px; font-weight: 600; }
+  .row-note { font-size: 13px; color: var(--muted); }
+  .row-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .date-head {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    padding: 16px 0 4px;
+  }
+  .date-head:first-child { padding-top: 0; }
+
+  /* ===== 明细阶段汇总 ===== */
+  .period-summary {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .period-stat {
+    flex: 1;
+    background: #F7F8F9;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .period-stat .label { font-size: 12px; color: var(--muted); }
+  .period-stat .value {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    margin-top: 2px;
+  }
+  .period-stat .value.income { color: var(--income); }
+  .period-stat .value.expense { color: var(--expense); }
+  .period-stat .value.debt { color: var(--ink); }
+
+  /* ===== 统计图 ===== */
+  .chart-legend { display: flex; flex-direction: column; gap: 6px; }
+  .chart-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .chart-legend-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .row-amount {
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    white-space: nowrap;
+  }
+  .row-amount.income { color: var(--income); }
+  .row-amount.expense { color: var(--expense); }
+  .row-amount.neutral { color: var(--ink); }
+  .row-actions { display: flex; gap: 6px; }
+  .mini-btn {
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--muted);
+    font-family: inherit;
+  }
+  .mini-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .mini-btn.danger:hover { border-color: var(--income); color: var(--income); }
+
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 24px 0;
+    font-size: 14px;
+  }
+  .empty.small { padding: 12px 0; font-size: 13px; }
+
+  /* ===== 下拉框（账户） ===== */
+  select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 16px;
+    font-family: inherit;
+    color: var(--ink);
+    background: #FAFBFC;
+  }
+  select:focus { outline: none; border-color: var(--ink); background: #fff; }
+
+  /* ===== 净资产行 ===== */
+  .stat-networth {
+    border-top: 1px solid var(--dark-line);
+    margin-top: 16px;
+    padding-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .stat-networth .label { color: #8CA39B; font-size: 13px; }
+  .stat-networth .value {
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  /* ===== 账户列表 ===== */
+  .acc-group-label { font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+  .acc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .acc-row:last-child { border-bottom: none; }
+  .acc-main { flex: 1; min-width: 0; }
+  .acc-name { font-size: 15px; font-weight: 600; }
+  .acc-kind {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: #F0F1F3;
+    color: var(--muted);
+  }
+  .acc-kind.liab { background: #FBE9E8; color: var(--income); }
+  .acc-init { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .acc-balance {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+    white-space: nowrap;
+  }
+  .acc-balance.neg { color: var(--income); }
+  .acc-msg { margin-top: 10px; font-size: 14px; color: var(--expense); min-height: 20px; }
+  .acc-msg.warn { color: var(--income); }
+  .backup-desc { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
+  .backup-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .backup-actions .btn-ghost { display: block; flex: 1; margin-top: 0; }
+
+  /* ===== 总览（跨账本） ===== */
+  .ov-income { color: var(--income); }
+  .ov-expense { color: var(--expense); }
+  .overview-total {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .overview-total .label { color: var(--muted); font-size: 13px; }
+  .overview-total .value {
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  /* ===== 手机 / 平板：可交互控件至少保留 44px 触控区域 ===== */
+  @media (max-width: 768px) {
+    .tab { min-height: 44px; }
+    .chip, .mini-btn, .btn-ghost { min-height: 44px; }
+    .mini-btn { min-width: 44px; padding: 8px 10px; }
+    input[type="number"], input[type="text"], input[type="date"], select {
+      min-height: 44px;
+    }
+  }
+
+  /* ===== 手机端：给窄屏留出更多内容宽度 ===== */
+  @media (max-width: 480px) {
+    body { padding: 16px 12px 36px; }
+    header { margin-bottom: 16px; }
+    .stats { padding: 20px; }
+    .card { padding: 16px; }
+    .tabs { gap: 6px; margin-bottom: 16px; }
+    .tab { font-size: 14px; }
+    .stat-balance { font-size: clamp(30px, 11vw, 44px); }
+    .stat .value { font-size: clamp(15px, 5vw, 20px); }
+    .stat-networth, .overview-total { flex-wrap: wrap; gap: 4px 12px; }
+    .stat-networth .value, .overview-total .value {
+      font-size: clamp(17px, 5.5vw, 22px);
+    }
+    .row, .acc-row { gap: 8px; }
+  }
+
+  /* 320px 设备中双列表单过窄，改成单列以保证输入内容清楚可见。 */
+  @media (max-width: 360px) {
+    .field-row { flex-direction: column; gap: 0; }
+    .field-row > .field { width: 100%; margin-bottom: 12px !important; }
+  }

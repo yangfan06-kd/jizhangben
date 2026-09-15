@@ -1,0 +1,233 @@
+// 后端读取层：只负责请求和响应映射，不直接操作 DOM 或 localStorage。
+// 当前阶段采用“后端读取 + 本地写入”的渐进接入方式，失败时由原有同步读取继续工作。
+
+const backendApi = {
+  // 直接打开 index.html 时没有可用的同源 API；用 HTTP 服务打开时默认请求 /api。
+  baseUrl() {
+    const configured = typeof window !== "undefined" && window.JIZHANGBEN_API_BASE_URL;
+    if (typeof configured === "string" && configured.trim()) {
+      return configured.trim().replace(/\/$/, "");
+    }
+    const protocol = typeof window !== "undefined" && window.location
+      ? window.location.protocol
+      : "";
+    return (protocol === "http:" || protocol === "https:") ? "/api" : null;
+  },
+
+  async getJSON(path) {
+    const base = this.baseUrl();
+    if (!base) throw new Error("backend_disabled");
+    const response = await window.fetch(base + path, {
+      headers: { Accept: "application/json" }
+    });
+    if (!response || !response.ok) throw new Error("backend_request_failed");
+    return response.json();
+  }
+};
+
+function mapBackendBook(book) {
+  return {
+    id: book.id,
+    name: book.name,
+    category: book.group_name || "未分类"
+  };
+}
+
+function mapBackendAccount(account) {
+  const cents = Number(account.initial_cents);
+  const initialCents = Number.isFinite(cents) ? Math.round(cents) : 0;
+  return {
+    id: account.id,
+    name: account.name,
+    kind: account.kind === "liability" ? "负债" : "资金",
+    initial: initialCents / 100,
+    initialCents
+  };
+}
+
+function mapBackendCategory(category) {
+  return {
+    id: category.id,
+    name: category.name,
+    isSystem: !!category.is_system
+  };
+}
+
+function backendTypeSide(behavior) {
+  if (behavior === "income") return "income";
+  if (behavior === "expense") return "expense";
+  return "neutral";
+}
+
+function mapBackendType(recordType) {
+  return {
+    id: recordType.id,
+    code: recordType.code,
+    name: recordType.name,
+    behavior: recordType.behavior,
+    side: backendTypeSide(recordType.behavior),
+    isSystem: !!recordType.is_system
+  };
+}
+
+const BACKEND_DEPOSIT_DIRS = {
+  receive: "收",
+  return_to_other: "退",
+  pay: "付",
+  returned_to_me: "退回"
+};
+
+function mapBackendRecord(record) {
+  const cents = Number(record.amount_cents);
+  const amountCents = Number.isFinite(cents) ? Math.round(cents) : 0;
+  return {
+    id: record.id,
+    type: record.type_name || record.type_code || "",
+    amount: amountCents / 100,
+    amountCents,
+    category: record.category_name || "",
+    note: record.note || "",
+    date: record.occurred_on || "",
+    account: record.account_id || null,
+    toAccount: record.to_account_id || null,
+    depositDir: BACKEND_DEPOSIT_DIRS[record.deposit_direction] || null,
+    depositTarget: record.deposit_target || null,
+    depositLinkId: record.deposit_link_id || null,
+    depositFinal: !!record.deposit_final
+  };
+}
+
+function mapBackendOverview(payload) {
+  if (!payload || !Array.isArray(payload.items) || !payload.totals) return null;
+  const items = payload.items.filter(Boolean).map(book => ({
+    id: book.id,
+    name: book.name,
+    category: book.group_name || "未分类",
+    income: Number(book.income_cents || 0) / 100,
+    expense: Number(book.expense_cents || 0) / 100,
+    netWorth: Number(book.net_worth_cents || 0) / 100
+  })).filter(book => book.id && book.name);
+  if (items.length === 0 && dataState.books.length > 0) return null;
+  return {
+    periodFrom: payload.period_from || "",
+    periodTo: payload.period_to || "",
+    items,
+    totals: {
+      income: Number(payload.totals.income_cents || 0) / 100,
+      expense: Number(payload.totals.expense_cents || 0) / 100,
+      netWorth: Number(payload.totals.net_worth_cents || 0) / 100
+    }
+  };
+}
+
+// 只在返回了有效账本时替换内存中的账本；空响应或请求失败都保留本地数据。
+async function hydrateBooksFromBackend() {
+  const payload = await backendApi.getJSON("/books");
+  if (!payload || !Array.isArray(payload.items)) return false;
+  const books = payload.items.filter(Boolean).map(mapBackendBook).filter(b => b.id && b.name);
+  if (books.length === 0) return false;
+
+  dataState.books = books;
+  const selected = books.find(book => String(book.id) === String(dataState.currentBookId));
+  dataState.currentBookId = selected ? selected.id : books[0].id;
+  dataState.backendBooksLoaded = true;
+  return true;
+}
+
+async function hydrateAccountsFromBackend() {
+  if (!dataState.backendBooksLoaded || !dataState.currentBookId) return false;
+  const bookId = encodeURIComponent(String(dataState.currentBookId));
+  const payload = await backendApi.getJSON("/books/" + bookId + "/accounts");
+  if (!payload || !Array.isArray(payload.items)) return false;
+  dataState.accounts = payload.items.filter(Boolean).map(mapBackendAccount);
+  return true;
+}
+
+async function hydrateOptionsFromBackend() {
+  const responses = await Promise.all([
+    backendApi.getJSON("/categories"),
+    backendApi.getJSON("/record-types")
+  ]);
+  const categories = responses[0];
+  const recordTypes = responses[1];
+  if (!categories || !Array.isArray(categories.items)) return false;
+  if (!recordTypes || !Array.isArray(recordTypes.items)) return false;
+
+  dataState.customCategories = categories.items
+    .filter(Boolean)
+    .map(mapBackendCategory)
+    .filter(category => !category.isSystem && category.name)
+    .map(category => category.name);
+  dataState.customTypes = recordTypes.items
+    .filter(Boolean)
+    .map(mapBackendType)
+    .filter(recordType => !recordType.isSystem && recordType.name)
+    .map(recordType => ({ name: recordType.name, side: recordType.side }));
+  dataState.backendOptionsLoaded = true;
+  return true;
+}
+
+async function hydrateRecordsFromBackend() {
+  if (!dataState.backendBooksLoaded || !dataState.currentBookId) return false;
+  const bookId = encodeURIComponent(String(dataState.currentBookId));
+  const payload = await backendApi.getJSON("/books/" + bookId + "/records");
+  if (!payload || !Array.isArray(payload.items)) return false;
+  if (!payload.items.every(item => item && typeof item === "object")) return false;
+  const records = payload.items.map(mapBackendRecord);
+  if (records.some(record => (
+    !record.id || !record.type || !record.category || !record.date || record.amountCents <= 0
+  ))) return false;
+  dataState.records = records;
+  dataState.backendRecordsLoaded = true;
+  return true;
+}
+
+async function hydrateOverviewFromBackend() {
+  const payload = await backendApi.getJSON("/overview");
+  const overview = mapBackendOverview(payload);
+  if (!overview) return false;
+  dataState.backendOverview = overview;
+  return true;
+}
+
+// 启动时异步尝试一次，不阻塞原有本地页面；任何网络错误都静默回到 localStorage。
+async function startBackendReadHydration() {
+  const localBooks = dataState.books;
+  const localCurrentBookId = dataState.currentBookId;
+  const localAccounts = dataState.accounts;
+  const localCustomTypes = dataState.customTypes;
+  const localCustomCategories = dataState.customCategories;
+  const localRecords = dataState.records;
+  const localOverview = dataState.backendOverview;
+  try {
+    const loaded = await hydrateBooksFromBackend();
+    if (!loaded) return false;
+    if (!await hydrateOptionsFromBackend()) throw new Error("options_response_invalid");
+    if (!await hydrateAccountsFromBackend()) throw new Error("accounts_response_invalid");
+    if (!await hydrateRecordsFromBackend()) throw new Error("records_response_invalid");
+    if (!await hydrateOverviewFromBackend()) throw new Error("overview_response_invalid");
+    if (!uiState.startupNotice) {
+      uiState.startupNotice = "已读取服务端账本、账户、选项和当前账本明细；当前阶段新增、修改仍保存在浏览器本地。";
+    }
+    renderBookSelect();
+    renderBookList();
+    renderAccountSelects();
+    fillCategoryFilter();
+    updateFormFields();
+    render();
+    return true;
+  } catch (e) {
+    // 账本和账户要么一起切换，要么一起回到启动时的本地快照。
+    dataState.books = localBooks;
+    dataState.currentBookId = localCurrentBookId;
+    dataState.accounts = localAccounts;
+    dataState.customTypes = localCustomTypes;
+    dataState.customCategories = localCustomCategories;
+    dataState.records = localRecords;
+    dataState.backendOverview = localOverview;
+    dataState.backendBooksLoaded = false;
+    dataState.backendOptionsLoaded = false;
+    dataState.backendRecordsLoaded = false;
+    return false;
+  }
+}

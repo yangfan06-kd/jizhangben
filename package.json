@@ -1,0 +1,7 @@
+{
+  "name": "jizhangben",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/helpers.test.cjs tests/migrations.test.cjs tests/records.test.cjs tests/backup.test.cjs tests/api-client.test.cjs"
+  }
+}
