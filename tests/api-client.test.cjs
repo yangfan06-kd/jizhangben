@@ -2,6 +2,33 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRuntime } = require("./runtime.cjs");
 
+function installFormDom(runtime) {
+  runtime.run(`(() => {
+    const ids = [
+      "bookName", "bookCategory", "bookSaveBtn", "bookCancelBtn", "bookMsg",
+      "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg"
+    ];
+    const elements = Object.fromEntries(ids.map(id => [id, {
+      value: "",
+      textContent: "",
+      style: { display: "" },
+      classList: { toggle() {} }
+    }]));
+    globalThis.document = { getElementById: id => elements[id] };
+    globalThis.renderBookSelect = () => {};
+    globalThis.renderBookList = () => {};
+    globalThis.renderAccountSelects = () => {};
+    globalThis.fillCategoryFilter = () => {};
+    globalThis.updateFormFields = () => {};
+    globalThis.renderOverview = () => {};
+    globalThis.render = () => {};
+    globalThis.resetForm = () => {};
+    globalThis.clearTimeout = () => {};
+    globalThis.setTimeout = () => 0;
+    globalThis.formElements = elements;
+  })()`);
+}
+
 test("backendApi disables requests when the page is opened as a local file", () => {
   const runtime = createRuntime();
   assert.equal(runtime.run("backendApi.baseUrl()"), null);
@@ -40,6 +67,109 @@ test("migration preview money formatting keeps cents exact", () => {
   assert.equal(runtime.run("formatPreviewMoney(31200)"), "¥312.00");
   assert.equal(runtime.run("formatPreviewMoney(-500)"), "−¥5.00");
 });
+
+test("backendApi uses UUID-safe write paths for books and accounts", async () => {
+  const runtime = createRuntime();
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      return { ok: true, json: async () => ({}) };
+    };
+  })()`);
+
+  await runtime.run(`Promise.all([
+    backendApi.createBook({ name: "家庭账", group_name: "个人" }),
+    backendApi.createAccount("book/with space", { name: "现金", kind: "asset", initial_cents: 1234 }),
+    backendApi.updateBook("book/with space", { name: "新账本", group_name: "工作" }),
+    backendApi.updateAccount("book/with space", "account/one", { name: "卡", kind: "liability", initial_cents: 0 })
+  ])`);
+  const calls = runtime.run("window.calls");
+  assert.equal(JSON.stringify(calls.map(call => [call.url, call.options.method])), JSON.stringify([
+    ["/api/books", "POST"],
+    ["/api/books/book%2Fwith%20space/accounts", "POST"],
+    ["/api/books/book%2Fwith%20space", "PATCH"],
+    ["/api/books/book%2Fwith%20space/accounts/account%2Fone", "PATCH"]
+  ]));
+});
+
+test("new book and account use backend responses when backend reads are active", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.books = [{ id: "server-book", name: "原账本", category: "个人" }];
+    dataState.currentBookId = "server-book";
+    dataState.accounts = [];
+    formElements.bookName.value = "旅行账本";
+    formElements.bookCategory.value = "生活";
+    formElements.accName.value = "旅行卡";
+    formElements.accKind.value = "资金";
+    formElements.accInitial.value = "12.34";
+    window.requests = [];
+    window.fetch = async (url, options) => {
+      window.requests.push({ url, options });
+      if (url.endsWith("/books")) return { ok: true, json: async () => ({
+        id: "uuid-book", name: "旅行账本", group_name: "生活", warnings: []
+      }) };
+      if (url.endsWith("/overview")) return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "server-book", name: "原账本", group_name: "个人", income_cents: 0, expense_cents: 0, net_worth_cents: 0 },
+          { id: "uuid-book", name: "旅行账本", group_name: "生活", income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+      }) };
+      return { ok: true, json: async () => ({
+        id: "uuid-account", book_id: "server-book", name: "旅行卡", kind: "asset",
+        initial_cents: 1234
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleBookSave()");
+  await runtime.run("handleAccountSave()");
+  const books = runtime.run("dataState.books");
+  const accounts = runtime.run("dataState.accounts");
+  const requests = runtime.run("window.requests");
+  assert.equal(books.some(book => book.id === "uuid-book"), true);
+  assert.equal(accounts[0].id, "uuid-account");
+  assert.equal(accounts[0].initialCents, 1234);
+  assert.equal(JSON.stringify(requests.map(request => [request.url, request.options.method])), JSON.stringify([
+    ["/api/books", "POST"],
+    ["/api/overview", null],
+    ["/api/books/server-book/accounts", "POST"],
+    ["/api/overview", null]
+  ]));
+});
+
+test("backend write failure restores local storage before saving a new book locally", async () => {
+  const runtime = createRuntime({
+    jizhangben_books: JSON.stringify([{ id: 1, name: "本地账本", category: "个人" }]),
+    jizhangben_current_book: JSON.stringify(1)
+  });
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.books = [{ id: "server-book", name: "服务端账本", category: "个人" }];
+    dataState.currentBookId = "server-book";
+    formElements.bookName.value = "本地新增";
+    formElements.bookCategory.value = "生活";
+    window.fetch = async () => { throw new Error("offline"); };
+  })()`);
+
+  await runtime.run("handleBookSave()");
+  const books = runtime.run("dataState.books");
+  assert.equal(dataStateOr(runtime, "dataState.backendBooksLoaded"), false);
+  assert.equal(books.some(book => book.name === "本地账本"), true);
+  assert.equal(books.some(book => book.name === "本地新增"), true);
+  assert.match(runtime.run("formElements.bookMsg.textContent"), /服务端不可用/);
+});
+
+function dataStateOr(runtime, expression) {
+  return runtime.run(expression);
+}
 
 test("backendApi maps server books and accounts to the webpage shape", () => {
   const runtime = createRuntime();

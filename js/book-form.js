@@ -120,13 +120,35 @@ function resetBookForm() {
   document.getElementById("bookMsg").textContent = "";
 }
 
-function handleBookSave() {
+async function handleBookSave() {
   const name = document.getElementById("bookName").value.trim();
   const category = document.getElementById("bookCategory").value.trim() || "未分类";
   if (!name) { showBookMsg("请填写账本名称"); return; }
   // 重名提醒（不禁止）：同名账本在顶部下拉里会分不清
   const dup = dataState.books.find(x => x.name === name && String(x.id) !== String(uiState.editingBookId));
   const wasEdit = uiState.editingBookId !== null;
+  let backendFallback = false;
+
+  // 先把新账本写入后端；修改沿用本地流程，后续步骤再切换 PATCH。
+  if (!wasEdit && backendWritesEnabled()) {
+    try {
+      const saved = await backendApi.createBook({ name, group_name: category });
+      const mapped = mapBackendBook(saved);
+      dataState.books.push(mapped);
+      await refreshBackendOverviewAfterWrite();
+      resetBookForm();
+      const backendDup = Array.isArray(saved.warnings) && saved.warnings.some(w => w.code === "duplicate_book_name");
+      showBookMsg(backendDup ? "已添加到账本服务端（注意：已有同名账本，请留意区分）" : "已添加到账本服务端", backendDup);
+      renderBookSelect();
+      renderBookList();
+      renderOverview();
+      return;
+    } catch (error) {
+      restoreLocalStateFromStorage();
+      backendFallback = true;
+    }
+  }
+
   if (wasEdit) {
     const b = dataState.books.find(x => String(x.id) === String(uiState.editingBookId));
     b.name = name;
@@ -139,6 +161,8 @@ function handleBookSave() {
   // 先重置再提示，否则 resetBookForm 会把提示清掉
   if (wasEdit) {
     showBookMsg(dup ? "已保存修改（注意：还有同名账本，请留意区分）" : "已保存修改", dup);
+  } else if (backendFallback) {
+    showBookMsg(dup ? "服务端不可用，已保存到本地（另有同名账本）" : "服务端不可用，已保存到本地", true);
   } else {
     showBookMsg(dup ? "已添加账本（注意：已有同名账本，请留意区分）" : "已添加账本", dup);
   }

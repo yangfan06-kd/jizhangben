@@ -238,4 +238,4 @@ backend/
 21. `GET /api/backups/export` 和 `POST /api/backups/import` 已固定服务端备份格式；导入前校验资源 ID、归属关系和押金链路，在事务中生成新 UUID 并重建关联。
 22. `POST /api/backups/preview` 和 `POST /api/backups/preview-local` 已提供只读迁移预览，返回数量、分账本摘要和收支净资产对账结果，不写入数据库。
 
-接下来让网页数据访问层接入迁移预览和确认流程，并保留 localStorage 回退与原始备份。
+接下来让网页数据访问层接入账目写入和迁移后的重新读取，并保留 localStorage 回退与原始备份。

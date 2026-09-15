@@ -20,7 +20,7 @@ function resetAccountForm() {
   document.getElementById("accMsg").textContent = "";
 }
 
-function handleAccountSave() {
+async function handleAccountSave() {
   const name = document.getElementById("accName").value.trim();
   const kind = document.getElementById("accKind").value;
   const initial = parseFloat(document.getElementById("accInitial").value) || 0;
@@ -28,6 +28,27 @@ function handleAccountSave() {
   if (!name) { showAccMsg("请填写账户名"); return; }
 
   const wasEdit = !!uiState.editingAccountId;
+  let backendFallback = false;
+  // 新账户先写入后端；已有账户的修改暂时保留本地流程，下一步再切换 PATCH。
+  if (!wasEdit && backendWritesEnabled()) {
+    try {
+      const saved = await backendApi.createAccount(dataState.currentBookId, {
+        name,
+        kind: kind === "负债" ? "liability" : "asset",
+        initial_cents: initialCents
+      });
+      dataState.accounts.push(mapBackendAccount(saved));
+      await refreshBackendOverviewAfterWrite();
+      resetAccountForm();
+      showAccMsg("已添加到账户服务端");
+      render();
+      return;
+    } catch (error) {
+      restoreLocalStateFromStorage();
+      backendFallback = true;
+    }
+  }
+
   if (wasEdit) {
     const a = dataState.accounts.find(x => String(x.id) === String(uiState.editingAccountId));
     a.name = name;
@@ -39,7 +60,7 @@ function handleAccountSave() {
   }
   saveAccounts();
   resetAccountForm();
-  showAccMsg(wasEdit ? "已保存修改" : "已添加账户");
+  showAccMsg(wasEdit ? "已保存修改" : (backendFallback ? "服务端不可用，已保存到本地" : "已添加账户"));
   render();
 }
 

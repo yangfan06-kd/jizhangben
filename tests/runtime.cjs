@@ -44,9 +44,12 @@ function createRuntime(initialStorage = {}) {
     "js/helpers.js",
     "js/storage-adapter.js",
     "js/migrations.js",
+    "js/storage.js",
     "js/api-client.js",
     "js/records.js",
-    "js/backup.js"
+    "js/backup.js",
+    "js/book-form.js",
+    "js/account-form.js"
   ];
 
   scripts.forEach(relativePath => {

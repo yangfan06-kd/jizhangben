@@ -24,11 +24,11 @@ const backendApi = {
     return response.json();
   },
 
-  async postJSON(path, payload) {
+  async postJSON(path, payload, method = "POST") {
     const base = this.baseUrl();
     if (!base) throw new Error("backend_disabled");
     const response = await window.fetch(base + path, {
-      method: "POST",
+      method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json"
@@ -51,8 +51,40 @@ const backendApi = {
 
   importLocalBackup(payload) {
     return this.postJSON("/backups/import-local", payload);
+  },
+
+  createBook(payload) {
+    return this.postJSON("/books", payload);
+  },
+
+  updateBook(bookId, payload) {
+    return this.postJSON("/books/" + encodeURIComponent(String(bookId)), payload, "PATCH");
+  },
+
+  createAccount(bookId, payload) {
+    const id = encodeURIComponent(String(bookId));
+    return this.postJSON("/books/" + id + "/accounts", payload);
+  },
+
+  updateAccount(bookId, accountId, payload) {
+    const book = encodeURIComponent(String(bookId));
+    const account = encodeURIComponent(String(accountId));
+    return this.postJSON("/books/" + book + "/accounts/" + account, payload, "PATCH");
   }
 };
+
+function backendWritesEnabled() {
+  return !!(dataState.backendBooksLoaded && backendApi.baseUrl());
+}
+
+async function refreshBackendOverviewAfterWrite() {
+  if (!dataState.backendBooksLoaded) return false;
+  try {
+    return await hydrateOverviewFromBackend();
+  } catch (error) {
+    return false;
+  }
+}
 
 function mapBackendBook(book) {
   return {
@@ -147,6 +179,29 @@ function mapBackendOverview(payload) {
       netWorth: Number(payload.totals.net_worth_cents || 0) / 100
     }
   };
+}
+
+// 后端写入失败时恢复浏览器里的原始快照，避免页面停留在半迁移状态。
+function restoreLocalStateFromStorage() {
+  dataState.backendBooksLoaded = false;
+  dataState.backendOptionsLoaded = false;
+  dataState.backendRecordsLoaded = false;
+  dataState.backendOverview = null;
+  loadBooks();
+  load();
+  loadAccounts();
+  loadCustomTypes();
+  loadCustomCategories();
+  resetForm();
+  resetAccountForm();
+  resetBookForm();
+  resetFilterState();
+  if (typeof renderBookSelect === "function") renderBookSelect();
+  if (typeof renderBookList === "function") renderBookList();
+  if (typeof renderAccountSelects === "function") renderAccountSelects();
+  if (typeof fillCategoryFilter === "function") fillCategoryFilter();
+  if (typeof updateFormFields === "function") updateFormFields();
+  if (typeof render === "function") render();
 }
 
 // 只在返回了有效账本时替换内存中的账本；空响应或请求失败都保留本地数据。
