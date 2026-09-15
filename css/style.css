@@ -238,6 +238,10 @@
     color: var(--expense);
     min-height: 20px;
   }
+  .form-msg.success { color: var(--expense); }
+  .form-msg.local { color: #704B00; }
+  .form-msg.conflict { color: var(--income); }
+  .form-msg.info, .form-msg.busy { color: var(--muted); }
 
   /* ===== 明细列表 ===== */
   .row {

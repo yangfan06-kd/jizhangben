@@ -3,9 +3,16 @@
 
 let msgTimer = null;
 
-function showMsg(text) {
+function showMsg(text, status = "error") {
   const m = document.getElementById("formMsg");
   m.textContent = text;
+  uiState.recordSaveStatus = status;
+  if (m.classList) {
+    ["success", "local", "conflict", "info", "busy", "error"].forEach(name => {
+      if (typeof m.classList.remove === "function") m.classList.remove(name);
+    });
+    if (typeof m.classList.add === "function") m.classList.add(status);
+  }
   clearTimeout(msgTimer);
   msgTimer = setTimeout(() => { m.textContent = ""; }, 3000);
 }
@@ -15,6 +22,7 @@ function resetForm() {
   uiState.selectedCategory = null;
   uiState.selectedDepositDir = null;
   uiState.editingRecordId = null;
+  uiState.recordSaveStatus = "idle";
   document.getElementById("amount").value = "";
   document.getElementById("note").value = "";
   document.getElementById("date").value = todayStr();
@@ -53,7 +61,7 @@ function localDepositIdByFingerprint(fingerprint) {
   return record ? record.id : null;
 }
 
-function saveRecordLocally(record, message, restore) {
+function saveRecordLocally(record, message, restore, status = "local") {
   if (restore) restoreLocalStateFromStorage();
   if (record.accountName) record.account = localAccountIdByName(record.accountName);
   if (record.toAccountName) record.toAccount = localAccountIdByName(record.toAccountName);
@@ -67,7 +75,7 @@ function saveRecordLocally(record, message, restore) {
   dataState.records.push(record);
   save();
   resetForm();
-  showMsg(message);
+  showMsg(message, status);
   render();
 }
 
@@ -82,6 +90,7 @@ function backendDepositDirection(direction) {
 
 function setRecordSaveBusy(busy) {
   uiState.recordSaveInFlight = !!busy;
+  if (busy) uiState.recordSaveStatus = "saving";
   const saveBtn = document.getElementById("saveBtn");
   const cancelBtn = document.getElementById("cancelBtn");
   if (saveBtn) {
@@ -102,7 +111,7 @@ function setRecordSaveBusy(busy) {
 
 async function handleSave() {
   if (uiState.recordSaveInFlight) {
-    showMsg("正在保存，请稍候");
+    showMsg("正在保存，请稍候", "busy");
     return;
   }
   const amount = parseFloat(document.getElementById("amount").value);
@@ -172,7 +181,7 @@ async function handleSave() {
     const typeId = backendOptionId(dataState.backendTypeIds, selectedType);
     const categoryId = backendOptionId(dataState.backendCategoryIds, selectedCategory);
     if (!typeId || !categoryId) {
-      saveRecordLocally(fallbackRecord, "服务端选项尚未同步，已保存到本地", true);
+      saveRecordLocally(fallbackRecord, "服务端选项尚未同步，已保存到本地", true, "local");
       return;
     }
     setRecordSaveBusy(true);
@@ -202,10 +211,15 @@ async function handleSave() {
       resetForm();
       showMsg(recordsRefreshed
         ? "已记一笔（已同步服务端）"
-        : "已记一笔（服务端已保存，明细刷新稍后重试）");
+        : "已记一笔（服务端已保存，明细刷新稍后重试）",
+        recordsRefreshed ? "success" : "info");
       render();
     } catch (error) {
-      saveRecordLocally(fallbackRecord, "服务端不可用，已保存到本地", true);
+      if (error && error.code && error.code !== "backend_request_failed") {
+        showMsg(error.message || "服务端拒绝了这笔账，请检查输入", "conflict");
+      } else {
+        saveRecordLocally(fallbackRecord, "服务端不可用，已保存到本地", true, "local");
+      }
     } finally {
       setRecordSaveBusy(false);
     }
@@ -232,7 +246,7 @@ async function handleSave() {
 
   save();
   resetForm();
-  showMsg(wasEdit ? "已保存修改" : "已记一笔");
+  showMsg(wasEdit ? "已保存修改" : "已记一笔", "local");
   render();
 }
 

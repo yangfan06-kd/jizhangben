@@ -24,7 +24,8 @@ const uiState = {
   categoriesExpanded: false,
   customTypeSideDraft: "neutral",
   startupNotice: "",
-  recordSaveInFlight: false
+  recordSaveInFlight: false,
+  recordSaveStatus: "idle"
 };
 
 const dataState = {

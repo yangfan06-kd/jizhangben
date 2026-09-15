@@ -46,7 +46,7 @@ function installRecordDom(runtime) {
       innerHTML: "",
       checked: false,
       style: { display: "" },
-      classList: { toggle() {} },
+      classList: { toggle() {}, add() {}, remove() {} },
       options: []
     }]));
     globalThis.document = { getElementById: id => elements[id] };
@@ -239,6 +239,42 @@ test("repeated record save clicks send only one backend request", async () => {
   assert.match(runtime.run("document.getElementById('formMsg').textContent"), /正在保存/);
   await firstSave;
   assert.equal(runtime.run("dataState.records.length"), 1);
+});
+
+test("backend record conflict stays visible instead of falling back locally", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "cash-1", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [];
+    dataState.backendTypeIds = { "支出": "type-expense" };
+    dataState.backendCategoryIds = { "餐饮": "category-food" };
+    uiState.selectedType = "支出";
+    uiState.selectedCategory = "餐饮";
+    formElements.amount.value = "8";
+    formElements.date.value = "2026-09-15";
+    formElements.accountSel.value = "cash-1";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      return { ok: false, json: async () => ({
+        code: "deposit_link_not_found", message: "当前账本中不存在对应的原押金"
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.records.length"), 0);
+  assert.equal(runtime.run("dataState.backendBooksLoaded"), true);
+  assert.equal(runtime.run("uiState.recordSaveStatus"), "conflict");
+  assert.equal(runtime.run("document.getElementById('formMsg').textContent"), "当前账本中不存在对应的原押金");
+  assert.equal(runtime.run("window.calls.length"), 1);
 });
 
 test("new deposit record maps direction and linked server record", async () => {
