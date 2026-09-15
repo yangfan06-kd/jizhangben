@@ -1,6 +1,12 @@
 // 后端读取层：只负责请求和响应映射，不直接操作 DOM 或 localStorage。
 // 当前阶段采用“后端读取 + 分阶段写入”的渐进接入方式，失败时由原有本地流程继续工作。
 
+function notifyBackendAuthExpired(path, error) {
+  // 登录接口自己的 401（例如密码错误）应该留在登录表单里，不要清理已有页面状态。
+  if (!error || error.status !== 401 || String(path).startsWith("/auth/")) return;
+  if (typeof handleBackendAuthExpired === "function") handleBackendAuthExpired();
+}
+
 const backendApi = {
   // 直接打开 index.html 时没有可用的同源 API；用 HTTP 服务打开时默认请求 /api。
   baseUrl() {
@@ -27,6 +33,7 @@ const backendApi = {
       const error = new Error(body && body.message ? body.message : "backend_request_failed");
       error.code = body && body.code ? body.code : "backend_request_failed";
       if (response && response.status) error.status = response.status;
+      notifyBackendAuthExpired(path, error);
       throw error;
     }
     return response.json();
@@ -50,6 +57,7 @@ const backendApi = {
       const error = new Error(body && body.message ? body.message : "backend_request_failed");
       error.code = body && body.code ? body.code : "backend_request_failed";
       if (response && response.status) error.status = response.status;
+      notifyBackendAuthExpired(path, error);
       throw error;
     }
     if (response.status === 204) return null;

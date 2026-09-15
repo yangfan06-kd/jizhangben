@@ -33,6 +33,19 @@ function renderAuthStatus() {
   }
 }
 
+function handleBackendAuthExpired() {
+  const wasAuthenticated = dataState.authStatus === "authenticated" && dataState.authUser;
+  dataState.authUser = null;
+  dataState.authStatus = "guest";
+  dataState.authHydrated = true;
+  // 会话失效后不继续把页面当成服务端数据，恢复到浏览器本地快照。
+  restoreLocalStateFromStorage();
+  uiState.startupNotice = "登录状态已过期，请重新登录；当前显示浏览器本地数据。";
+  renderAuthStatus();
+  if (wasAuthenticated) showAuthMsg("登录状态已过期，请重新登录");
+  if (typeof render === "function") render();
+}
+
 function setAuthMode(mode) {
   authMode = mode === "register" ? "register" : "login";
   const title = document.getElementById("authTitle");
@@ -107,7 +120,9 @@ async function submitAuth() {
   renderAuthStatus();
   // 登录用户可能还没有账本，必须允许空账本响应替换本地兼容数据。
   const hydrated = await startBackendReadHydration(true);
-  if (!hydrated) showAuthMsg("已登录，但账本数据暂时无法读取", true);
+  if (!hydrated && dataState.authStatus === "authenticated") {
+    showAuthMsg("已登录，但账本数据暂时无法读取", true);
+  }
   render();
   setAuthBusy(false);
 }
@@ -152,7 +167,9 @@ async function hydrateAuthSession() {
   dataState.authHydrated = true;
   renderAuthStatus();
   const hydrated = await startBackendReadHydration(true);
-  if (!hydrated) showAuthMsg("已登录，但账本数据暂时无法读取", true);
+  if (!hydrated && dataState.authStatus === "authenticated") {
+    showAuthMsg("已登录，但账本数据暂时无法读取", true);
+  }
   render();
   return true;
 }

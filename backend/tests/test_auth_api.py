@@ -107,6 +107,36 @@ async def test_development_fallback_can_be_disabled(tmp_path, monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_expired_session_is_rejected_and_removed(tmp_path):
+    application = create_app(tmp_path / "auth-expired.db")
+    transport = ASGITransport(app=application)
+
+    async with application.router.lifespan_context(application):
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            registered = await client.post(
+                "/api/auth/register",
+                json={
+                    "email": "expired@example.com",
+                    "password": "correct-horse-battery",
+                    "display_name": "过期会话",
+                },
+            )
+            assert registered.status_code == 201
+            token = registered.cookies.get("jizhangben_session")
+            assert token
+
+            with sqlite3.connect(application.state.database_path) as connection:
+                connection.execute("UPDATE sessions SET expires_at = 0")
+
+            response = await client.get("/api/books")
+            assert response.status_code == 401
+            assert response.json()["code"] == "authentication_required"
+
+            with sqlite3.connect(application.state.database_path) as connection:
+                assert connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+
+
+@pytest.mark.anyio
 async def test_register_rejects_duplicate_email_without_creating_second_user(tmp_path):
     application = create_app(tmp_path / "auth-duplicate.db")
     transport = ASGITransport(app=application)

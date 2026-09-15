@@ -174,6 +174,32 @@ test("auth form login accepts an authenticated user with no server books yet", a
   assert.equal(runtime.run("document.getElementById('authPanel').hidden"), true);
 });
 
+test("an expired backend session returns the page to local compatibility mode", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    window.restored = false;
+    restoreLocalStateFromStorage = () => { window.restored = true; };
+    window.fetch = async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ code: "authentication_required", message: "登录状态已失效，请重新登录" })
+    });
+  })()`);
+
+  await assert.rejects(
+    () => runtime.run("backendApi.getJSON('/books')"),
+    error => error.status === 401 && error.code === "authentication_required"
+  );
+  assert.equal(runtime.run("dataState.authStatus"), "guest");
+  assert.equal(runtime.run("dataState.authUser"), null);
+  assert.equal(runtime.run("window.restored"), true);
+  assert.match(runtime.run("uiState.startupNotice"), /登录状态已过期/);
+});
+
 test("editing a server book uses PATCH and refreshes the overview", async () => {
   const runtime = createRuntime();
   installFormDom(runtime);

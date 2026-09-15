@@ -267,5 +267,6 @@ backend/
 31. schema v5 已为用户增加 PBKDF2 密码哈希，并建立带过期时间的会话表；`/api/auth/register`、`/api/auth/login`、`/api/auth/logout` 和 `/api/auth/me` 已提供统一 Cookie 会话流程。
 32. 业务依赖优先解析会话 Cookie；Cookie 无效时返回 401，迁移期间完全没有 Cookie 的请求可由 `JIZHANGBEN_ALLOW_DEV_FALLBACK` 控制是否回退固定开发用户，便于旧页面和已有接口测试平滑升级。
 33. 客户端请求携带凭据；跨端口时由 `JIZHANGBEN_CORS_ORIGINS` 显式配置允许来源并开启凭据传递，默认不允许任意跨域来源。
+34. 会话读取时清理已过期的令牌；业务接口的无效或过期 Cookie 统一返回 401，客户端据此清除登录状态并恢复本地兼容快照。
 
 接下来验证登录状态在手机浏览器中的保持和过期，再关闭固定开发用户回退。
