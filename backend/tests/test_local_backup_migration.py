@@ -104,6 +104,43 @@ def test_convert_local_backup_rejects_unknown_record_type():
 
 
 @pytest.mark.anyio
+async def test_preview_local_backup_returns_reconciliation_without_writing(tmp_path):
+    database_path = tmp_path / "preview.db"
+    application = create_app(database_path)
+
+    async with application.router.lifespan_context(application):
+        response = await request(application, "POST", "/api/backups/preview-local", json=local_backup())
+        books = await request(application, "GET", "/api/books")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["counts"] == {
+        "books": 1,
+        "accounts": 2,
+        "categories": 9,
+        "record_types": 10,
+        "records": 4,
+    }
+    assert body["books"] == [{
+        "id": "book:10",
+        "name": "脱敏日常账",
+        "group_name": "个人",
+        "accounts": 2,
+        "records": 4,
+        "income_cents": 0,
+        "expense_cents": 31200,
+        "net_worth_cents": 168800,
+    }]
+    assert body["totals"] == {
+        "income_cents": 0,
+        "expense_cents": 31200,
+        "net_worth_cents": 168800,
+    }
+    assert books.status_code == 200
+    assert books.json()["items"] == []
+
+
+@pytest.mark.anyio
 async def test_migration_payload_imports_and_reconciles_counts_and_totals(tmp_path):
     database_path = tmp_path / "migration.db"
     application = create_app(database_path)

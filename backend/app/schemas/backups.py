@@ -99,3 +99,28 @@ class BackupImportResponse(BaseModel):
     version: int
     imported: BackupCounts
     id_map: dict[str, dict[str, str]]
+
+
+class BackupPreviewBook(BaseModel):
+    id: str
+    name: str
+    group_name: str
+    accounts: int
+    records: int
+    income_cents: int
+    expense_cents: int
+    net_worth_cents: int
+
+
+class BackupPreviewTotals(BaseModel):
+    income_cents: int
+    expense_cents: int
+    net_worth_cents: int
+
+
+class BackupPreviewResponse(BaseModel):
+    format: str
+    version: int
+    counts: BackupCounts
+    books: list[BackupPreviewBook]
+    totals: BackupPreviewTotals

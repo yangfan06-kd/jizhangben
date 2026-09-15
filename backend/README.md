@@ -132,4 +132,6 @@ python -m venv backend/.venv
 
 `app/services/local_backup_migration.py` 提供离线转换器 `convert_local_backup()`，把网页导出的 `jizhangben-backup`（或旧版扁平 localStorage 对象）转换成服务端备份 payload。它会为本地数字 ID 加上账本作用域，补齐默认账户和系统选项，并转换押金方向；转换器不接触数据库，实际写入仍由上面的事务式导入接口完成。
 
+`POST /api/backups/preview` 只校验服务端备份并返回账本、账户、账目数量和收入、支出、净资产摘要，不写入数据库。`POST /api/backups/preview-local` 接收网页备份，先调用上述转换器，再返回同样的摘要；转换失败统一返回 422，适合网页迁移向导在确认前展示对账结果。
+
 当前本地开发用户不是真正的登录认证，接口只用于本地开发与自动化测试，不能直接暴露到公网。

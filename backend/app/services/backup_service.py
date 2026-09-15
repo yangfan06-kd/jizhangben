@@ -198,6 +198,138 @@ def export_backup(database_path: str | Path, user_id: str) -> dict[str, object]:
     }
 
 
+def _preview_flow_direction(behavior: str, deposit_direction: str | None) -> str:
+    if behavior in {"income", "expense_reversal"}:
+        return "in"
+    if behavior in {"expense", "outflow_neutral"}:
+        return "out"
+    if behavior == "transfer":
+        return "transfer"
+    if behavior == "deposit":
+        if deposit_direction in {"receive", "returned_to_me"}:
+            return "in"
+        if deposit_direction in {"pay", "return_to_other"}:
+            return "out"
+    return "none"
+
+
+def _apply_preview_delta(
+    balances: dict[str, int],
+    account_kinds: dict[str, str],
+    account_id: str | None,
+    direction: str,
+    amount_cents: int,
+) -> None:
+    if account_id is None or account_id not in balances:
+        return
+    sign = 1 if direction == "in" else -1
+    if account_kinds[account_id] == "liability":
+        sign *= -1
+    balances[account_id] += sign * amount_cents
+
+
+def _preview_deposit_settlement(
+    record,
+    records_by_id: dict[str, object],
+    records: list[object],
+) -> tuple[int, int]:
+    if record.deposit_direction not in {"return_to_other", "returned_to_me"} or not record.deposit_final:
+        return 0, 0
+    original = records_by_id.get(record.deposit_link_id) if record.deposit_link_id else None
+    if original is None or original.deposit_direction not in {"pay", "receive"}:
+        return 0, 0
+    returned_cents = sum(
+        int(candidate.amount_cents)
+        for candidate in records
+        if candidate.deposit_link_id == original.id
+    )
+    difference = max(0, int(original.amount_cents) - returned_cents)
+    if original.deposit_direction == "pay":
+        return 0, difference
+    return difference, 0
+
+
+def preview_backup(payload: BackupPayload) -> dict[str, object]:
+    """只校验并计算备份摘要，不写入当前用户或任何数据库。"""
+    grouped = _validate_payload(payload)
+    types_by_id = {record_type.id: record_type for record_type in payload.record_types}
+    accounts_by_book: dict[str, list[object]] = {}
+    records_by_book: dict[str, list[object]] = {}
+    for account in payload.accounts:
+        accounts_by_book.setdefault(account.book_id, []).append(account)
+    for record in payload.records:
+        records_by_book.setdefault(record.book_id, []).append(record)
+
+    preview_books: list[dict[str, object]] = []
+    total_income = 0
+    total_expense = 0
+    total_net_worth = 0
+    for book in payload.books:
+        accounts = accounts_by_book.get(book.id, [])
+        records = records_by_book.get(book.id, [])
+        balances = {account.id: int(account.initial_cents) for account in accounts}
+        account_kinds = {account.id: account.kind for account in accounts}
+        records_by_id = {record.id: record for record in records}
+        income_cents = 0
+        expense_cents = 0
+
+        for record in records:
+            behavior = types_by_id[record.type_id].behavior
+            direction = _preview_flow_direction(behavior, record.deposit_direction)
+            if direction == "transfer":
+                _apply_preview_delta(balances, account_kinds, record.account_id, "out", record.amount_cents)
+                _apply_preview_delta(balances, account_kinds, record.to_account_id, "in", record.amount_cents)
+            elif direction in {"in", "out"}:
+                _apply_preview_delta(balances, account_kinds, record.account_id, direction, record.amount_cents)
+
+            if behavior == "income":
+                income_cents += record.amount_cents
+            elif behavior == "expense":
+                expense_cents += record.amount_cents
+            elif behavior == "expense_reversal":
+                expense_cents -= record.amount_cents
+            elif behavior == "deposit":
+                settlement_income, settlement_expense = _preview_deposit_settlement(
+                    record,
+                    records_by_id,
+                    records,
+                )
+                income_cents += settlement_income
+                expense_cents += settlement_expense
+
+        net_worth_cents = sum(
+            balances[account.id] if account.kind == "asset" else -balances[account.id]
+            for account in accounts
+        )
+        preview_books.append(
+            {
+                "id": book.id,
+                "name": book.name,
+                "group_name": book.group_name,
+                "accounts": len(accounts),
+                "records": len(records),
+                "income_cents": income_cents,
+                "expense_cents": expense_cents,
+                "net_worth_cents": net_worth_cents,
+            }
+        )
+        total_income += income_cents
+        total_expense += expense_cents
+        total_net_worth += net_worth_cents
+
+    return {
+        "format": BACKUP_FORMAT,
+        "version": BACKUP_VERSION,
+        "counts": {label: len(items) for label, items in grouped.items()},
+        "books": preview_books,
+        "totals": {
+            "income_cents": total_income,
+            "expense_cents": total_expense,
+            "net_worth_cents": total_net_worth,
+        },
+    }
+
+
 def import_backup(
     database_path: str | Path,
     user_id: str,
