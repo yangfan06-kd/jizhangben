@@ -25,6 +25,7 @@ const uiState = {
   customTypeSideDraft: "neutral",
   startupNotice: "",
   recordSaveInFlight: false,
+  recordDeleteInFlight: false,
   recordSaveStatus: "idle"
 };
 

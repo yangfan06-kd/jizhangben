@@ -42,6 +42,7 @@ const backendApi = {
       error.code = body && body.code ? body.code : "backend_request_failed";
       throw error;
     }
+    if (response.status === 204) return null;
     return response.json();
   },
 
@@ -69,6 +70,18 @@ const backendApi = {
   createRecord(bookId, payload) {
     const id = encodeURIComponent(String(bookId));
     return this.postJSON("/books/" + id + "/records", payload);
+  },
+
+  updateRecord(bookId, recordId, payload) {
+    const book = encodeURIComponent(String(bookId));
+    const record = encodeURIComponent(String(recordId));
+    return this.postJSON("/books/" + book + "/records/" + record, payload, "PUT");
+  },
+
+  deleteRecord(bookId, recordId) {
+    const book = encodeURIComponent(String(bookId));
+    const record = encodeURIComponent(String(recordId));
+    return this.postJSON("/books/" + book + "/records/" + record, {}, "DELETE");
   },
 
   updateAccount(bookId, accountId, payload) {
@@ -334,7 +347,7 @@ async function startBackendReadHydration() {
     if (!await hydrateRecordsFromBackend()) throw new Error("records_response_invalid");
     if (!await hydrateOverviewFromBackend()) throw new Error("overview_response_invalid");
     if (!uiState.startupNotice) {
-      uiState.startupNotice = "已读取服务端账本、账户、选项和当前账本明细；新建账本、账户和账目会优先同步服务端，已有对象的修改与删除仍保存在浏览器本地。";
+      uiState.startupNotice = "已读取服务端账本、账户、选项和当前账本明细；新建账本、账户和账目会优先同步服务端，账目修改与删除也会优先同步服务端，网络异常时再回退到浏览器本地。";
     }
     renderBookSelect();
     renderBookList();

@@ -25,6 +25,7 @@ function installFormDom(runtime) {
     globalThis.resetForm = () => {};
     globalThis.clearTimeout = () => {};
     globalThis.setTimeout = () => 0;
+    globalThis.confirm = () => true;
     globalThis.formElements = elements;
   })()`);
 }
@@ -62,6 +63,7 @@ function installRecordDom(runtime) {
     globalThis.resetBookForm = () => {};
     globalThis.clearTimeout = () => {};
     globalThis.setTimeout = () => 0;
+    globalThis.confirm = () => true;
     globalThis.formElements = elements;
   })()`);
 }
@@ -332,6 +334,108 @@ test("new deposit record maps direction and linked server record", async () => {
   assert.equal(payload.deposit_link_id, "record-original");
   assert.equal(payload.deposit_final, true);
   assert.equal(runtime.run("dataState.records.find(record => record.id === 'record-return').depositDir"), "退回");
+});
+
+test("editing a server record uses PUT and refreshes backend details", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "cash-1", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [{ id: "record-1", type: "支出", amount: 12.34, amountCents: 1234,
+      category: "餐饮", note: "午餐", date: "2026-09-15", account: "cash-1", toAccount: null,
+      depositDir: null, depositTarget: null, depositLinkId: null, depositFinal: false }];
+    dataState.backendTypeIds = { "支出": "type-expense" };
+    dataState.backendCategoryIds = { "餐饮": "category-food" };
+    uiState.editingRecordId = "record-1";
+    uiState.selectedType = "支出";
+    uiState.selectedCategory = "餐饮";
+    formElements.amount.value = "20.50";
+    formElements.note.value = "晚餐";
+    formElements.date.value = "2026-09-15";
+    formElements.accountSel.value = "cash-1";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/records/record-1") && options.method === "PUT") return { ok: true, json: async () => ({
+        id: "record-1", book_id: "book-1", type_id: "type-expense", category_id: "category-food",
+        account_id: "cash-1", to_account_id: null, amount_cents: 2050,
+        occurred_on: "2026-09-15", note: "晚餐", deposit_direction: null,
+        deposit_target: null, deposit_link_id: null, deposit_final: false
+      }) };
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({ items: [
+        { id: "record-1", book_id: "book-1", type_id: "type-expense", category_id: "category-food",
+          type_name: "支出", category_name: "餐饮", account_id: "cash-1", to_account_id: null,
+          amount_cents: 2050, occurred_on: "2026-09-15", note: "晚餐", deposit_direction: null,
+          deposit_target: null, deposit_link_id: null, deposit_final: false }
+      ] }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 2050, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 2050, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleSave()");
+  const calls = runtime.run("window.calls");
+  const payload = JSON.parse(calls[0].options.body);
+  assert.equal(calls[0].url, "/api/books/book-1/records/record-1");
+  assert.equal(calls[0].options.method, "PUT");
+  assert.equal(payload.type_id, "type-expense");
+  assert.equal(payload.category_id, "category-food");
+  assert.equal(payload.amount_cents, 2050);
+  assert.equal(runtime.run("dataState.records[0].amountCents"), 2050);
+  assert.equal(runtime.run("dataState.records[0].note"), "晚餐");
+  assert.equal(runtime.run("uiState.recordSaveStatus"), "success");
+  assert.equal(JSON.stringify(calls.map(call => [call.url, call.options.method])), JSON.stringify([
+    ["/api/books/book-1/records/record-1", "PUT"],
+    ["/api/books/book-1/records", undefined],
+    ["/api/overview", undefined]
+  ]));
+});
+
+test("deleting a server record uses DELETE and handles a 204 response", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "cash-1", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [{ id: "record-1", type: "支出", amount: 12.34, amountCents: 1234,
+      category: "餐饮", note: "午餐", date: "2026-09-15", account: "cash-1", toAccount: null,
+      depositDir: null, depositTarget: null, depositLinkId: null, depositFinal: false }];
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/records/record-1") && options.method === "DELETE") return {
+        ok: true, status: 204, json: async () => { throw new Error("no content"); }
+      };
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({ items: [] }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("deleteRec('record-1')");
+  const calls = runtime.run("window.calls");
+  assert.equal(calls[0].url, "/api/books/book-1/records/record-1");
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.equal(runtime.run("dataState.records.length"), 0);
+  assert.equal(runtime.run("uiState.recordSaveStatus"), "success");
+  assert.equal(runtime.run("uiState.recordDeleteInFlight"), false);
 });
 
 test("record write failure restores local accounts before local fallback", async () => {

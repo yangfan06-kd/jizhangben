@@ -88,6 +88,97 @@ function backendDepositDirection(direction) {
   }[direction] || null;
 }
 
+function backendRecordPayload(record, typeId, categoryId) {
+  return {
+    type_id: typeId,
+    category_id: categoryId,
+    account_id: needsAccount(record.type) ? (record.account || null) : null,
+    to_account_id: record.type === "转账" ? (record.toAccount || null) : null,
+    amount_cents: record.amountCents,
+    occurred_on: record.date,
+    note: record.note || "",
+    deposit_direction: record.depositDir ? backendDepositDirection(record.depositDir) : null,
+    deposit_target: record.type === "押金" ? (record.depositTarget || null) : null,
+    deposit_link_id: record.depositLinkId || null,
+    deposit_final: !!record.depositFinal
+  };
+}
+
+function accountNameById(id) {
+  if (id === null || id === undefined || id === "") return null;
+  const account = dataState.accounts.find(item => String(item.id) === String(id));
+  return account ? account.name : null;
+}
+
+function recordFingerprint(record) {
+  if (!record) return null;
+  return {
+    type: record.type,
+    category: record.category,
+    date: record.date,
+    amount: amountOf(record),
+    note: record.note || "",
+    accountName: accountNameById(record.account),
+    toAccountName: accountNameById(record.toAccount),
+    depositDir: record.depositDir || null,
+    depositTarget: record.depositTarget || null
+  };
+}
+
+function localRecordMatchesFingerprint(record, fingerprint) {
+  if (!record || !fingerprint) return false;
+  return record.type === fingerprint.type &&
+    record.category === fingerprint.category &&
+    record.date === fingerprint.date &&
+    amountOf(record) === fingerprint.amount &&
+    (record.note || "") === fingerprint.note &&
+    accountNameById(record.account) === fingerprint.accountName &&
+    accountNameById(record.toAccount) === fingerprint.toAccountName &&
+    (record.depositDir || null) === fingerprint.depositDir &&
+    (record.depositTarget || null) === fingerprint.depositTarget;
+}
+
+function findLocalRecordByFingerprint(fingerprint) {
+  const matches = dataState.records.filter(record => localRecordMatchesFingerprint(record, fingerprint));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function applyRecordDraft(target, draft) {
+  target.type = draft.type;
+  target.amount = draft.amount;
+  target.amountCents = draft.amountCents;
+  target.category = draft.category;
+  target.note = draft.note;
+  target.date = draft.date;
+  target.account = draft.account;
+  target.toAccount = draft.toAccount;
+  target.depositDir = draft.depositDir;
+  target.depositTarget = draft.depositTarget;
+  target.depositLinkId = draft.depositLinkId;
+  target.depositFinal = draft.depositFinal;
+}
+
+function saveEditedRecordLocally(draft, originalFingerprint, message) {
+  restoreLocalStateFromStorage();
+  const target = findLocalRecordByFingerprint(originalFingerprint);
+  if (!target) {
+    showMsg("服务端不可用，本地未找到原账目，修改未保存", "info");
+    render();
+    return false;
+  }
+  if (draft.accountName) draft.account = localAccountIdByName(draft.accountName);
+  if (draft.toAccountName) draft.toAccount = localAccountIdByName(draft.toAccountName);
+  if (draft.depositLinkFingerprint) {
+    draft.depositLinkId = localDepositIdByFingerprint(draft.depositLinkFingerprint);
+  }
+  applyRecordDraft(target, draft);
+  save();
+  resetForm();
+  showMsg(message, "local");
+  render();
+  return true;
+}
+
 function setRecordSaveBusy(busy) {
   uiState.recordSaveInFlight = !!busy;
   if (busy) uiState.recordSaveStatus = "saving";
@@ -112,6 +203,10 @@ function setRecordSaveBusy(busy) {
 async function handleSave() {
   if (uiState.recordSaveInFlight) {
     showMsg("正在保存，请稍候", "busy");
+    return;
+  }
+  if (uiState.recordDeleteInFlight) {
+    showMsg("正在删除，请稍候", "busy");
     return;
   }
   const amount = parseFloat(document.getElementById("amount").value);
@@ -141,6 +236,10 @@ async function handleSave() {
   }
 
   const wasEdit = uiState.editingRecordId !== null;
+  const originalRecord = wasEdit
+    ? dataState.records.find(r => String(r.id) === String(uiState.editingRecordId))
+    : null;
+  const originalFingerprint = recordFingerprint(originalRecord);
   const accountName = account ? (dataState.accounts.find(item => String(item.id) === String(account)) || {}).name : null;
   const toAccountName = toAccount ? (dataState.accounts.find(item => String(item.id) === String(toAccount)) || {}).name : null;
   const linkedRecord = depositLinkId
@@ -185,19 +284,7 @@ async function handleSave() {
       return;
     }
     setRecordSaveBusy(true);
-    const payload = {
-      type_id: typeId,
-      category_id: categoryId,
-      account_id: needsAccount(selectedType) ? account : null,
-      to_account_id: selectedType === "转账" ? toAccount : null,
-      amount_cents: amountCents,
-      occurred_on: date,
-      note: note,
-      deposit_direction: depositDir ? backendDepositDirection(depositDir) : null,
-      deposit_target: uiState.selectedType === "押金" ? depositTarget : null,
-      deposit_link_id: depositLinkId,
-      deposit_final: depositFinal
-    };
+    const payload = backendRecordPayload(localRecord, typeId, categoryId);
     try {
       const saved = await backendApi.createRecord(dataState.currentBookId, payload);
       if (!saved || !saved.id) throw new Error("record_response_invalid");
@@ -226,20 +313,51 @@ async function handleSave() {
     return;
   }
 
+  if (wasEdit && backendRecordWritesEnabled()) {
+    const typeId = backendOptionId(dataState.backendTypeIds, selectedType);
+    const categoryId = backendOptionId(dataState.backendCategoryIds, selectedCategory);
+    if (!originalRecord || !typeId || !categoryId) {
+      showMsg("服务端选项尚未同步，修改未保存，请稍后重试", "conflict");
+      return;
+    }
+    setRecordSaveBusy(true);
+    try {
+      const saved = await backendApi.updateRecord(
+        dataState.currentBookId,
+        originalRecord.id,
+        backendRecordPayload(localRecord, typeId, categoryId)
+      );
+      if (!saved || !saved.id) throw new Error("record_response_invalid");
+      const mapped = mapBackendRecord(Object.assign({}, saved, {
+        type_name: selectedType,
+        category_name: selectedCategory
+      }));
+      const index = dataState.records.findIndex(r => String(r.id) === String(originalRecord.id));
+      if (index >= 0) dataState.records[index] = mapped;
+      else dataState.records.push(mapped);
+      const recordsRefreshed = await refreshBackendRecordsAfterWrite();
+      await refreshBackendOverviewAfterWrite();
+      resetForm();
+      showMsg(recordsRefreshed
+        ? "已保存修改（已同步服务端）"
+        : "已保存修改（服务端已保存，明细刷新稍后重试）",
+        recordsRefreshed ? "success" : "info");
+      render();
+    } catch (error) {
+      if (error && error.code && error.code !== "backend_request_failed") {
+        showMsg(error.message || "服务端拒绝了修改，请检查输入", "conflict");
+      } else {
+        saveEditedRecordLocally(fallbackRecord, originalFingerprint, "服务端不可用，已在本地保存修改");
+      }
+    } finally {
+      setRecordSaveBusy(false);
+    }
+    return;
+  }
+
   if (wasEdit) {
     const rec = dataState.records.find(r => String(r.id) === String(uiState.editingRecordId));
-    rec.type = uiState.selectedType;
-    rec.amount = amountCents / 100;
-    rec.amountCents = amountCents;
-    rec.category = uiState.selectedCategory;
-    rec.note = note;
-    rec.date = date;
-    rec.account = account;
-    rec.toAccount = (uiState.selectedType === "转账") ? toAccount : null;
-    rec.depositDir = depositDir;
-    rec.depositTarget = (uiState.selectedType === "押金") ? depositTarget : null;
-    rec.depositLinkId = depositLinkId;
-    rec.depositFinal = depositFinal;
+    applyRecordDraft(rec, localRecord);
   } else {
     dataState.records.push(localRecord);
   }
@@ -279,9 +397,56 @@ function cancelEdit() {
   resetForm();
 }
 
-function deleteRec(id) {
-  if (!confirm("确定删除这笔账吗？")) return;
+async function deleteRec(id) {
+  if (uiState.recordSaveInFlight) {
+    showMsg("正在保存，请稍候", "busy");
+    return;
+  }
+  if (uiState.recordDeleteInFlight) {
+    showMsg("正在删除，请稍候", "busy");
+    return;
+  }
+  const target = dataState.records.find(r => String(r.id) === String(id));
+  if (!target || !confirm("确定删除这笔账吗？")) return;
+  const fingerprint = recordFingerprint(target);
+
+  if (backendRecordWritesEnabled() && typeof target.id === "string" && target.id) {
+    uiState.recordDeleteInFlight = true;
+    uiState.recordSaveStatus = "saving";
+    try {
+      await backendApi.deleteRecord(dataState.currentBookId, target.id);
+      dataState.records = dataState.records.filter(r => String(r.id) !== String(id));
+      const recordsRefreshed = await refreshBackendRecordsAfterWrite();
+      await refreshBackendOverviewAfterWrite();
+      showMsg(recordsRefreshed
+        ? "已删除（已同步服务端）"
+        : "已删除（服务端已删除，明细刷新稍后重试）",
+        recordsRefreshed ? "success" : "info");
+      render();
+    } catch (error) {
+      if (error && error.code && error.code !== "backend_request_failed") {
+        showMsg(error.message || "服务端拒绝删除，请先处理关联记录", "conflict");
+      } else {
+        restoreLocalStateFromStorage();
+        const localTarget = findLocalRecordByFingerprint(fingerprint);
+        if (!localTarget) {
+          showMsg("服务端不可用，本地未找到这笔账，未删除", "info");
+          render();
+        } else {
+          dataState.records = dataState.records.filter(r => r !== localTarget);
+          save();
+          showMsg("服务端不可用，已在本地删除", "local");
+          render();
+        }
+      }
+    } finally {
+      uiState.recordDeleteInFlight = false;
+    }
+    return;
+  }
+
   dataState.records = dataState.records.filter(r => String(r.id) !== String(id));
   save();
+  showMsg("已删除", "local");
   render();
 }
