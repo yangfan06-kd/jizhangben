@@ -237,5 +237,7 @@ backend/
 20. `GET /api/overview` 已按账本返回账户余额、期间收支和净资产合计；服务层统一处理负债账户符号、转账中性规则和押金最终差额。
 21. `GET /api/backups/export` 和 `POST /api/backups/import` 已固定服务端备份格式；导入前校验资源 ID、归属关系和押金链路，在事务中生成新 UUID 并重建关联。
 22. `POST /api/backups/preview` 和 `POST /api/backups/preview-local` 已提供只读迁移预览，返回数量、分账本摘要和收支净资产对账结果，不写入数据库。
+23. 网页新建账目已优先调用 `POST /api/books/{book_id}/records`；客户端保留服务端类型、类别 UUID 映射，并把普通账目、转账和押金方向转换为后端请求字段。
+24. 账目写入失败时网页会先恢复 localStorage 的账本和账户快照，再把账户名称转换回本地 ID 后保存；服务端成功响应则使用返回的记录 UUID，并刷新总览。
 
-接下来让网页数据访问层接入账目写入和迁移后的重新读取，并保留 localStorage 回退与原始备份。
+接下来完善账目写入后的服务端明细重新读取、重复提交保护和写入状态提示，并保留 localStorage 回退与原始备份。

@@ -42,12 +42,14 @@ function createRuntime(initialStorage = {}) {
     "js/constants.js",
     "js/state.js",
     "js/helpers.js",
+    "js/deposit-form.js",
     "js/storage-adapter.js",
     "js/migrations.js",
     "js/storage.js",
     "js/api-client.js",
     "js/records.js",
     "js/backup.js",
+    "js/record-form.js",
     "js/book-form.js",
     "js/account-form.js"
   ];

@@ -1,5 +1,5 @@
 // 后端读取层：只负责请求和响应映射，不直接操作 DOM 或 localStorage。
-// 当前阶段采用“后端读取 + 本地写入”的渐进接入方式，失败时由原有同步读取继续工作。
+// 当前阶段采用“后端读取 + 分阶段写入”的渐进接入方式，失败时由原有本地流程继续工作。
 
 const backendApi = {
   // 直接打开 index.html 时没有可用的同源 API；用 HTTP 服务打开时默认请求 /api。
@@ -66,6 +66,11 @@ const backendApi = {
     return this.postJSON("/books/" + id + "/accounts", payload);
   },
 
+  createRecord(bookId, payload) {
+    const id = encodeURIComponent(String(bookId));
+    return this.postJSON("/books/" + id + "/records", payload);
+  },
+
   updateAccount(bookId, accountId, payload) {
     const book = encodeURIComponent(String(bookId));
     const account = encodeURIComponent(String(accountId));
@@ -75,6 +80,21 @@ const backendApi = {
 
 function backendWritesEnabled() {
   return !!(dataState.backendBooksLoaded && backendApi.baseUrl());
+}
+
+function backendRecordWritesEnabled() {
+  return !!(
+    dataState.backendBooksLoaded &&
+    dataState.backendOptionsLoaded &&
+    dataState.backendRecordsLoaded &&
+    backendApi.baseUrl()
+  );
+}
+
+function backendOptionId(map, name) {
+  if (!map || !name) return null;
+  const id = map[name];
+  return (typeof id === "string" && id) ? id : null;
 }
 
 async function refreshBackendOverviewAfterWrite() {
@@ -187,6 +207,8 @@ function restoreLocalStateFromStorage() {
   dataState.backendOptionsLoaded = false;
   dataState.backendRecordsLoaded = false;
   dataState.backendOverview = null;
+  dataState.backendCategoryIds = Object.create(null);
+  dataState.backendTypeIds = Object.create(null);
   loadBooks();
   load();
   loadAccounts();
@@ -237,15 +259,27 @@ async function hydrateOptionsFromBackend() {
   if (!categories || !Array.isArray(categories.items)) return false;
   if (!recordTypes || !Array.isArray(recordTypes.items)) return false;
 
-  dataState.customCategories = categories.items
+  const mappedCategories = categories.items
     .filter(Boolean)
     .map(mapBackendCategory)
-    .filter(category => !category.isSystem && category.name)
-    .map(category => category.name);
-  dataState.customTypes = recordTypes.items
+    .filter(category => category.id && category.name);
+  const mappedTypes = recordTypes.items
     .filter(Boolean)
     .map(mapBackendType)
-    .filter(recordType => !recordType.isSystem && recordType.name)
+    .filter(recordType => recordType.id && recordType.name);
+  dataState.backendCategoryIds = Object.create(null);
+  mappedCategories.forEach(category => {
+    dataState.backendCategoryIds[category.name] = category.id;
+  });
+  dataState.backendTypeIds = Object.create(null);
+  mappedTypes.forEach(recordType => {
+    dataState.backendTypeIds[recordType.name] = recordType.id;
+  });
+  dataState.customCategories = mappedCategories
+    .filter(category => !category.isSystem)
+    .map(category => category.name);
+  dataState.customTypes = mappedTypes
+    .filter(recordType => !recordType.isSystem)
     .map(recordType => ({ name: recordType.name, side: recordType.side }));
   dataState.backendOptionsLoaded = true;
   return true;
@@ -291,7 +325,7 @@ async function startBackendReadHydration() {
     if (!await hydrateRecordsFromBackend()) throw new Error("records_response_invalid");
     if (!await hydrateOverviewFromBackend()) throw new Error("overview_response_invalid");
     if (!uiState.startupNotice) {
-      uiState.startupNotice = "已读取服务端账本、账户、选项和当前账本明细；当前阶段新增、修改仍保存在浏览器本地。";
+      uiState.startupNotice = "已读取服务端账本、账户、选项和当前账本明细；新建账本、账户和账目会优先同步服务端，已有对象的修改与删除仍保存在浏览器本地。";
     }
     renderBookSelect();
     renderBookList();
@@ -309,6 +343,8 @@ async function startBackendReadHydration() {
     dataState.customCategories = localCustomCategories;
     dataState.records = localRecords;
     dataState.backendOverview = localOverview;
+    dataState.backendCategoryIds = Object.create(null);
+    dataState.backendTypeIds = Object.create(null);
     dataState.backendBooksLoaded = false;
     dataState.backendOptionsLoaded = false;
     dataState.backendRecordsLoaded = false;

@@ -29,6 +29,43 @@ function installFormDom(runtime) {
   })()`);
 }
 
+function installRecordDom(runtime) {
+  runtime.run(`(() => {
+    const ids = [
+      "amount", "note", "date", "accountSel", "toAccountSel", "depositTarget",
+      "depositLinkSel", "depositFinal", "saveBtn", "cancelBtn", "formMsg",
+      "typeCustomBox", "categoryCustomBox", "typeChips", "categoryChips",
+      "toAccountField", "depositDirField", "depositTargetField", "depositLinkField",
+      "depositFinalField", "depositDirChips", "depositSettlementHint",
+      "bookName", "bookCategory", "bookSaveBtn", "bookCancelBtn", "bookMsg",
+      "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg"
+    ];
+    const elements = Object.fromEntries(ids.map(id => [id, {
+      value: "",
+      textContent: "",
+      innerHTML: "",
+      checked: false,
+      style: { display: "" },
+      classList: { toggle() {} },
+      options: []
+    }]));
+    globalThis.document = { getElementById: id => elements[id] };
+    globalThis.renderTypeChips = () => {};
+    globalThis.renderCategoryChips = () => {};
+    globalThis.updateFormFields = () => {};
+    globalThis.render = () => {};
+    globalThis.renderBookSelect = () => {};
+    globalThis.renderBookList = () => {};
+    globalThis.renderAccountSelects = () => {};
+    globalThis.fillCategoryFilter = () => {};
+    globalThis.resetAccountForm = () => {};
+    globalThis.resetBookForm = () => {};
+    globalThis.clearTimeout = () => {};
+    globalThis.setTimeout = () => 0;
+    globalThis.formElements = elements;
+  })()`);
+}
+
 test("backendApi disables requests when the page is opened as a local file", () => {
   const runtime = createRuntime();
   assert.equal(runtime.run("backendApi.baseUrl()"), null);
@@ -92,6 +129,140 @@ test("backendApi uses UUID-safe write paths for books and accounts", async () =>
     ["/api/books/book%2Fwith%20space", "PATCH"],
     ["/api/books/book%2Fwith%20space/accounts/account%2Fone", "PATCH"]
   ]));
+});
+
+test("new ordinary record posts server option and account UUIDs", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "cash-1", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [];
+    dataState.backendTypeIds = { "支出": "type-expense" };
+    dataState.backendCategoryIds = { "餐饮": "category-food" };
+    uiState.selectedType = "支出";
+    uiState.selectedCategory = "餐饮";
+    formElements.amount.value = "12.34";
+    formElements.note.value = "午餐";
+    formElements.date.value = "2026-09-15";
+    formElements.accountSel.value = "cash-1";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({
+        id: "record-1", book_id: "book-1", type_id: "type-expense", category_id: "category-food",
+        account_id: "cash-1", to_account_id: null, amount_cents: 1234,
+        occurred_on: "2026-09-15", note: "午餐", deposit_direction: null,
+        deposit_target: null, deposit_link_id: null, deposit_final: false
+      }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 1234, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 1234, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleSave()");
+  const calls = runtime.run("window.calls");
+  const payload = JSON.parse(calls[0].options.body);
+  assert.equal(calls[0].url, "/api/books/book-1/records");
+  assert.equal(payload.type_id, "type-expense");
+  assert.equal(payload.category_id, "category-food");
+  assert.equal(payload.account_id, "cash-1");
+  assert.equal(payload.amount_cents, 1234);
+  assert.equal(runtime.run("dataState.records[0].id"), "record-1");
+  assert.equal(runtime.run("dataState.records[0].type"), "支出");
+});
+
+test("new deposit record maps direction and linked server record", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "cash-1", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [{ id: "record-original", type: "押金", amount: 1000, amountCents: 100000,
+      category: "居住", note: "租房押金", date: "2026-09-01", account: "cash-1", toAccount: null,
+      depositDir: "付", depositTarget: "房东", depositLinkId: null, depositFinal: false }];
+    dataState.backendTypeIds = { "押金": "type-deposit" };
+    dataState.backendCategoryIds = { "居住": "category-home" };
+    uiState.selectedType = "押金";
+    uiState.selectedCategory = "居住";
+    uiState.selectedDepositDir = "退回";
+    formElements.amount.value = "700";
+    formElements.note.value = "退回押金";
+    formElements.date.value = "2026-09-15";
+    formElements.accountSel.value = "cash-1";
+    formElements.depositTarget.value = "房东";
+    formElements.depositLinkSel.value = "record-original";
+    formElements.depositFinal.checked = true;
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({
+        id: "record-return", book_id: "book-1", type_id: "type-deposit", category_id: "category-home",
+        account_id: "cash-1", to_account_id: null, amount_cents: 70000,
+        occurred_on: "2026-09-15", note: "退回押金", deposit_direction: "returned_to_me",
+        deposit_target: "房东", deposit_link_id: "record-original", deposit_final: true
+      }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 30000, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 30000, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleSave()");
+  const payload = JSON.parse(runtime.run("window.calls[0].options.body"));
+  assert.equal(payload.deposit_direction, "returned_to_me");
+  assert.equal(payload.deposit_link_id, "record-original");
+  assert.equal(payload.deposit_final, true);
+  assert.equal(runtime.run("dataState.records[1].depositDir"), "退回");
+});
+
+test("record write failure restores local accounts before local fallback", async () => {
+  const runtime = createRuntime({
+    jizhangben_books: JSON.stringify([{ id: 1, name: "本地账本", category: "个人" }]),
+    jizhangben_current_book: JSON.stringify(1),
+    jizhangben_records_1: JSON.stringify([]),
+    jizhangben_accounts_1: JSON.stringify([{ id: 7, name: "现金", kind: "资金", initial: 0 }])
+  });
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "server-book";
+    dataState.books = [{ id: "server-book", name: "本地账本", category: "个人" }];
+    dataState.accounts = [{ id: "server-cash", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [];
+    dataState.backendTypeIds = { "支出": "type-expense" };
+    dataState.backendCategoryIds = { "餐饮": "category-food" };
+    uiState.selectedType = "支出";
+    uiState.selectedCategory = "餐饮";
+    formElements.amount.value = "8";
+    formElements.date.value = "2026-09-15";
+    formElements.accountSel.value = "server-cash";
+    window.fetch = async () => { throw new Error("offline"); };
+  })()`);
+
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.backendBooksLoaded"), false);
+  assert.equal(runtime.run("dataState.currentBookId"), 1);
+  assert.equal(runtime.run("dataState.records[0].account"), 7);
+  assert.match(runtime.run("document.getElementById('formMsg').textContent"), /服务端不可用/);
 });
 
 test("new book and account use backend responses when backend reads are active", async () => {

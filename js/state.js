@@ -33,6 +33,9 @@ const dataState = {
   accounts: [],
   customTypes: [],
   customCategories: [],
+  // 后端选项的名称到 UUID 映射，记录写入时使用；页面仍继续用名称显示。
+  backendCategoryIds: {},
+  backendTypeIds: {},
   // 后端读取成功后置为 true；写入暂时仍沿用本地存储，避免半迁移状态覆盖数据。
   backendBooksLoaded: false,
   backendOptionsLoaded: false,
