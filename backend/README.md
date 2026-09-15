@@ -55,7 +55,7 @@ $env:JIZHANGBEN_CORS_ORIGINS = "http://127.0.0.1:5500"
 
 应用每次启动都会检查待执行迁移。已经记录的版本不会重复运行；某个迁移失败时，本次事务不会提交。
 
-应用启动时仍会幂等检查并创建一个固定的本地开发用户，供旧页面和自动化测试在没有 Cookie 时兼容使用；真正登录后，请求依赖会优先从会话 Cookie 解析用户，带有无效 Cookie 时直接返回 401。下一步关闭这个开发回退，所有业务请求都要求登录。
+应用启动时仍会幂等检查并创建一个固定的本地开发用户，供旧页面和自动化测试在没有 Cookie 时兼容使用；真正登录后，请求依赖会优先从会话 Cookie 解析用户，带有无效或过期 Cookie 时直接返回 401。前端收到受保护接口的 401 会清除登录状态并提示重新登录。下一步关闭这个开发回退，所有业务请求都要求登录。
 
 部署或联调登录功能时，可以设置 `$env:JIZHANGBEN_ALLOW_DEV_FALLBACK = "0"`，让没有 Cookie 的业务请求也直接返回 401；默认值 `1` 只用于当前迁移阶段兼容旧页面。
 
@@ -67,7 +67,7 @@ $env:JIZHANGBEN_CORS_ORIGINS = "http://127.0.0.1:5500"
 
 `POST /api/auth/login` 校验邮箱和密码并设置会话 Cookie；密码错误返回 `401` 和 `invalid_credentials`。`GET /api/auth/me` 返回当前登录用户，缺少或失效会话返回 `401`；`POST /api/auth/logout` 撤销当前会话并返回 `204`。
 
-`GET /api/books` 查询当前开发用户的账本，列表统一放在 `items` 字段中。
+`GET /api/books` 查询当前会话用户的账本，列表统一放在 `items` 字段中；迁移期间没有 Cookie 时才会按开发回退开关使用固定开发用户。
 
 `POST /api/books` 新建账本，例如：
 
@@ -142,9 +142,9 @@ $env:JIZHANGBEN_CORS_ORIGINS = "http://127.0.0.1:5500"
 
 `PUT /api/books/{book_id}/records/{record_id}` 使用与创建账目相同的请求结构完整替换账目，并重新执行账户、类型、类别和押金校验。成功返回更新后的账目；校验失败时原账目保持不变。已被退回记录引用的原押金返回 `deposit_record_in_use`，已关联原押金的退回记录返回 `deposit_settlement_locked`，两者都不能修改。
 
-`GET /api/overview` 返回当前开发用户所有账本的账户余额、指定期间收入、支出和净资产。默认期间是本月第一天到今天，也可以用 `from` 和 `to` 参数指定包含边界的日期范围。余额和净资产使用整数分；转账不计入收支，押金只有最终少退差额计入对应方向。
+`GET /api/overview` 返回当前会话用户所有账本的账户余额、指定期间收入、支出和净资产。默认期间是本月第一天到今天，也可以用 `from` 和 `to` 参数指定包含边界的日期范围。余额和净资产使用整数分；转账不计入收支，押金只有最终少退差额计入对应方向。
 
-`GET /api/backups/export` 导出当前开发用户的服务端备份，格式为 `jizhangben-server-backup`、版本 `1`，包含账本、账户、类别、记账类型和账目，不包含认证凭据或其他用户数据。`POST /api/backups/import` 接收同样的 JSON 结构，先校验所有 ID 和跨表关系，再替换当前开发用户的数据；响应中的 `id_map` 记录每个旧 ID 到新 UUID 的映射，转账和押金关联会按映射恢复。任何校验失败返回 422，原数据不会被删除。
+`GET /api/backups/export` 导出当前会话用户的服务端备份，格式为 `jizhangben-server-backup`、版本 `1`，包含账本、账户、类别、记账类型和账目，不包含认证凭据或其他用户数据。`POST /api/backups/import` 接收同样的 JSON 结构，先校验所有 ID 和跨表关系，再替换当前会话用户的数据；响应中的 `id_map` 记录每个旧 ID 到新 UUID 的映射，转账和押金关联会按映射恢复。任何校验失败返回 422，原数据不会被删除。
 
 `app/services/local_backup_migration.py` 提供离线转换器 `convert_local_backup()`，把网页导出的 `jizhangben-backup`（或旧版扁平 localStorage 对象）转换成服务端备份 payload。它会为本地数字 ID 加上账本作用域，补齐默认账户和系统选项，并转换押金方向；转换器不接触数据库，实际写入仍由上面的事务式导入接口完成。
 
