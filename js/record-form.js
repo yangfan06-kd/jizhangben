@@ -80,7 +80,31 @@ function backendDepositDirection(direction) {
   }[direction] || null;
 }
 
+function setRecordSaveBusy(busy) {
+  uiState.recordSaveInFlight = !!busy;
+  const saveBtn = document.getElementById("saveBtn");
+  const cancelBtn = document.getElementById("cancelBtn");
+  if (saveBtn) {
+    if (busy) {
+      if (saveBtn.dataset) saveBtn.dataset.idleText = saveBtn.textContent;
+      saveBtn.disabled = true;
+      saveBtn.textContent = "保存中…";
+    } else {
+      saveBtn.disabled = false;
+      saveBtn.textContent = saveBtn.dataset && saveBtn.dataset.idleText
+        ? saveBtn.dataset.idleText
+        : (uiState.editingRecordId === null ? "保存这笔账" : "保存修改");
+      if (saveBtn.dataset) delete saveBtn.dataset.idleText;
+    }
+  }
+  if (cancelBtn) cancelBtn.disabled = !!busy;
+}
+
 async function handleSave() {
+  if (uiState.recordSaveInFlight) {
+    showMsg("正在保存，请稍候");
+    return;
+  }
   const amount = parseFloat(document.getElementById("amount").value);
   const amountCents = toCents(amount);
   const note = document.getElementById("note").value.trim();
@@ -151,6 +175,7 @@ async function handleSave() {
       saveRecordLocally(fallbackRecord, "服务端选项尚未同步，已保存到本地", true);
       return;
     }
+    setRecordSaveBusy(true);
     const payload = {
       type_id: typeId,
       category_id: categoryId,
@@ -172,12 +197,17 @@ async function handleSave() {
         category_name: selectedCategory
       }));
       dataState.records.push(mapped);
+      const recordsRefreshed = await refreshBackendRecordsAfterWrite();
       await refreshBackendOverviewAfterWrite();
       resetForm();
-      showMsg("已记一笔（已同步服务端）");
+      showMsg(recordsRefreshed
+        ? "已记一笔（已同步服务端）"
+        : "已记一笔（服务端已保存，明细刷新稍后重试）");
       render();
     } catch (error) {
       saveRecordLocally(fallbackRecord, "服务端不可用，已保存到本地", true);
+    } finally {
+      setRecordSaveBusy(false);
     }
     return;
   }

@@ -154,12 +154,18 @@ test("new ordinary record posts server option and account UUIDs", async () => {
     window.calls = [];
     window.fetch = async (url, options) => {
       window.calls.push({ url, options });
-      if (url.endsWith("/records")) return { ok: true, json: async () => ({
+      if (url.endsWith("/records") && options && options.method === "POST") return { ok: true, json: async () => ({
         id: "record-1", book_id: "book-1", type_id: "type-expense", category_id: "category-food",
         account_id: "cash-1", to_account_id: null, amount_cents: 1234,
         occurred_on: "2026-09-15", note: "午餐", deposit_direction: null,
         deposit_target: null, deposit_link_id: null, deposit_final: false
       }) };
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({ items: [
+        { id: "record-1", book_id: "book-1", type_id: "type-expense", category_id: "category-food",
+          type_name: "支出", category_name: "餐饮", account_id: "cash-1", to_account_id: null,
+          amount_cents: 1234, occurred_on: "2026-09-15", note: "午餐", deposit_direction: null,
+          deposit_target: null, deposit_link_id: null, deposit_final: false }
+      ] }) };
       return { ok: true, json: async () => ({
         period_from: "2026-09-01", period_to: "2026-09-15", items: [
           { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 1234, net_worth_cents: 0 }
@@ -178,6 +184,61 @@ test("new ordinary record posts server option and account UUIDs", async () => {
   assert.equal(payload.amount_cents, 1234);
   assert.equal(runtime.run("dataState.records[0].id"), "record-1");
   assert.equal(runtime.run("dataState.records[0].type"), "支出");
+  assert.equal(JSON.stringify(calls.map(call => [call.url, call.options.method])), JSON.stringify([
+    ["/api/books/book-1/records", "POST"],
+    ["/api/books/book-1/records", undefined],
+    ["/api/overview", undefined]
+  ]));
+});
+
+test("repeated record save clicks send only one backend request", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.backendRecordsLoaded = true;
+    dataState.currentBookId = "book-1";
+    dataState.books = [{ id: "book-1", name: "日常账本", category: "个人" }];
+    dataState.accounts = [{ id: "cash-1", name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.records = [];
+    dataState.backendTypeIds = { "支出": "type-expense" };
+    dataState.backendCategoryIds = { "餐饮": "category-food" };
+    uiState.selectedType = "支出";
+    uiState.selectedCategory = "餐饮";
+    formElements.amount.value = "5";
+    formElements.date.value = "2026-09-15";
+    formElements.accountSel.value = "cash-1";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/records") && options && options.method === "POST") return { ok: true, json: async () => ({
+        id: "record-1", book_id: "book-1", type_id: "type-expense", category_id: "category-food",
+        account_id: "cash-1", to_account_id: null, amount_cents: 500,
+        occurred_on: "2026-09-15", note: "", deposit_direction: null,
+        deposit_target: null, deposit_link_id: null, deposit_final: false
+      }) };
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({ items: [
+        { id: "record-1", book_id: "book-1", type_id: "type-expense", category_id: "category-food",
+          type_name: "支出", category_name: "餐饮", account_id: "cash-1", to_account_id: null,
+          amount_cents: 500, occurred_on: "2026-09-15", note: "", deposit_direction: null,
+          deposit_target: null, deposit_link_id: null, deposit_final: false }
+      ] }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 500, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 500, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  const firstSave = runtime.run("handleSave()");
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("window.calls.filter(call => call.options && call.options.method === 'POST').length"), 1);
+  assert.match(runtime.run("document.getElementById('formMsg').textContent"), /正在保存/);
+  await firstSave;
+  assert.equal(runtime.run("dataState.records.length"), 1);
 });
 
 test("new deposit record maps direction and linked server record", async () => {
@@ -209,12 +270,18 @@ test("new deposit record maps direction and linked server record", async () => {
     window.calls = [];
     window.fetch = async (url, options) => {
       window.calls.push({ url, options });
-      if (url.endsWith("/records")) return { ok: true, json: async () => ({
+      if (url.endsWith("/records") && options && options.method === "POST") return { ok: true, json: async () => ({
         id: "record-return", book_id: "book-1", type_id: "type-deposit", category_id: "category-home",
         account_id: "cash-1", to_account_id: null, amount_cents: 70000,
         occurred_on: "2026-09-15", note: "退回押金", deposit_direction: "returned_to_me",
         deposit_target: "房东", deposit_link_id: "record-original", deposit_final: true
       }) };
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({ items: [
+        { id: "record-return", book_id: "book-1", type_id: "type-deposit", category_id: "category-home",
+          type_name: "押金", category_name: "居住", account_id: "cash-1", to_account_id: null,
+          amount_cents: 70000, occurred_on: "2026-09-15", note: "退回押金", deposit_direction: "returned_to_me",
+          deposit_target: "房东", deposit_link_id: "record-original", deposit_final: true }
+      ] }) };
       return { ok: true, json: async () => ({
         period_from: "2026-09-01", period_to: "2026-09-15", items: [
           { id: "book-1", name: "日常账本", group_name: "个人", income_cents: 0, expense_cents: 30000, net_worth_cents: 0 }
@@ -228,7 +295,7 @@ test("new deposit record maps direction and linked server record", async () => {
   assert.equal(payload.deposit_direction, "returned_to_me");
   assert.equal(payload.deposit_link_id, "record-original");
   assert.equal(payload.deposit_final, true);
-  assert.equal(runtime.run("dataState.records[1].depositDir"), "退回");
+  assert.equal(runtime.run("dataState.records.find(record => record.id === 'record-return').depositDir"), "退回");
 });
 
 test("record write failure restores local accounts before local fallback", async () => {

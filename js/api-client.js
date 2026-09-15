@@ -106,6 +106,15 @@ async function refreshBackendOverviewAfterWrite() {
   }
 }
 
+async function refreshBackendRecordsAfterWrite() {
+  if (!dataState.backendBooksLoaded || !dataState.currentBookId) return false;
+  try {
+    return await hydrateRecordsFromBackend();
+  } catch (error) {
+    return false;
+  }
+}
+
 function mapBackendBook(book) {
   return {
     id: book.id,
