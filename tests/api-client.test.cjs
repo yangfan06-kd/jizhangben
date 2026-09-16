@@ -9,7 +9,7 @@ function installFormDom(runtime) {
       "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg",
       "authStatus", "authOpenBtn", "authLogoutBtn", "authPanel", "authTitle", "authCloseBtn",
       "authLoginTab", "authRegisterTab", "authNameField", "authEmail", "authDisplayName",
-      "authPassword", "authSubmitBtn", "authMsg"
+      "authPassword", "authSubmitBtn", "authMsg", "startupNotice"
     ];
     const elements = Object.fromEntries(ids.map(id => [id, {
       value: "",
@@ -198,6 +198,47 @@ test("an expired backend session returns the page to local compatibility mode", 
   assert.equal(runtime.run("dataState.authUser"), null);
   assert.equal(runtime.run("window.restored"), true);
   assert.match(runtime.run("uiState.startupNotice"), /登录状态已过期/);
+});
+
+test("a successful login keeps the user visible when server data is temporarily unavailable", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    formElements.authEmail.value = "learner@example.com";
+    formElements.authPassword.value = "correct-horse-battery";
+    startBackendReadHydration = async () => false;
+    window.fetch = async () => ({ ok: true, json: async () => ({
+      id: "user-1", email: "learner@example.com", display_name: "学习者"
+    }) });
+  })()`);
+
+  await runtime.run("submitAuth()");
+  assert.equal(runtime.run("dataState.authStatus"), "authenticated");
+  assert.equal(runtime.run("dataState.authUser.id"), "user-1");
+  assert.equal(runtime.run("document.getElementById('startupNotice').hidden"), false);
+  assert.match(runtime.run("uiState.startupNotice"), /服务端账本暂时无法读取/);
+});
+
+test("logout clears the session state and labels the local compatibility mode", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    window.restored = false;
+    restoreLocalStateFromStorage = () => { window.restored = true; };
+    window.fetch = async () => ({ ok: true, status: 204, json: async () => null });
+  })()`);
+
+  await runtime.run("logoutAuth()");
+  assert.equal(runtime.run("dataState.authStatus"), "guest");
+  assert.equal(runtime.run("dataState.authUser"), null);
+  assert.equal(runtime.run("window.restored"), true);
+  assert.equal(runtime.run("document.getElementById('authOpenBtn').hidden"), false);
+  assert.equal(runtime.run("document.getElementById('authLogoutBtn').hidden"), true);
+  assert.match(runtime.run("uiState.startupNotice"), /已退出登录/);
 });
 
 test("editing a server book uses PATCH and refreshes the overview", async () => {

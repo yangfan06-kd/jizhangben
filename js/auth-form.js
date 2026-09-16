@@ -13,6 +13,15 @@ function showAuthMsg(text, isError = true) {
   authMsgTimer = setTimeout(() => { message.textContent = ""; }, 4000);
 }
 
+function showAuthDataNotice(text) {
+  uiState.startupNotice = text;
+  const notice = document.getElementById("startupNotice");
+  if (notice) {
+    notice.textContent = text;
+    notice.hidden = false;
+  }
+}
+
 function renderAuthStatus() {
   const status = document.getElementById("authStatus");
   const open = document.getElementById("authOpenBtn");
@@ -40,7 +49,7 @@ function handleBackendAuthExpired() {
   dataState.authHydrated = true;
   // 会话失效后不继续把页面当成服务端数据，恢复到浏览器本地快照。
   restoreLocalStateFromStorage();
-  uiState.startupNotice = "登录状态已过期，请重新登录；当前显示浏览器本地数据。";
+  showAuthDataNotice("登录状态已过期，请重新登录；当前显示浏览器本地数据。");
   renderAuthStatus();
   if (wasAuthenticated) showAuthMsg("登录状态已过期，请重新登录");
   if (typeof render === "function") render();
@@ -119,9 +128,11 @@ async function submitAuth() {
   closeAuthPanel();
   renderAuthStatus();
   // 登录用户可能还没有账本，必须允许空账本响应替换本地兼容数据。
+  uiState.startupNotice = "";
   const hydrated = await startBackendReadHydration(true);
   if (!hydrated && dataState.authStatus === "authenticated") {
-    showAuthMsg("已登录，但账本数据暂时无法读取", true);
+    showAuthDataNotice("已登录，但服务端账本暂时无法读取；当前显示浏览器本地数据，可稍后重试。");
+    showAuthMsg("服务端数据暂时无法读取", true);
   }
   render();
   setAuthBusy(false);
@@ -138,7 +149,9 @@ async function logoutAuth() {
   dataState.authStatus = "guest";
   dataState.authHydrated = true;
   restoreLocalStateFromStorage();
+  showAuthDataNotice("已退出登录，当前显示浏览器本地数据。");
   renderAuthStatus();
+  if (typeof render === "function") render();
 }
 
 async function hydrateAuthSession() {
@@ -166,9 +179,11 @@ async function hydrateAuthSession() {
   dataState.authStatus = "authenticated";
   dataState.authHydrated = true;
   renderAuthStatus();
+  uiState.startupNotice = "";
   const hydrated = await startBackendReadHydration(true);
   if (!hydrated && dataState.authStatus === "authenticated") {
-    showAuthMsg("已登录，但账本数据暂时无法读取", true);
+    showAuthDataNotice("已登录，但服务端账本暂时无法读取；当前显示浏览器本地数据，可稍后重试。");
+    showAuthMsg("服务端数据暂时无法读取", true);
   }
   render();
   return true;
