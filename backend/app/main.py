@@ -54,7 +54,8 @@ class HealthResponse(BaseModel):
 
 def create_app(database_path: str | Path | None = None) -> FastAPI:
     resolved_path = resolve_database_path(database_path)
-    allow_development_fallback = os.getenv("JIZHANGBEN_ALLOW_DEV_FALLBACK", "1").lower() in {
+    # 开发回退必须显式打开，避免部署时忘记配置而让无 Cookie 请求使用固定用户。
+    allow_development_fallback = os.getenv("JIZHANGBEN_ALLOW_DEV_FALLBACK", "0").lower() in {
         "1", "true", "yes", "on"
     }
 

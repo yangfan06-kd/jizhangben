@@ -1,3 +1,4 @@
+import asyncio
 import sqlite3
 
 import pytest
@@ -104,6 +105,26 @@ async def test_development_fallback_can_be_disabled(tmp_path, monkeypatch):
             response = await client.get("/api/books")
             assert response.status_code == 401
             assert response.json()["code"] == "authentication_required"
+
+
+@pytest.mark.anyio
+async def test_business_endpoints_require_login_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("JIZHANGBEN_ALLOW_DEV_FALLBACK", raising=False)
+    application = create_app(tmp_path / "auth-default-required.db")
+    transport = ASGITransport(app=application)
+
+    async with application.router.lifespan_context(application):
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            responses = await asyncio.gather(
+                client.get("/api/books"),
+                client.get("/api/categories"),
+                client.get("/api/record-types"),
+                client.get("/api/overview"),
+                client.get("/api/backups/export"),
+            )
+
+    assert [response.status_code for response in responses] == [401] * 5
+    assert all(response.json()["code"] == "authentication_required" for response in responses)
 
 
 @pytest.mark.anyio
