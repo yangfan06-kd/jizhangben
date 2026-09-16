@@ -932,9 +932,20 @@
 
 - 日期：2026-09-16
 - 目标：让每次提交和合并请求都在干净环境中自动验证前端、后端和 JavaScript 语法。
-- 实际完成：新增 `.github/workflows/ci.yml`，使用 Ubuntu、Node.js 20 和 Python 3.12；先运行 `npm test`，再逐个执行 `node --check`，最后安装 `backend/requirements.txt` 并运行后端测试。工作流只申请读取代码权限，覆盖 `main` 推送和所有合并请求。
+- 实际完成：新增 `.github/workflows/ci.yml`，使用 Ubuntu、Node.js 22 和 Python 3.12；先运行 `npm test`，再逐个执行 `node --check`，最后安装 `backend/requirements.txt` 并运行后端测试。工作流只申请读取代码权限，覆盖 `main` 推送和所有合并请求。
 - 验证方式：本地前端 50 项、后端 100 项和语法检查全部通过；工作流命令与本地测试命令保持一致，后续上传 GitHub 后由 Actions 在全新环境实际执行。
 - 遇到的问题：项目没有 `package-lock.json`，CI 不能使用 `npm ci`；同时 JavaScript 文件较多，直接把通配符传给 `node --check` 在不同 shell 中行为不一致。
 - 解决方法：前端没有第三方依赖时直接运行 `npm test`，语法检查用 Bash 循环逐文件执行；Python 依赖统一从 `requirements.txt` 安装，并启用 pip 缓存减少重复下载。
 - 面试表达：我把本地验证命令原样搬进 GitHub Actions，并固定 Node/Python 版本和依赖文件；这样能同时发现代码回归、语法问题和“本机装过依赖所以能跑”的环境差异。
 - 后续疑问：如何加入部署配置，在真实 HTTP 端口下验收 Cookie、CORS 和手机浏览器访问。
+
+## 第 76 步：修复 CI 的 Node.js 版本兼容性
+
+- 日期：2026-09-16
+- 目标：修复 GitHub Actions 中前端测试退出码 9 的问题，让 CI 使用与测试参数兼容的 Node.js 版本。
+- 实际完成：从失败运行日志确认错误发生在 `Run frontend tests`，而不是后端依赖或语法检查；原因是工作流使用 Node.js 20，而项目测试命令包含 `--test-isolation=none`。工作流已改用 Node.js 22，保留现有测试命令和 Python 3.12 配置。
+- 验证方式：本地前端 50 项、后端 100 项和 JavaScript 语法检查全部通过；修复提交推送后等待新的 GitHub Actions 运行结果。
+- 遇到的问题：本机 Node.js 24 支持该参数，因此本地测试无法复现 Node.js 20 的退出码 9；GitHub 邮件只显示“所有任务失败”，必须进入具体 job 日志定位步骤。
+- 解决方法：根据 Actions 的失败步骤和退出码判断是运行时参数兼容问题，把 CI 版本提升到支持该参数的 Node.js 22，而不是改动测试隔离语义。
+- 面试表达：遇到 CI 失败时我先定位失败 job 和具体步骤，再对比本机与 CI 的运行时版本；确认是 Node 参数兼容后只调整 CI 版本，保持测试命令和业务代码不变。
+- 后续疑问：如何确认新的 Actions 运行成功，并开始加入部署配置和真实手机浏览器验收。

@@ -691,6 +691,6 @@
 ### 本地测试通过，但 GitHub Actions 失败
 
 - 现象：本机测试全部通过，CI 在安装依赖或语法检查阶段失败。
-- 原因：本机可能复用了已安装的 Python 包，或者不同 shell 对 `node --check` 的通配符展开方式不同；项目也没有锁定前端依赖的 lock 文件。
-- 解决：CI 使用 Python 3.12 从 `backend/requirements.txt` 全量安装，前端直接运行无第三方依赖的 `npm test`，并在 Bash 循环中逐个检查 `js/*.js`。
+- 原因：本机可能复用了已安装的 Python 包，或者不同 shell 对 `node --check` 的通配符展开方式不同；项目也没有锁定前端依赖的 lock 文件。若 CI Node.js 版本过低，还可能不支持 `--test-isolation=none`。
+- 解决：CI 使用 Node.js 22 和 Python 3.12；Python 从 `backend/requirements.txt` 全量安装，前端直接运行无第三方依赖的 `npm test`，并在 Bash 循环中逐个检查 `js/*.js`。
 - 预防：本地修改依赖后先在干净虚拟环境中重跑，新增脚本时不要假设 Windows PowerShell 和 Linux Bash 的通配符行为相同。

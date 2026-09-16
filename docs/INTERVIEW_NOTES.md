@@ -234,7 +234,7 @@ SQLite 默认创建时间是秒级的，连续插入的数据可能拥有完全�
 
 ### 你的持续集成检查什么？
 
-GitHub Actions 在 Ubuntu 干净环境中固定 Node.js 20 和 Python 3.12，运行与本地相同的前端 50 项测试、逐文件 JavaScript 语法检查，以及从 `requirements.txt` 安装依赖后的后端 100 项回归。工作流同时监听 `main` 推送和合并请求，能发现依赖、运行环境和代码回归问题。
+GitHub Actions 在 Ubuntu 干净环境中固定 Node.js 22 和 Python 3.12，运行与本地相同的前端 50 项测试、逐文件 JavaScript 语法检查，以及从 `requirements.txt` 安装依赖后的后端 100 项回归。工作流同时监听 `main` 推送和合并请求，能发现依赖、运行环境和代码回归问题。之前 Node.js 20 的运行失败是因为不支持项目测试命令中的 `--test-isolation=none`，我根据具体失败步骤升级了 CI 运行时，而没有改变测试语义。
 
 ## 后续补充方向
 
