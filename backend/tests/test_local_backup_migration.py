@@ -195,6 +195,64 @@ async def test_migration_payload_imports_and_reconciles_counts_and_totals(tmp_pa
 
 
 @pytest.mark.anyio
+async def test_authenticated_user_migration_round_trip_preserves_reconciliation(tmp_path):
+    database_path = tmp_path / "authenticated-migration.db"
+    application = create_app(database_path)
+    transport = ASGITransport(app=application)
+
+    async with application.router.lifespan_context(application):
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            registered = await client.post(
+                "/api/auth/register",
+                json={
+                    "email": "migration-user@example.com",
+                    "password": "correct-horse-battery",
+                    "display_name": "迁移用户",
+                },
+            )
+            assert registered.status_code == 201
+
+            preview = await client.post(
+                "/api/backups/preview-local",
+                json=local_backup(),
+            )
+            imported = await client.post(
+                "/api/backups/import-local",
+                json=local_backup(),
+            )
+            exported = await client.get("/api/backups/export")
+            books = await client.get("/api/books")
+            book_id = books.json()["items"][0]["id"]
+            records = await client.get(f"/api/books/{book_id}/records")
+            overview = await client.get("/api/overview")
+            logged_out = await client.post("/api/auth/logout")
+            after_logout = await client.get("/api/books")
+
+    assert preview.status_code == 200
+    assert imported.status_code == 200
+    assert exported.status_code == 200
+    assert records.status_code == 200
+    assert overview.status_code == 200
+    assert logged_out.status_code == 204
+    assert after_logout.status_code == 200
+
+    preview_body = preview.json()
+    imported_body = imported.json()
+    exported_body = exported.json()
+    assert imported_body["imported"] == preview_body["counts"]
+    assert len(exported_body["books"]) == preview_body["counts"]["books"]
+    assert len(exported_body["accounts"]) == preview_body["counts"]["accounts"]
+    assert len(exported_body["records"]) == preview_body["counts"]["records"]
+    assert overview.json()["totals"] == preview_body["totals"]
+    assert len(records.json()["items"]) == preview_body["counts"]["records"]
+    returned = next(item for item in exported_body["records"] if item["note"] == "脱敏退回")
+    original = next(item for item in exported_body["records"] if item["note"] == "脱敏押金")
+    assert returned["deposit_link_id"] == original["id"]
+    # 退出后不应再看到刚才登录用户的账本；当前迁移兼容开关只会显示开发用户数据。
+    assert after_logout.json()["items"] == []
+
+
+@pytest.mark.anyio
 async def test_invalid_migration_payload_keeps_existing_server_data(tmp_path):
     database_path = tmp_path / "migration-rollback.db"
     application = create_app(database_path)
