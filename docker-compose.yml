@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${JIZHANGBEN_PORT:-8000}:8000"
+    environment:
+      JIZHANGBEN_DB_PATH: /data/jizhangben.db
+      JIZHANGBEN_STATIC_DIR: /app/frontend
+      JIZHANGBEN_ALLOW_DEV_FALLBACK: "0"
+      JIZHANGBEN_CORS_ORIGINS: "${JIZHANGBEN_CORS_ORIGINS:-}"
+    volumes:
+      - jizhangben-data:/data
+    restart: unless-stopped
+
+volumes:
+  jizhangben-data:

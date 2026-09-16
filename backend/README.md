@@ -42,6 +42,8 @@ $env:JIZHANGBEN_CORS_ORIGINS = "http://127.0.0.1:5500"
 
 登录 Cookie 只会在列出的来源之间通过跨端口请求发送。
 
+需要让手机和电脑访问同一个地址时，可使用项目根目录的 Docker Compose 配置；它会让 FastAPI 同源提供网页和 API，并把 SQLite 写入持久化卷。具体步骤见 [`docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md)。
+
 默认开发数据库保存在 `backend/data/jizhangben.db`，该文件已经被 `.gitignore` 排除。
 
 当前数据库 schema 版本为 `5`，包含：

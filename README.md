@@ -62,6 +62,7 @@
 - 已支持完整修改普通账目，并重新校验账户、类别、类型与押金规则
 - 第一个业务接口 `POST /api/books/{book_id}/records` 已支持创建普通账目、转账和押金关联
 - 已加入 GitHub Actions 持续集成，在提交和合并请求中自动运行前端 50 项、JavaScript 语法检查和后端回归
+- 已加入单容器 Docker Compose 部署基线，FastAPI 同源提供网页和 API，SQLite 使用持久化卷；详见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 
 ## 使用方法
 
@@ -70,6 +71,16 @@
 3. 数据存在当前浏览器的本地存储里，换浏览器或清除浏览器数据会丢失所有账本和账目，建议定期用「导出备份」留个底
 
 通过 HTTP 打开页面时，读取层默认请求同源的 `/api`；如果前端和后端使用不同端口，可在加载入口脚本前设置 `window.JIZHANGBEN_API_BASE_URL`，例如 `http://127.0.0.1:8000/api`。当前阶段新建账本、账户和账目会优先写入服务端；账本、账户和账目修改与删除也优先使用服务端接口，网络异常时恢复浏览器本地快照后继续操作。
+
+### 用 Docker Compose 启动手机可访问版本
+
+项目提供单容器同源部署配置，FastAPI 会同时提供网页和 `/api`，SQLite 数据库保存在 Docker 命名卷中。详细步骤、局域网访问方式、关闭和备份说明见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
+
+```powershell
+docker compose up --build -d
+```
+
+启动后在电脑上访问 `http://127.0.0.1:8000/`；手机和电脑连接同一 Wi-Fi 时，把地址中的 `127.0.0.1` 换成电脑的局域网 IPv4 地址。
 
 ## 文件结构
 
@@ -81,6 +92,8 @@ jizhangben/
 ├── tests/                  # 前端逻辑自动化测试
 ├── backend/                # FastAPI、SQLite 和后端测试
 ├── docs/                   # 设计、学习、排错和面试记录
+├── Dockerfile              # 单容器部署镜像
+├── docker-compose.yml      # 持久化数据库的 Compose 配置
 ├── PROJECT_ROADMAP.md      # 项目演进路线
 ├── package.json            # 测试命令
 ├── README.md               # 项目说明

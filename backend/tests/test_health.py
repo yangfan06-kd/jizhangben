@@ -46,3 +46,17 @@ async def test_health_creates_and_queries_temporary_database(tmp_path):
         "records",
         "sessions",
     } <= tables
+
+
+@pytest.mark.anyio
+async def test_root_serves_frontend_entrypoint(tmp_path):
+    database_path = tmp_path / "frontend-test.db"
+    application = create_app(database_path)
+
+    transport = ASGITransport(app=application)
+    async with application.router.lifespan_context(application):
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/")
+
+    assert response.status_code == 200
+    assert "记账本" in response.text

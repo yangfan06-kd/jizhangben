@@ -9,6 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from starlette.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .database import check_database, initialize_database, resolve_database_path
 from .routers.backups import router as backups_router
@@ -136,6 +137,19 @@ def create_app(database_path: str | Path | None = None) -> FastAPI:
             status="ok",
             database=str(database["status"]),
             schema_version=int(database["schema_version"]),
+        )
+
+    # 同源部署时由 FastAPI 直接提供网页，手机和电脑只需访问同一个地址。
+    # 本地默认指向仓库根目录；容器通过 JIZHANGBEN_STATIC_DIR 指向复制后的前端目录。
+    # 必须在所有 /api 路由之后挂载，避免静态路由截获接口请求。
+    static_directory = Path(
+        os.getenv("JIZHANGBEN_STATIC_DIR", str(Path(__file__).resolve().parents[2]))
+    ).expanduser().resolve()
+    if (static_directory / "index.html").is_file():
+        application.mount(
+            "/",
+            StaticFiles(directory=static_directory, html=True),
+            name="frontend",
         )
 
     return application
