@@ -128,6 +128,96 @@ async def test_business_endpoints_require_login_by_default(tmp_path, monkeypatch
 
 
 @pytest.mark.anyio
+async def test_two_authenticated_clients_share_data_but_other_user_cannot_read_it(tmp_path):
+    application = create_app(tmp_path / "auth-cross-device.db")
+    transport = ASGITransport(app=application)
+
+    async with application.router.lifespan_context(application):
+        async with (
+            AsyncClient(transport=transport, base_url="http://testserver") as phone,
+            AsyncClient(transport=transport, base_url="http://testserver") as desktop,
+            AsyncClient(transport=transport, base_url="http://testserver") as other,
+        ):
+            credentials = {
+                "email": "cross-device@example.com",
+                "password": "correct-horse-battery",
+                "display_name": "跨设备用户",
+            }
+            registered = await phone.post("/api/auth/register", json=credentials)
+            assert registered.status_code == 201
+
+            book = await phone.post(
+                "/api/books",
+                json={"name": "跨设备账本", "group_name": "个人"},
+            )
+            assert book.status_code == 201
+            book_id = book.json()["id"]
+            account = await phone.post(
+                f"/api/books/{book_id}/accounts",
+                json={"name": "银行卡", "kind": "asset", "initial_cents": 100000},
+            )
+            category = await phone.post("/api/categories", json={"name": "餐饮"})
+            record_type = await phone.post(
+                "/api/record-types",
+                json={"code": "lunch", "name": "午餐", "behavior": "expense"},
+            )
+            assert account.status_code == 201
+            assert category.status_code == 201
+            assert record_type.status_code == 201
+            created_record = await phone.post(
+                f"/api/books/{book_id}/records",
+                json={
+                    "type_id": record_type.json()["id"],
+                    "category_id": category.json()["id"],
+                    "account_id": account.json()["id"],
+                    "amount_cents": 1234,
+                    "occurred_on": "2026-09-16",
+                    "note": "跨设备午餐",
+                },
+            )
+            assert created_record.status_code == 201
+
+            logged_in = await desktop.post(
+                "/api/auth/login",
+                json={"email": credentials["email"], "password": credentials["password"]},
+            )
+            assert logged_in.status_code == 200
+            desktop_books = await desktop.get("/api/books")
+            desktop_accounts = await desktop.get(f"/api/books/{book_id}/accounts")
+            desktop_records = await desktop.get(f"/api/books/{book_id}/records")
+            desktop_overview = await desktop.get("/api/overview")
+
+            other_credentials = {
+                "email": "cross-device-other@example.com",
+                "password": "correct-horse-battery",
+                "display_name": "另一位用户",
+            }
+            other_registered = await other.post("/api/auth/register", json=other_credentials)
+            assert other_registered.status_code == 201
+            other_books = await other.get("/api/books")
+            other_accounts = await other.get(f"/api/books/{book_id}/accounts")
+
+    assert len(desktop_books.json()["items"]) == 1
+    assert desktop_books.json()["items"][0]["id"] == book_id
+    assert desktop_books.json()["items"][0]["name"] == "跨设备账本"
+    assert desktop_books.json()["items"][0]["group_name"] == "个人"
+    assert len(desktop_accounts.json()["items"]) == 1
+    assert desktop_accounts.json()["items"][0]["id"] == account.json()["id"]
+    assert desktop_accounts.json()["items"][0]["book_id"] == book_id
+    assert desktop_accounts.json()["items"][0]["initial_cents"] == 100000
+    assert desktop_records.json()["items"][0]["id"] == created_record.json()["id"]
+    assert desktop_records.json()["items"][0]["note"] == "跨设备午餐"
+    assert desktop_overview.json()["totals"] == {
+        "income_cents": 0,
+        "expense_cents": 1234,
+        "net_worth_cents": 98766,
+    }
+    assert other_books.json() == {"items": []}
+    assert other_accounts.status_code == 404
+    assert other_accounts.json()["code"] == "book_not_found"
+
+
+@pytest.mark.anyio
 async def test_expired_session_is_rejected_and_removed(tmp_path):
     application = create_app(tmp_path / "auth-expired.db")
     transport = ASGITransport(app=application)
