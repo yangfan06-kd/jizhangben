@@ -20,6 +20,8 @@ python -m venv backend/.venv
 
 测试使用临时 SQLite 数据库，结束后自动删除，不接触 `backend/data/jizhangben.db`。
 
+GitHub Actions 会在提交和合并请求中使用全新的 Ubuntu 环境安装 `requirements.txt`，然后运行同一套前端测试、JavaScript 语法检查和后端测试；本地通过不代表可以跳过 CI，因为 CI 还会验证依赖安装和干净环境。
+
 ## 启动开发服务
 
 ```powershell

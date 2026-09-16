@@ -687,3 +687,10 @@
 - 原因：两个客户端没有各自保存登录 Cookie，或者前端跨端口请求没有启用凭据传递，导致其中一端没有使用同一个服务端用户会话。
 - 解决：确认前端请求使用 `credentials: "include"`，后端配置 `JIZHANGBEN_CORS_ORIGINS` 并允许凭据；退出后重新登录，再读取账本、账户、账目和总览。
 - 预防：用两个独立 Cookie 容器做一端写入、另一端读取测试，再用第三个账号验证访问他人账本返回 404。
+
+### 本地测试通过，但 GitHub Actions 失败
+
+- 现象：本机测试全部通过，CI 在安装依赖或语法检查阶段失败。
+- 原因：本机可能复用了已安装的 Python 包，或者不同 shell 对 `node --check` 的通配符展开方式不同；项目也没有锁定前端依赖的 lock 文件。
+- 解决：CI 使用 Python 3.12 从 `backend/requirements.txt` 全量安装，前端直接运行无第三方依赖的 `npm test`，并在 Bash 循环中逐个检查 `js/*.js`。
+- 预防：本地修改依赖后先在干净虚拟环境中重跑，新增脚本时不要假设 Windows PowerShell 和 Linux Bash 的通配符行为相同。
