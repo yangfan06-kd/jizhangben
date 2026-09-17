@@ -55,6 +55,8 @@ npm run app:validate:release
 2. 生成签名 APK/AAB，编写隐私说明和数据备份说明。
 3. 再评估是否需要发布到 TapTap 或其他应用市场。
 
+当前已提供 `npm run app:build:release`，它会先执行正式 API 地址预检，再同步网页资源并调用 Gradle 生成未签名发布 APK；签名和 AAB 仍属于后续发布准备。
+
 ## 当前边界
 
 - Android Studio、Android SDK、ADB 和可复现构建脚本已准备完成；当前 APK 是调试包，只用于个人手机安装和功能验收。

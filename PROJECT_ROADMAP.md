@@ -100,7 +100,7 @@
 
 - 前后端部署到线上环境
 - 已完成手机浏览器局域网同源入口、APK 同账号回读和跨端新增账目对账；登录后的“同步”入口已可主动读取另一端数据，下一步进入正式 HTTPS 验收
-- 已验证生产 Compose 变量解析和本机端口绑定模板；新增正式 App API 地址预检，正式 HTTPS 仍等待真实域名、服务器及 80/443 入口
+- 已验证生产 Compose 变量解析和本机端口绑定模板；新增正式 App API 地址预检和受预检保护的未签名发布构建流程，正式 HTTPS 仍等待真实域名、服务器及 80/443 入口
 - 已确定 App 路线：使用 Capacitor 复用现有网页，先建立 `mobile/www` 打包基线，再准备 Android Studio、SDK 和真实设备生成 APK；具体边界见 [`docs/APP_PLAN.md`](docs/APP_PLAN.md)
 - 已完成 App 第一个真机构建闭环：Android Studio、JDK 21、SDK 和 Gradle 缓存放在 `G:\project\android-tools`，已创建 `android/` 原生工程、生成调试 APK，并在真实 Android 手机上安装启动；已完成筛选、总览、服务端备份读取和手机浏览器局域网入口验收，下一步是三端同账号数据核对
 - 配置生产环境数据库、备份、恢复和监控；演练一次实际恢复
@@ -117,7 +117,7 @@
 
 1. 用同一账号在电脑浏览器、手机浏览器和 APK 间核对账本、明细、账户余额和净资产。
 2. 在手机浏览器和 APK 分别验收押金、筛选、总览和备份流程。
-3. 使用 `deploy/Caddyfile.example` 配置正式 HTTPS 后端，通过 `npm run app:validate:release` 检查真实 API 地址，让 APK 摆脱 USB 转发，再处理签名 APK/AAB 和发布准备。
+3. 使用 `deploy/Caddyfile.example` 配置正式 HTTPS 后端，通过 `npm run app:validate:release` 和 `npm run app:build:release` 检查真实 API 地址并生成发布构建，让 APK 摆脱 USB 转发，再处理签名 APK/AAB 和发布准备。
 
 ## 后续认证增强清单
 
