@@ -101,6 +101,7 @@
 - 前后端部署到线上环境
 - 先验收手机浏览器使用；桌面与手机登录同一账号后能看到相同数据，无需先制作原生 App
 - 已确定 App 路线：使用 Capacitor 复用现有网页，先建立 `mobile/www` 打包基线，再准备 Android Studio、SDK 和真实设备生成 APK；具体边界见 [`docs/APP_PLAN.md`](docs/APP_PLAN.md)
+- 已完成 App 第一个构建闭环：Android Studio、JDK 21、SDK 和 Gradle 缓存放在 `G:\project\android-tools`，已创建 `android/` 原生工程并生成调试 APK；下一步是连接真实手机安装验收
 - 配置生产环境数据库、备份、恢复和监控；演练一次实际恢复
 - 增加自动测试和 GitHub Actions
 - 在手机与电脑上分别验收记账、押金结算、筛选、总览、备份和异常提示
@@ -115,7 +116,7 @@
 
 1. 根据真实用户迁移演练结果补充恢复失败和重复导入保护。
 2. 让真实手机通过局域网访问 Docker 服务，验收登录、押金、筛选、总览和备份流程。
-3. 完成 Capacitor 网页资源基线，并准备 Android Studio、SDK 和真实设备生成第一个调试 APK。
+3. 连接真实 Android 手机安装调试 APK，验收登录、记账、押金、总览和备份；随后再处理 HTTPS 后端同步。
 
 ## 后续认证增强清单
 

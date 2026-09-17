@@ -18,16 +18,16 @@
 
 ### A. 网页资源打包基线（当前）
 
-1. 安装 Capacitor 核心依赖和 CLI。
-2. 建立 `mobile/www` 与可重复执行的同步脚本。
-3. 确认 `npx cap sync` 能识别网页目录；Android SDK 未准备好前不生成原生工程。
+1. 已安装 Capacitor 核心依赖、CLI 和 Android 平台依赖。
+2. 已建立 `mobile/www` 与可重复执行的同步脚本。
+3. 已确认 `npx cap sync` 能识别网页目录。
 
 ### B. Android 工具链和第一个 APK
 
-1. 安装 Android Studio，并把 Android SDK、模拟器镜像和 Gradle 缓存放在 G 盘。
-2. 安装 API 24 或更高版本的平台包，连接真实 Android 手机或创建模拟器。
-3. 执行 `npx cap add android`、同步网页资源并运行调试版本。
-4. 在手机上验收登录入口、记账、押金结算、筛选、总览和本地备份。
+1. 已把 Android Studio、JDK 21、Android SDK 和 Gradle 缓存放在 `G:\project\android-tools`。
+2. 已安装 Android API 36、Build Tools 35.0.0/36.0.0 和 Platform Tools；真实手机尚未连接。
+3. 已执行 `npx cap add android`，创建 `android/` 原生工程，并成功生成调试 APK。
+4. 待在真实手机上验收登录入口、记账、押金结算、筛选、总览和本地备份。
 
 ### C. 手机与电脑共享数据
 

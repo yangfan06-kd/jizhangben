@@ -4,7 +4,8 @@
   "scripts": {
     "test": "node --test --experimental-test-isolation=none tests/helpers.test.cjs tests/migrations.test.cjs tests/records.test.cjs tests/backup.test.cjs tests/api-client.test.cjs",
     "app:sync": "node mobile/sync-web.cjs",
-    "app:sync-capacitor": "npm run app:sync && npx cap sync"
+    "app:sync-capacitor": "npm run app:sync && npx cap sync",
+    "app:build:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/build-debug.ps1"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

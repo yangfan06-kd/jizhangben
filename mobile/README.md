@@ -12,10 +12,16 @@
 ## 后续命令
 
 ```powershell
+. .\mobile\android-env.ps1
 npm run app:sync
 npx cap add android
 npm run app:sync-capacitor
+npm run app:build:debug
 npx cap open android
 ```
 
 `npx cap add android` 需要 Android Studio 和 SDK；在它们安装完成前不要把失败当成网页代码问题。
+
+本机工具放在 `G:\project\android-tools`。环境脚本会选择其中的 Java 21、Android SDK，并把 Android 用户缓存和 Gradle 缓存都放到 G 盘；每次打开新的 PowerShell 窗口后，先重新执行脚本。
+
+以后网页代码有更新，直接运行 `npm run app:build:debug`，脚本会先同步网页资源，再生成新的 `android/app/build/outputs/apk/debug/app-debug.apk`。

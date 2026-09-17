@@ -1035,3 +1035,15 @@
 - 解决方法：单独建立 `mobile/www`，只同步 `index.html`、`css` 和 `js`，并把同步过程写成脚本，避免手动复制造成版本漂移。
 - 面试表达：我先识别出网页资源与服务端代码的边界，再选择增量接入 Capacitor；通过独立 `webDir` 和可重复同步脚本控制打包输入，降低后续维护成本。
 - 后续疑问：如何把 Android SDK 和 Gradle 缓存放到 G 盘，生成第一个调试 APK，并验证 App 中的本地数据模式和远程登录模式。
+
+## 第 85 步：创建 Android 原生工程并生成第一个调试 APK
+
+- 日期：2026-09-17
+- 目标：用真实 Android 构建工具把现有网页封装成可以安装的调试 APK。
+- 实际完成：将 Android Studio 压缩包、命令行 SDK、Android API 36、Build Tools 35.0.0/36.0.0、Platform Tools、Java 21 和 Gradle 缓存放到 `G:\project\android-tools`；执行 `npx cap add android` 创建原生工程；新增 `mobile/android-env.ps1` 和 `mobile/build-debug.ps1`，把环境配置、网页同步和 APK 构建串成可重复命令。
+- 验证方式：`assembleDebug` 成功，93 个 Gradle 任务完成；APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`，大小 4,176,223 bytes，包名 `com.jizhangben.app`，版本 `1.0`，最低 API 24，目标 API 36。`adb version` 为 37.0.1，但当前没有连接 Android 设备。
+- 遇到的问题：第一次构建使用 Java 25，Gradle 报 `Unsupported class file major version 69`；改用 Java 21 后继续。随后发现默认 Build Tools 35.0.0 未安装，又补齐该版本。Android 默认缓存目录没有写权限，设置 `ANDROID_USER_HOME` 到 G 盘后恢复；同时清掉旧的 `ANDROID_PREFS_ROOT`，避免两个缓存路径冲突。
+- 解决方法：工具链版本按 Gradle 和 Android Gradle Plugin 的实际错误逐项对齐；所有可迁移的下载、SDK、JDK、Android 用户缓存和 Gradle 缓存都放在 G 盘，项目代码仍只提交可复现配置和脚本。
+- 关键知识：调试 APK 可以直接安装到个人手机，签名 APK/AAB 才是发布准备；`adb devices` 是判断电脑是否识别手机的证据，只有出现设备序列号后才能执行安装和真机验收。
+- 面试表达：我先用最小可运行闭环验证 Web 到 Android 的打包链路，再根据构建日志拆分 JDK、Build Tools 和缓存目录问题逐项修复，并把成功步骤脚本化，避免依赖个人机器上的临时环境。
+- 后续疑问：如何打开手机 USB 调试、连接设备并安装 APK；安装成功后再验证 App 的本地数据模式，最后配置 HTTPS 后端实现跨设备同步。
