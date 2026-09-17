@@ -265,7 +265,7 @@ async function handleBookSave() {
       showBookMsg(backendDup ? "已添加到账本服务端（注意：已有同名账本，请留意区分）" : "已添加到账本服务端", backendDup);
       renderBookSelect();
       renderBookList();
-      renderOverview();
+      render();
       return;
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {

@@ -1050,6 +1050,8 @@ test("creating the first server book activates it and reads seeded accounts", as
     dataState.currentBookId = null;
     dataState.accounts = [];
     dataState.records = [];
+    window.renderCalls = 0;
+    globalThis.render = () => { window.renderCalls += 1; };
     formElements.bookName.value = "第一本账";
     formElements.bookCategory.value = "个人";
     window.requests = [];
@@ -1075,6 +1077,7 @@ test("creating the first server book activates it and reads seeded accounts", as
   assert.equal(runtime.run("dataState.accounts[0].id"), "seed-cash");
   assert.equal(runtime.run("dataState.backendRecordsLoaded"), true);
   assert.equal(runtime.run("JSON.parse(window.localStorage.getItem('jizhangben_current_book'))"), "first-book");
+  assert.equal(runtime.run("window.renderCalls"), 1);
   const requestPaths = runtime.run("window.requests.map(request => request.url)");
   assert.equal(requestPaths.includes("/api/books/first-book/accounts"), true);
   assert.equal(requestPaths.includes("/api/books/first-book/records"), true);

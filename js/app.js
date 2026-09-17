@@ -49,7 +49,7 @@ document.getElementById("authLogoutBtn").onclick = logoutAuth;
 document.getElementById("authCloseBtn").onclick = closeAuthPanel;
 document.getElementById("authLoginTab").onclick = () => setAuthMode("login");
 document.getElementById("authRegisterTab").onclick = () => setAuthMode("register");
-document.getElementById("authForm").onsubmit = event => {
+document.getElementById("authPanel").onsubmit = event => {
   event.preventDefault();
   submitAuth();
 };
