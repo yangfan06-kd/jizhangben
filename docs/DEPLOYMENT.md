@@ -37,6 +37,8 @@ Android 调试包默认使用 `http://localhost:8000/api`，安装脚本会通�
 
 当前仓库只提供模板，不会在本地局域网环境自动申请证书；没有域名时继续使用 HTTP 局域网验收即可。
 
+生产示例已通过 `docker compose --env-file deploy/.env.production.example config --quiet` 配置解析校验；这只证明 Compose 变量和端口映射格式正确，不会代替真实域名、证书和公网入口验收。
+
 ## 数据和安全默认值
 
 - `jizhangben-data` 是 Docker 命名卷，数据库位于 `/data/jizhangben.db`，删除容器不会删除该卷。
