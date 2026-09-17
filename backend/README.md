@@ -69,6 +69,8 @@ $env:JIZHANGBEN_CORS_ORIGINS = "http://127.0.0.1:5500"
 
 `POST /api/auth/register` 接收 `email`、至少 8 位的 `password` 和 `display_name`，成功返回用户公开资料并设置 HttpOnly 会话 Cookie；同一邮箱不能重复注册。
 
+注册和密码登录会幂等补齐当前用户的 8 个系统类别和 9 个系统记账类型；已有自定义选项会保留。新建账本时会在同一事务中建立 7 个默认账户，避免新账号第一次记账时缺少服务端 UUID。
+
 `POST /api/auth/login` 校验邮箱和密码并设置会话 Cookie；密码错误返回 `401` 和 `invalid_credentials`。`GET /api/auth/me` 返回当前登录用户，缺少或失效会话返回 `401`；`POST /api/auth/logout` 撤销当前会话并返回 `204`。
 
 `GET /api/books` 查询当前会话用户的账本，列表统一放在 `items` 字段中；迁移期间没有 Cookie 时才会按开发回退开关使用固定开发用户。

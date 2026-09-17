@@ -3,6 +3,71 @@ from uuid import uuid4
 
 from ..database import connect_database
 from .errors import BusinessValidationError
+from .local_backup_migration import BUILTIN_CATEGORIES, BUILTIN_TYPES
+
+
+def ensure_system_options(
+    database_path: str | Path,
+    user_id: str,
+) -> None:
+    """幂等补齐当前用户的系统类别和记账类型。
+
+    老用户可能在选项表建立前就已注册，新用户也不应因为只创建了账号
+    而拿不到内置选项。按名称和代码检查后再插入，保留已有自定义数据。
+    """
+    with connect_database(database_path) as connection:
+        existing_categories = {
+            str(row["name"]).casefold()
+            for row in connection.execute(
+                """
+                SELECT name FROM categories
+                WHERE user_id = ? AND archived_at IS NULL
+                """,
+                (user_id,),
+            )
+        }
+        for name in BUILTIN_CATEGORIES:
+            if name.casefold() in existing_categories:
+                continue
+            connection.execute(
+                """
+                INSERT INTO categories (id, user_id, name, is_system)
+                VALUES (?, ?, ?, 1)
+                """,
+                (str(uuid4()), user_id, name),
+            )
+            existing_categories.add(name.casefold())
+
+        existing_names = {
+            str(row["name"]).casefold()
+            for row in connection.execute(
+                """
+                SELECT name FROM record_types
+                WHERE user_id = ? AND archived_at IS NULL
+                """,
+                (user_id,),
+            )
+        }
+        existing_codes = {
+            str(row["code"]).casefold()
+            for row in connection.execute(
+                "SELECT code FROM record_types WHERE user_id = ?",
+                (user_id,),
+            )
+        }
+        for name, code, behavior in BUILTIN_TYPES:
+            if name.casefold() in existing_names or code.casefold() in existing_codes:
+                continue
+            connection.execute(
+                """
+                INSERT INTO record_types
+                    (id, user_id, code, name, behavior, is_system)
+                VALUES (?, ?, ?, ?, ?, 1)
+                """,
+                (str(uuid4()), user_id, code, name, behavior),
+            )
+            existing_names.add(name.casefold())
+            existing_codes.add(code.casefold())
 
 
 def list_categories(

@@ -3,6 +3,29 @@ from uuid import uuid4
 
 from ..database import connect_database
 from .errors import BusinessValidationError
+from .local_backup_migration import DEFAULT_ACCOUNTS
+
+
+def _ensure_default_accounts(connection, book_id: str) -> None:
+    """为新账本补齐默认账户；已有同名账户时保留原数据。"""
+    existing = {
+        str(row["name"]).casefold()
+        for row in connection.execute(
+            "SELECT name FROM accounts WHERE book_id = ?",
+            (book_id,),
+        )
+    }
+    for _, name, kind in DEFAULT_ACCOUNTS:
+        if name.casefold() in existing:
+            continue
+        connection.execute(
+            """
+            INSERT INTO accounts (id, book_id, name, kind, initial_cents)
+            VALUES (?, ?, ?, ?, 0)
+            """,
+            (str(uuid4()), book_id, name, kind),
+        )
+        existing.add(name.casefold())
 
 
 def list_books(database_path: str | Path, user_id: str) -> list[dict[str, object]]:
@@ -44,6 +67,7 @@ def create_book(
             """,
             (book_id, user_id, name, group_name),
         )
+        _ensure_default_accounts(connection, book_id)
         saved = connection.execute(
             """
             SELECT id, user_id, name, group_name, created_at, updated_at

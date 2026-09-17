@@ -36,6 +36,13 @@ async def test_register_sets_session_and_scopes_resources_to_new_user(tmp_path):
             assert books.status_code == 200
             assert books.json() == {"items": []}
 
+            categories = await client.get("/api/categories")
+            record_types = await client.get("/api/record-types")
+            assert len(categories.json()["items"]) == 8
+            assert all(item["is_system"] for item in categories.json()["items"])
+            assert len(record_types.json()["items"]) == 9
+            assert all(item["is_system"] for item in record_types.json()["items"])
+
     with sqlite3.connect(application.state.database_path) as connection:
         password_hash = connection.execute(
             "SELECT password_hash FROM users WHERE email = ?",
@@ -179,7 +186,7 @@ async def test_two_authenticated_clients_share_data_but_other_user_cannot_read_i
                 f"/api/books/{book_id}/accounts",
                 json={"name": "银行卡", "kind": "asset", "initial_cents": 100000},
             )
-            category = await phone.post("/api/categories", json={"name": "餐饮"})
+            category = await phone.post("/api/categories", json={"name": "午餐类别"})
             record_type = await phone.post(
                 "/api/record-types",
                 json={"code": "lunch", "name": "午餐", "behavior": "expense"},
@@ -224,10 +231,10 @@ async def test_two_authenticated_clients_share_data_but_other_user_cannot_read_i
     assert desktop_books.json()["items"][0]["id"] == book_id
     assert desktop_books.json()["items"][0]["name"] == "跨设备账本"
     assert desktop_books.json()["items"][0]["group_name"] == "个人"
-    assert len(desktop_accounts.json()["items"]) == 1
-    assert desktop_accounts.json()["items"][0]["id"] == account.json()["id"]
-    assert desktop_accounts.json()["items"][0]["book_id"] == book_id
-    assert desktop_accounts.json()["items"][0]["initial_cents"] == 100000
+    assert len(desktop_accounts.json()["items"]) == 8
+    saved_account = next(item for item in desktop_accounts.json()["items"] if item["id"] == account.json()["id"])
+    assert saved_account["book_id"] == book_id
+    assert saved_account["initial_cents"] == 100000
     assert desktop_records.json()["items"][0]["id"] == created_record.json()["id"]
     assert desktop_records.json()["items"][0]["note"] == "跨设备午餐"
     assert desktop_overview.json()["totals"] == {

@@ -76,7 +76,9 @@ async def test_post_account_persists_and_get_lists_book_accounts(tmp_path):
     liability = liability_response.json()
     assert liability["kind"] == "liability"
     assert liability["initial_cents"] == 0
-    assert listed_response.json()["items"] == [asset, liability]
+    listed = listed_response.json()["items"]
+    assert len(listed) == 9
+    assert [item["id"] for item in listed[-2:]] == [asset["id"], liability["id"]]
 
 
 @pytest.mark.anyio
@@ -176,7 +178,8 @@ async def test_patch_and_delete_account_in_owned_book(tmp_path):
     assert updated.json()["kind"] == "liability"
     assert updated.json()["initial_cents"] == 5000
     assert deleted.status_code == 204
-    assert listed.json() == {"items": []}
+    assert len(listed.json()["items"]) == 7
+    assert all(item["id"] != account_id for item in listed.json()["items"])
     assert missing.status_code == 404
     assert missing.json() == {"code": "account_not_found", "message": "账户不存在"}
 

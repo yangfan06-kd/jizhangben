@@ -11,6 +11,7 @@ from ..services.auth_service import (
     register_user,
     revoke_session,
 )
+from ..services.option_service import ensure_system_options
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -91,5 +92,9 @@ def logout(request: Request, response: Response) -> Response:
 
 
 @router.get("/me", response_model=UserResponse)
-def current_user(user: dict[str, object] = Depends(get_authenticated_user)) -> dict[str, object]:
+def current_user(
+    request: Request,
+    user: dict[str, object] = Depends(get_authenticated_user),
+) -> dict[str, object]:
+    ensure_system_options(request.app.state.database_path, str(user["id"]))
     return user

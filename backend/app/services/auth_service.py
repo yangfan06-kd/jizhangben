@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .errors import BusinessValidationError
 from ..database import connect_database
+from .option_service import ensure_system_options
 
 
 PASSWORD_ALGORITHM = "pbkdf2_sha256"
@@ -94,7 +95,9 @@ def register_user(
         if "users.email" in str(error).lower() or "unique" in str(error).lower():
             raise BusinessValidationError("email_exists", "这个邮箱已经注册") from error
         raise
-    return _public_user(user)
+    public_user = _public_user(user)
+    ensure_system_options(database_path, str(public_user["id"]))
+    return public_user
 
 
 def authenticate_user(
@@ -110,7 +113,9 @@ def authenticate_user(
         ).fetchone()
     if user is None or not _verify_password(password, user["password_hash"]):
         raise BusinessValidationError("invalid_credentials", "邮箱或密码不正确")
-    return _public_user(user)
+    public_user = _public_user(user)
+    ensure_system_options(database_path, str(public_user["id"]))
+    return public_user
 
 
 def create_session(database_path: str | Path, user_id: str) -> str:
@@ -142,7 +147,9 @@ def user_for_session(database_path: str | Path, token: str | None) -> dict[str, 
             """,
             (token_hash, now),
         ).fetchone()
-    return _public_user(user) if user else None
+    if user is None:
+        return None
+    return _public_user(user)
 
 
 def revoke_session(database_path: str | Path, token: str | None) -> None:
