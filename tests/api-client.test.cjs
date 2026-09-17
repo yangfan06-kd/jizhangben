@@ -1039,6 +1039,47 @@ test("new book and account use backend responses when backend reads are active",
   ]));
 });
 
+test("creating the first server book activates it and reads seeded accounts", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.backendBooksLoaded = true;
+    dataState.backendOptionsLoaded = true;
+    dataState.books = [];
+    dataState.currentBookId = null;
+    dataState.accounts = [];
+    dataState.records = [];
+    formElements.bookName.value = "第一本账";
+    formElements.bookCategory.value = "个人";
+    window.requests = [];
+    window.fetch = async (url, options) => {
+      window.requests.push({ url, options });
+      if (url.endsWith("/books") && options.method === "POST") return { ok: true, json: async () => ({
+        id: "first-book", name: "第一本账", group_name: "个人", warnings: []
+      }) };
+      if (url.endsWith("/accounts")) return { ok: true, json: async () => ({ items: [
+        { id: "seed-cash", book_id: "first-book", name: "现金", kind: "asset", initial_cents: 0 }
+      ] }) };
+      if (url.endsWith("/records")) return { ok: true, json: async () => ({ items: [] }) };
+      return { ok: true, json: async () => ({
+        period_from: "2026-09-01", period_to: "2026-09-15", items: [
+          { id: "first-book", name: "第一本账", group_name: "个人", income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+        ], totals: { income_cents: 0, expense_cents: 0, net_worth_cents: 0 }
+      }) };
+    };
+  })()`);
+
+  await runtime.run("handleBookSave()");
+  assert.equal(runtime.run("dataState.currentBookId"), "first-book");
+  assert.equal(runtime.run("dataState.accounts[0].id"), "seed-cash");
+  assert.equal(runtime.run("dataState.backendRecordsLoaded"), true);
+  assert.equal(runtime.run("JSON.parse(window.localStorage.getItem('jizhangben_current_book'))"), "first-book");
+  const requestPaths = runtime.run("window.requests.map(request => request.url)");
+  assert.equal(requestPaths.includes("/api/books/first-book/accounts"), true);
+  assert.equal(requestPaths.includes("/api/books/first-book/records"), true);
+});
+
 test("backend write failure restores local storage before saving a new book locally", async () => {
   const runtime = createRuntime({
     jizhangben_books: JSON.stringify([{ id: 1, name: "本地账本", category: "个人" }]),

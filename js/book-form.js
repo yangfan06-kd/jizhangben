@@ -244,7 +244,21 @@ async function handleBookSave() {
       const saved = await backendApi.createBook({ name, group_name: category });
       if (!saved || !saved.id) throw new Error("book_response_invalid");
       const mapped = mapBackendBook(saved);
+      const activateCreatedBook = !dataState.currentBookId;
       dataState.books.push(mapped);
+      if (activateCreatedBook) {
+        dataState.currentBookId = mapped.id;
+        appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(dataState.currentBookId));
+        const [accountsLoaded, recordsLoaded] = await Promise.all([
+          hydrateAccountsFromBackend(),
+          hydrateRecordsFromBackend()
+        ]);
+        if (!accountsLoaded || !recordsLoaded) {
+          dataState.accounts = [];
+          dataState.records = [];
+          dataState.backendRecordsLoaded = false;
+        }
+      }
       await refreshBackendOverviewAfterWrite();
       resetBookForm();
       const backendDup = Array.isArray(saved.warnings) && saved.warnings.some(w => w.code === "duplicate_book_name");
