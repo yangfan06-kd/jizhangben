@@ -42,6 +42,7 @@ function installRecordDom(runtime) {
     const ids = [
       "amount", "note", "date", "accountSel", "toAccountSel", "depositTarget",
       "depositLinkSel", "depositFinal", "saveBtn", "cancelBtn", "formMsg",
+      "customInput", "customOk",
       "typeCustomBox", "categoryCustomBox", "typeChips", "categoryChips",
       "toAccountField", "depositDirField", "depositTargetField", "depositLinkField",
       "depositFinalField", "depositDirChips", "depositSettlementHint",
@@ -52,12 +53,24 @@ function installRecordDom(runtime) {
       value: "",
       textContent: "",
       innerHTML: "",
+      dataset: {},
       checked: false,
       style: { display: "" },
       classList: { toggle() {}, add() {}, remove() {} },
-      options: []
+      options: [],
+      appendChild() {},
+      querySelectorAll() { return []; }
     }]));
-    globalThis.document = { getElementById: id => elements[id] };
+    globalThis.document = {
+      getElementById: id => elements[id],
+      createElement: () => ({
+        className: "",
+        textContent: "",
+        dataset: {},
+        classList: { add() {}, remove() {} },
+        appendChild() {}
+      })
+    };
     globalThis.renderTypeChips = () => {};
     globalThis.renderCategoryChips = () => {};
     globalThis.updateFormFields = () => {};
@@ -168,6 +181,30 @@ test("backendApi uses UUID-safe write paths for books and accounts", async () =>
     ["/api/books/book%2Fwith%20space", "PATCH"],
     ["/api/books/book%2Fwith%20space/accounts/account%2Fone", "PATCH"]
   ]));
+});
+
+test("custom categories created in an authenticated page sync to the backend", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.backendOptionsLoaded = true;
+    window.fetch = async (url, options) => {
+      window.customRequest = { url, options };
+      return { ok: true, status: 201, json: async () => ({
+        id: "category-travel", name: "旅行", is_system: false
+      }) };
+    };
+    formElements.customInput.value = "旅行";
+  })()`);
+
+  await runtime.run("addCustom('category')");
+  assert.equal(runtime.run("window.customRequest.url"), "/api/categories");
+  assert.equal(runtime.run("window.customRequest.options.method"), "POST");
+  assert.equal(runtime.run("JSON.parse(window.customRequest.options.body).name"), "旅行");
+  assert.equal(JSON.stringify(runtime.run("dataState.customCategories")), JSON.stringify(["旅行"]));
+  assert.equal(runtime.run("dataState.backendCategoryIds['旅行']"), "category-travel");
 });
 
 test("auth form login accepts an authenticated user with no server books yet", async () => {

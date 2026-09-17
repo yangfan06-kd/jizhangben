@@ -50,6 +50,7 @@ function createRuntime(initialStorage = {}) {
     "js/api-client.js",
     "js/records.js",
     "js/backup.js",
+    "js/custom-options.js",
     "js/record-form.js",
     "js/book-form.js",
     "js/account-form.js",

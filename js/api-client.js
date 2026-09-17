@@ -105,6 +105,22 @@ const backendApi = {
     return this.getJSON("/auth/me");
   },
 
+  createCategory(payload) {
+    return this.postJSON("/categories", payload);
+  },
+
+  deleteCategory(categoryId) {
+    return this.postJSON("/categories/" + encodeURIComponent(String(categoryId)), {}, "DELETE");
+  },
+
+  createRecordType(payload) {
+    return this.postJSON("/record-types", payload);
+  },
+
+  deleteRecordType(typeId) {
+    return this.postJSON("/record-types/" + encodeURIComponent(String(typeId)), {}, "DELETE");
+  },
+
   createBook(payload) {
     return this.postJSON("/books", payload);
   },

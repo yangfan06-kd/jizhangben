@@ -3,6 +3,7 @@
 
 function renderTypeChips() {
   const box = document.getElementById("typeChips");
+  if (!box) return;
   box.innerHTML = "";
   const list = allTypes();
   const collapsed = list.slice(0, COLLAPSE_COUNT);
@@ -49,6 +50,7 @@ function renderTypeChips() {
 
 function renderCategoryChips() {
   const box = document.getElementById("categoryChips");
+  if (!box) return;
   box.innerHTML = "";
   const list = allCategories();
   const collapsed = list.slice(0, COLLAPSE_COUNT);
@@ -130,28 +132,85 @@ function renderCustomBox(kind) {
   }
 }
 
-// 新增一个自定义类型 / 类别
-function addCustom(kind) {
-  const input = document.getElementById("customInput");
-  const name = (input.value || "").trim();
-  const isType = (kind === "type");
-  if (!name) { alert(isType ? "请先输入新类型名称" : "请先输入新类别名称"); return; }
-  const list = isType ? allTypes() : allCategories();
-  if (list.includes(name)) { alert("「" + name + "」已经存在了"); return; }
+function customOptionsBackendEnabled() {
+  return !!(
+    typeof backendApi !== "undefined" &&
+    backendApi.baseUrl() &&
+    dataState.authStatus === "authenticated" &&
+    dataState.backendOptionsLoaded
+  );
+}
+
+function customTypeCode(name) {
+  const slug = String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 30);
+  const suffix = (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)).slice(-14);
+  return ("custom-" + (slug || "type") + "-" + suffix).slice(0, 50);
+}
+
+function finishCustomAdd(kind, name, backendItem) {
+  const isType = kind === "type";
   if (isType) {
-    dataState.customTypes.push({ name: name, side: uiState.customTypeSideDraft });
+    const side = uiState.customTypeSideDraft;
+    dataState.customTypes.push({ name: name, side: side });
     saveCustomTypes();
     uiState.selectedType = name;
+    if (backendItem && backendItem.id) dataState.backendTypeIds[name] = backendItem.id;
   } else {
     dataState.customCategories.push(name);
     saveCustomCategories();
     uiState.selectedCategory = name;
+    if (backendItem && backendItem.id) dataState.backendCategoryIds[name] = backendItem.id;
   }
   document.getElementById(isType ? "typeCustomBox" : "categoryCustomBox").innerHTML = "";
   renderTypeChips();
   renderCategoryChips();
   if (isType) updateFormFields();
   else fillCategoryFilter();
+}
+
+// 新增一个自定义类型 / 类别；登录后的 HTTP 页面优先同步服务端。
+async function addCustom(kind) {
+  const input = document.getElementById("customInput");
+  const name = (input.value || "").trim();
+  const isType = (kind === "type");
+  if (!name) { alert(isType ? "请先输入新类型名称" : "请先输入新类别名称"); return; }
+  const list = isType ? allTypes() : allCategories();
+  if (list.includes(name)) { alert("「" + name + "」已经存在了"); return; }
+
+  const confirmButton = document.getElementById("customOk");
+  if (confirmButton) confirmButton.disabled = true;
+  let backendItem = null;
+  let backendFallback = false;
+  try {
+    if (customOptionsBackendEnabled()) {
+      backendItem = isType
+        ? await backendApi.createRecordType({
+          code: customTypeCode(name),
+          name,
+          behavior: uiState.customTypeSideDraft
+        })
+        : await backendApi.createCategory({ name });
+      if (!backendItem || !backendItem.id) throw new Error("custom_option_response_invalid");
+    }
+  } catch (error) {
+    if (error && error.code && error.code !== "backend_request_failed") {
+      alert(error.message || "服务端拒绝了这个自定义选项");
+      if (confirmButton) confirmButton.disabled = false;
+      return;
+    }
+    backendFallback = true;
+  }
+  finishCustomAdd(kind, name, backendItem);
+  if (typeof showMsg === "function" && backendFallback) {
+    showMsg("服务端暂不可用，已保存到本地，恢复网络后可迁移", "local");
+  } else if (typeof showMsg === "function" && backendItem) {
+    showMsg("自定义选项已同步服务端", "success");
+  }
+  if (confirmButton) confirmButton.disabled = false;
 }
 
 // 是不是自定义（只有自定义的才能删）
@@ -163,7 +222,7 @@ function isCustomCategory(name) {
 }
 
 // 删除一个自定义类型 / 类别
-function removeCustom(kind, name) {
+async function removeCustom(kind, name) {
   const used = (kind === "type")
     ? dataState.records.filter(r => r.type === name).length
     : dataState.records.filter(r => r.category === name).length;
@@ -174,6 +233,24 @@ function removeCustom(kind, name) {
       : "\n已有 " + used + " 笔账用它，删除后这些账还在，只是以后不能再选它。";
   }
   if (!confirm(msg)) return;
+
+  const backendEnabled = customOptionsBackendEnabled();
+  const optionId = kind === "type"
+    ? backendOptionId(dataState.backendTypeIds, name)
+    : backendOptionId(dataState.backendCategoryIds, name);
+  let backendFallback = false;
+  if (backendEnabled && optionId) {
+    try {
+      if (kind === "type") await backendApi.deleteRecordType(optionId);
+      else await backendApi.deleteCategory(optionId);
+    } catch (error) {
+      if (error && error.code && error.code !== "backend_request_failed") {
+        alert(error.message || "服务端拒绝删除这个自定义选项");
+        return;
+      }
+      backendFallback = true;
+    }
+  }
   if (kind === "type") {
     dataState.customTypes = dataState.customTypes.filter(x => (typeof x === "string" ? x : x.name) !== name);
     saveCustomTypes();
@@ -187,6 +264,8 @@ function removeCustom(kind, name) {
       document.getElementById("filterCategorySel").value = "";
     }
   }
+  if (kind === "type") delete dataState.backendTypeIds[name];
+  else delete dataState.backendCategoryIds[name];
   document.getElementById("typeCustomBox").innerHTML = "";
   document.getElementById("categoryCustomBox").innerHTML = "";
   renderTypeChips();
@@ -194,4 +273,7 @@ function removeCustom(kind, name) {
   if (kind === "type") updateFormFields();
   if (kind === "category") fillCategoryFilter();
   refreshDetail();
+  if (typeof showMsg === "function" && backendFallback) {
+    showMsg("服务端暂不可用，已在本地移除；恢复网络后需再次核对", "local");
+  }
 }
