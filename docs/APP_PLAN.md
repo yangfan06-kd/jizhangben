@@ -25,9 +25,9 @@
 ### B. Android 工具链和第一个 APK
 
 1. 已把 Android Studio、JDK 21、Android SDK 和 Gradle 缓存放在 `G:\project\android-tools`。
-2. 已安装 Android API 36、Build Tools 35.0.0/36.0.0 和 Platform Tools；真实手机尚未连接。
+2. 已安装 Android API 36、Build Tools 35.0.0/36.0.0 和 Platform Tools，并通过 USB 调试连接真实 Android 手机。
 3. 已执行 `npx cap add android`，创建 `android/` 原生工程，并成功生成调试 APK。
-4. 已准备 `npm run app:install:debug` 真机安装命令；待连接真实手机后验收登录入口、记账、押金结算、筛选、总览和本地备份。
+4. 已运行 `npm run app:install:debug` 并成功安装、启动调试 APK；下一步手动验收登录入口、记账、押金结算、筛选、总览和本地备份。
 
 ### C. 手机与电脑共享数据
 
@@ -43,7 +43,7 @@
 
 ## 当前边界
 
-- 当前仓库还没有 Android Studio、Android SDK 和 ADB，因此本次只建立可复现的网页打包基线，不能声称已经生成 APK。
+- Android Studio、Android SDK、ADB 和可复现构建脚本已准备完成；当前 APK 是调试包，只用于个人手机安装和功能验收。
 - 在正式 HTTPS 后端可用前，App 可以先验证离线 localStorage 模式；登录同步和跨设备数据必须等 C 阶段完成。
 - 不把邮箱验证码、找回密码等认证增强塞入 App 首版，继续遵循核心记账流程优先的计划。
 
