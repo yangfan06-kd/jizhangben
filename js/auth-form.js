@@ -3,6 +3,7 @@
 let authMode = "login";
 let authMsgTimer = null;
 let authPanelOpen = false;
+let syncInFlight = false;
 
 function isBackendAuthGateEnabled() {
   return !!(typeof backendApi !== "undefined" && backendApi.baseUrl());
@@ -84,22 +85,60 @@ async function hydrateAuthenticatedData() {
   return hydrated;
 }
 
+// 跨设备新增数据后，允许用户在当前页面主动重新读取服务端快照。
+async function syncBackendData() {
+  if (syncInFlight || !isBackendAuthGateEnabled() || dataState.authStatus !== "authenticated") return false;
+  const button = document.getElementById("syncBtn");
+  syncInFlight = true;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "同步中…";
+  }
+  showAuthDataNotice("正在同步服务端账本、账户、明细和总览…");
+  try {
+    const hydrated = await startBackendReadHydration(true);
+    if (!hydrated) {
+      if (dataState.authStatus === "authenticated") {
+        showAuthDataNotice("服务端数据暂时无法同步，请稍后重试。当前数据未被替换。 ");
+        showAuthMsg("同步失败，请检查网络后重试", true);
+      }
+      return false;
+    }
+    showAuthDataNotice("已同步服务端账本、账户、明细和总览。 ");
+    return true;
+  } finally {
+    syncInFlight = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "同步";
+    }
+    renderAuthStatus();
+  }
+}
+
 function renderAuthStatus() {
   const status = document.getElementById("authStatus");
   const open = document.getElementById("authOpenBtn");
+  const sync = document.getElementById("syncBtn");
   const logout = document.getElementById("authLogoutBtn");
-  if (!status || !open || !logout) return;
+  if (!status || !open || !sync || !logout) return;
   if (dataState.authStatus === "authenticated" && dataState.authUser) {
     status.textContent = "已登录：" + dataState.authUser.display_name;
     open.hidden = true;
+    sync.hidden = false;
+    sync.disabled = syncInFlight;
     logout.hidden = false;
   } else if (dataState.authStatus === "loading") {
     status.textContent = "正在检查登录状态…";
     open.hidden = true;
+    sync.hidden = true;
+    sync.disabled = false;
     logout.hidden = true;
   } else {
     status.textContent = backendApi.baseUrl() ? "未登录，请先登录" : "本地模式";
     open.hidden = false;
+    sync.hidden = true;
+    sync.disabled = false;
     logout.hidden = true;
   }
   renderAuthGate();

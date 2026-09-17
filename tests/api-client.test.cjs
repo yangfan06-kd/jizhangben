@@ -7,7 +7,7 @@ function installFormDom(runtime) {
     const ids = [
       "bookName", "bookCategory", "bookSaveBtn", "bookCancelBtn", "bookMsg",
       "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg",
-      "authStatus", "authOpenBtn", "authLogoutBtn", "authPanel", "authTitle", "authCloseBtn",
+      "authStatus", "authOpenBtn", "syncBtn", "authLogoutBtn", "authPanel", "authTitle", "authCloseBtn",
       "authLoginTab", "authRegisterTab", "authNameField", "authEmail", "authDisplayName",
       "authPassword", "authPasswordHint", "authConfirmField", "authPasswordConfirm",
       "authSubmitBtn", "authMsg", "startupNotice", "ledgerApp", "authEntryHint"
@@ -349,6 +349,7 @@ test("HTTP entry hides the ledger until authentication succeeds", () => {
   assert.equal(runtime.run("document.getElementById('authPanel').hidden"), false);
   assert.equal(runtime.run("document.getElementById('authEntryHint').hidden"), false);
   assert.equal(runtime.run("document.getElementById('authCloseBtn').hidden"), true);
+  assert.equal(runtime.run("document.getElementById('syncBtn').hidden"), true);
 
   runtime.run(`(() => {
     dataState.authStatus = "authenticated";
@@ -357,6 +358,47 @@ test("HTTP entry hides the ledger until authentication succeeds", () => {
   })()`);
   assert.equal(runtime.run("document.getElementById('ledgerApp').hidden"), false);
   assert.equal(runtime.run("document.getElementById('authPanel').hidden"), true);
+  assert.equal(runtime.run("document.getElementById('syncBtn').hidden"), false);
+});
+
+test("manual backend sync refreshes the authenticated snapshot", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    window.allowEmptyBooks = null;
+    startBackendReadHydration = async allowEmptyBooks => {
+      window.allowEmptyBooks = allowEmptyBooks;
+      return true;
+    };
+    renderAuthStatus();
+  })()`);
+
+  assert.equal(await runtime.run("syncBackendData()"), true);
+  assert.equal(runtime.run("window.allowEmptyBooks"), true);
+  assert.equal(runtime.run("document.getElementById('syncBtn').disabled"), false);
+  assert.match(runtime.run("document.getElementById('startupNotice').textContent"), /已同步服务端/);
+});
+
+test("manual backend sync preserves the page when the server read fails", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    dataState.books = [{ id: "book-1", name: "当前账本" }];
+    startBackendReadHydration = async () => false;
+    renderAuthStatus();
+  })()`);
+
+  assert.equal(await runtime.run("syncBackendData()"), false);
+  assert.equal(runtime.run("dataState.books[0].id"), "book-1");
+  assert.equal(runtime.run("document.getElementById('syncBtn').disabled"), false);
+  assert.match(runtime.run("document.getElementById('startupNotice').textContent"), /当前数据未被替换/);
+  assert.match(runtime.run("document.getElementById('authMsg').textContent"), /同步失败/);
 });
 
 test("registration validates password confirmation before sending credentials", async () => {

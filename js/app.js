@@ -45,6 +45,7 @@ document.getElementById("bookBackBtn").onclick = () => toggleBookPanel(false);
 document.getElementById("bookSaveBtn").onclick = handleBookSave;
 document.getElementById("bookCancelBtn").onclick = resetBookForm;
 document.getElementById("authOpenBtn").onclick = () => openAuthPanel("login");
+document.getElementById("syncBtn").onclick = syncBackendData;
 document.getElementById("authLogoutBtn").onclick = logoutAuth;
 document.getElementById("authCloseBtn").onclick = closeAuthPanel;
 document.getElementById("authLoginTab").onclick = () => setAuthMode("login");
