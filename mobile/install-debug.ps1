@@ -18,6 +18,11 @@ if ($deviceLines.Count -gt 1) {
   throw "Multiple Android devices found. Keep one device connected and retry."
 }
 
+$reverseOutput = @(& $adb reverse tcp:8000 tcp:8000 2>&1)
+if ($LASTEXITCODE -ne 0) {
+  throw ("Unable to create USB forwarding for port 8000: " + ($reverseOutput -join " "))
+}
+
 & $adb install -r $apk
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE

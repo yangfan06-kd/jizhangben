@@ -7,6 +7,23 @@ function notifyBackendAuthExpired(path, error) {
   if (typeof handleBackendAuthExpired === "function") handleBackendAuthExpired();
 }
 
+async function readBackendJSON(response, path) {
+  try {
+    return await response.json();
+  } catch (cause) {
+    const contentType = response && response.headers && typeof response.headers.get === "function"
+      ? String(response.headers.get("content-type") || "")
+      : "";
+    const error = new Error(contentType.includes("text/html")
+      ? "后端地址配置错误：接口返回了网页，请检查 App 的服务地址"
+      : "后端返回的数据不是有效 JSON，请检查服务是否正常运行");
+    error.code = "invalid_json_response";
+    error.path = path;
+    error.cause = cause;
+    throw error;
+  }
+}
+
 const backendApi = {
   // 直接打开 index.html 时没有可用的同源 API；用 HTTP 服务打开时默认请求 /api。
   baseUrl() {
@@ -36,7 +53,7 @@ const backendApi = {
       notifyBackendAuthExpired(path, error);
       throw error;
     }
-    return response.json();
+    return readBackendJSON(response, path);
   },
 
   async postJSON(path, payload, method = "POST") {
@@ -61,7 +78,7 @@ const backendApi = {
       throw error;
     }
     if (response.status === 204) return null;
-    return response.json();
+    return readBackendJSON(response, path);
   },
 
   previewLocalBackup(payload) {

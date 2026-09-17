@@ -1057,3 +1057,15 @@
 - 关键知识：MTP 用于文件传输，ADB 用于调试、安装和启动应用；“允许 USB 调试”的 RSA 授权弹窗是电脑获得调试权限的关键步骤。`adb shell pm path com.jizhangben.app` 可以确认系统已安装该包，`adb shell monkey -p com.jizhangben.app 1` 可以验证启动入口。
 - 面试表达：我把 Android 真机验收拆成设备识别、授权、安装和启动四个可观测步骤，先定位 MTP 与 ADB 的区别，再用脚本复现安装过程，避免只凭手机桌面图标判断发布成功。
 - 下一步：在手机上手动验收登录、创建账本和账户、普通记账、押金结算、筛选、总览及备份；确认本地模式稳定后，再接入可从手机访问的 HTTPS 后端。
+
+## 第 87 步：修复 App 注册接口返回 HTML 的问题
+
+- 日期：2026-09-17
+- 目标：让 App 内的注册请求真正到达 FastAPI，而不是被 Capacitor 内置静态页面截获。
+- 现象：手机注册时报 `Unexpected token '<', "<!DOCTYPE"... is not valid JSON`。这表示前端调用 `response.json()` 时收到的是 HTML 首页，通常意味着 API 基地址没有指向后端。
+- 根因：Capacitor 页面默认使用本地 WebView 地址，前端的相对 `/api` 解析到了 App 静态资源服务；该服务没有注册接口，于是回退返回 `index.html`。
+- 解决方法：同步脚本为 App 生成 `runtime-config.js`，开发版默认使用 `http://localhost:8000/api`；Capacitor 开发配置启用 HTTP 和明文网络；安装脚本自动执行 `adb reverse tcp:8000 tcp:8000`；Compose 默认允许 `http://localhost` 的凭据跨端口请求。API 客户端同时把 HTML 或其他非 JSON 响应转换成可读错误。
+- 验证方式：前端测试 53 项全部通过；后端健康检查返回 200，CORS 预检返回 `Access-Control-Allow-Origin: http://localhost` 和允许凭据；新版 APK 构建、安装成功，用户在真实小米手机上完成注册。
+- 关键知识：App 的“页面能打开”与“API 能访问”是两条链路；`localhost` 在手机上默认指向手机自身，USB reverse 才能把它映射到电脑。跨端口请求还需要 CORS 和 Cookie 凭据配置，开发 HTTP 通道不能直接当作生产 HTTPS 方案。
+- 面试表达：我根据响应首字符定位到“接口地址错误而非 JSON 格式错误”，再用配置注入、USB 端口转发和 CORS 预检逐层验证网络链路，并把重复操作固化到构建与安装脚本。
+- 下一步：在手机 App 中继续验收注册后的自动登录、创建账本和账户、普通记账、押金结算、筛选、总览和备份；随后将开发接口替换为正式 HTTPS 服务。

@@ -22,6 +22,8 @@ docker compose up --build -d
 
 手机和电脑连接同一个局域网时，把“电脑地址”替换成电脑的局域网 IPv4 地址，例如 `192.168.1.20`。如果 Windows 防火墙拦截 8000 端口，需要允许该端口的入站访问。
 
+Android 调试包默认使用 `http://localhost:8000/api`，安装脚本会通过 USB 转发把手机的 8000 端口连接到电脑服务；这只适合开发验收。正式 App 应改为可从手机访问的 HTTPS 地址，并重新配置 API 地址与跨域策略。
+
 ## 数据和安全默认值
 
 - `jizhangben-data` 是 Docker 命名卷，数据库位于 `/data/jizhangben.db`，删除容器不会删除该卷。

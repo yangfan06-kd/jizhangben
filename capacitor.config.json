@@ -1,5 +1,9 @@
 {
   "appId": "com.jizhangben.app",
   "appName": "记账本",
-  "webDir": "mobile/www"
+  "webDir": "mobile/www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
 }

@@ -108,6 +108,23 @@ test("backendApi posts local migration JSON and preserves server error codes", a
   );
 });
 
+test("backendApi explains a successful HTML response instead of exposing a JSON parse error", async () => {
+  const runtime = createRuntime();
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    window.fetch = async () => ({
+      ok: true,
+      headers: { get: name => name === "content-type" ? "text/html" : "" },
+      json: async () => { throw new SyntaxError("Unexpected token '<'"); }
+    });
+  })()`);
+
+  await assert.rejects(
+    () => runtime.run("backendApi.register({ email: 'new@example.com' })"),
+    error => error.code === "invalid_json_response" && /接口返回了网页/.test(error.message)
+  );
+});
+
 test("migration preview money formatting keeps cents exact", () => {
   const runtime = createRuntime();
   assert.equal(runtime.run("formatPreviewMoney(31200)"), "¥312.00");
