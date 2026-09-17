@@ -64,6 +64,7 @@
 - 第一个业务接口 `POST /api/books/{book_id}/records` 已支持创建普通账目、转账和押金关联
 - 已加入 GitHub Actions 持续集成，在提交和合并请求中自动运行前端 50 项、JavaScript 语法检查和后端回归
 - 已加入单容器 Docker Compose 部署基线，FastAPI 同源提供网页和 API，SQLite 使用持久化卷；详见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- 已确定 Android App 路线：使用 Capacitor 复用现有网页，当前先建立 `mobile/www` 网页资源基线；Android 工具链、APK 和手机端 HTTPS 同步按 [`docs/APP_PLAN.md`](docs/APP_PLAN.md) 分阶段完成
 
 ## 使用方法
 
