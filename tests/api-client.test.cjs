@@ -205,6 +205,49 @@ test("auth form login accepts an authenticated user with no server books yet", a
   assert.equal(runtime.run("document.getElementById('authPanel').hidden"), true);
 });
 
+test("login offers local data migration before accepting an empty server account", async () => {
+  const runtime = createRuntime({
+    jizhangben_books: JSON.stringify([{ id: 1, name: "本地账本", category: "个人" }]),
+    jizhangben_current_book: "1",
+    jizhangben_records_1: JSON.stringify([{ id: 2, type: "支出", amountCents: 123, category: "餐饮" }]),
+    jizhangben_schema_version: "2"
+  });
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    formElements.authEmail.value = "learner@example.com";
+    formElements.authPassword.value = "correct-horse-battery";
+    window.calls = [];
+    startBackendReadHydration = async () => true;
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      if (url.endsWith("/auth/login")) return { ok: true, json: async () => ({
+        id: "user-1", email: "learner@example.com", display_name: "学习者"
+      }) };
+      if (url.endsWith("/books")) return { ok: true, json: async () => ({ items: [] }) };
+      if (url.endsWith("/backups/preview-local")) return { ok: true, json: async () => ({
+        counts: { books: 1, records: 1, accounts: 7 },
+        totals: { income_cents: 0, expense_cents: 123, net_worth_cents: -123 },
+        books: []
+      }) };
+      if (url.endsWith("/backups/import-local")) return { ok: true, json: async () => ({ imported: {
+        books: 1, records: 1, accounts: 7
+      } }) };
+      throw new Error("unexpected request: " + url);
+    };
+  })()`);
+
+  await runtime.run("submitAuth()");
+  assert.deepEqual(JSON.parse(runtime.run("JSON.stringify(window.calls.map(call => call.url))")), [
+    "/api/auth/login",
+    "/api/books",
+    "/api/backups/preview-local",
+    "/api/backups/import-local"
+  ]);
+  assert.equal(runtime.run("dataState.authStatus"), "authenticated");
+  assert.equal(runtime.run("JSON.parse(window.calls[3].options.body).format"), "jizhangben-backup");
+});
+
 test("HTTP entry hides the ledger until authentication succeeds", () => {
   const runtime = createRuntime();
   installFormDom(runtime);

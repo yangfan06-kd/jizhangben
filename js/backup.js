@@ -137,6 +137,80 @@ function exportBackup() {
   showBackupMsg("已导出备份文件");
 }
 
+// 登录后，如果服务端还是空账本，先检查浏览器 / App WebView 里是否有可迁移的旧数据。
+// 只把有实际账目的本地数据作为候选，避免新用户仅因默认空账本被反复提醒。
+function getLocalMigrationCandidate() {
+  const storage = appStorage.entries("jizhangben_");
+  if (!storage[BOOKS_KEY]) return null;
+  let books = [];
+  try { books = JSON.parse(storage[BOOKS_KEY]); } catch (e) { return null; }
+  if (!Array.isArray(books) || books.length === 0) return null;
+
+  let recordCount = 0;
+  Object.entries(storage).forEach(([key, raw]) => {
+    if (key.indexOf("jizhangben_records_") !== 0) return;
+    try {
+      const records = JSON.parse(raw);
+      if (Array.isArray(records)) recordCount += records.length;
+    } catch (e) { /* extractBackupStorage 会在真正迁移前再次校验 */ }
+  });
+  let customTypes = [];
+  let customCategories = [];
+  try { customTypes = JSON.parse(storage[CUSTOM_TYPES_KEY] || "[]"); } catch (e) { customTypes = []; }
+  try { customCategories = JSON.parse(storage[CUSTOM_CATEGORIES_KEY] || "[]"); } catch (e) { customCategories = []; }
+  const hasMeaningfulData = recordCount > 0 || books.length > 1 ||
+    customTypes.length > 0 || customCategories.length > 0 ||
+    (books[0] && books[0].name && books[0].name !== "我的账本");
+  if (!hasMeaningfulData) return null;
+
+  const backup = {
+    format: "jizhangben-backup",
+    version: DATA_VERSION,
+    exportedAt: new Date().toISOString(),
+    storage
+  };
+  try {
+    extractBackupStorage(backup);
+    return backup;
+  } catch (e) {
+    return null;
+  }
+}
+
+function showLocalMigrationFallback() {
+  if (typeof initializeLocalLedger === "function") initializeLocalLedger();
+  if (typeof showAuthDataNotice === "function") {
+    showAuthDataNotice("发现本机已有账目，暂未同步到当前账号；本机数据已保留，可稍后在账本管理中导出并迁移。 ");
+  }
+}
+
+// 返回 none（无需处理）、imported（已导入）或 local（保留本地数据继续使用）。
+async function maybeOfferLocalMigration() {
+  if (!backendApi.baseUrl()) return "none";
+  const backup = getLocalMigrationCandidate();
+  if (!backup) return "none";
+  try {
+    const booksPayload = await backendApi.getJSON("/books");
+    if (!booksPayload || !Array.isArray(booksPayload.items) || booksPayload.items.length > 0) return "none";
+    const summary = await backendApi.previewLocalBackup(backup);
+    const counts = summary && summary.counts ? summary.counts : {};
+    const totals = summary && summary.totals ? summary.totals : {};
+    const income = (Number(totals.income_cents || 0) / 100).toFixed(2);
+    const expense = (Number(totals.expense_cents || 0) / 100).toFixed(2);
+    const message = `检测到本机有 ${Number(counts.books || 0)} 个账本、${Number(counts.records || 0)} 笔账目和 ${Number(counts.accounts || 0)} 个账户。\n收入 ¥${income}，支出 ¥${expense}。\n当前账号还没有账本，是否把本机数据迁移到当前账号？`;
+    if (typeof confirm !== "function" || !confirm(message)) {
+      showLocalMigrationFallback();
+      return "local";
+    }
+    await backendApi.importLocalBackup(backup);
+    return "imported";
+  } catch (error) {
+    // 预览或导入失败时保留本机数据，避免登录过程把它替换成空页面。
+    showLocalMigrationFallback();
+    return "local";
+  }
+}
+
 function isBackupObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }

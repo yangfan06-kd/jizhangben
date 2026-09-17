@@ -69,6 +69,21 @@ function showAuthDataNotice(text) {
   }
 }
 
+async function hydrateAuthenticatedData() {
+  uiState.startupNotice = "";
+  const migration = typeof maybeOfferLocalMigration === "function"
+    ? await maybeOfferLocalMigration()
+    : "none";
+  // 用户选择保留本地数据，或迁移过程暂时失败时，页面已经回退到本地快照。
+  if (migration === "local") return true;
+  const hydrated = await startBackendReadHydration(true);
+  if (!hydrated && dataState.authStatus === "authenticated") {
+    showAuthDataNotice("已登录，但服务端账本暂时无法读取，请稍后重试。当前未显示本地账本数据。");
+    showAuthMsg("服务端数据暂时无法读取", true);
+  }
+  return hydrated;
+}
+
 function renderAuthStatus() {
   const status = document.getElementById("authStatus");
   const open = document.getElementById("authOpenBtn");
@@ -199,12 +214,7 @@ async function submitAuth() {
   dataState.authStatus = "authenticated";
   dataState.authHydrated = true;
   // 登录用户可能还没有账本，必须允许空账本响应替换本地兼容数据。
-  uiState.startupNotice = "";
-  const hydrated = await startBackendReadHydration(true);
-  if (!hydrated && dataState.authStatus === "authenticated") {
-    showAuthDataNotice("已登录，但服务端账本暂时无法读取，请稍后重试。当前未显示本地账本数据。");
-    showAuthMsg("服务端数据暂时无法读取", true);
-  }
+  const hydrated = await hydrateAuthenticatedData();
   closeAuthPanel();
   renderAuthStatus();
   render();
@@ -251,12 +261,7 @@ async function hydrateAuthSession() {
   dataState.authUser = user;
   dataState.authStatus = "authenticated";
   dataState.authHydrated = true;
-  uiState.startupNotice = "";
-  const hydrated = await startBackendReadHydration(true);
-  if (!hydrated && dataState.authStatus === "authenticated") {
-    showAuthDataNotice("已登录，但服务端账本暂时无法读取，请稍后重试。当前未显示本地账本数据。");
-    showAuthMsg("服务端数据暂时无法读取", true);
-  }
+  const hydrated = await hydrateAuthenticatedData();
   renderAuthStatus();
   render();
   return true;
