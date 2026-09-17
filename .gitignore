@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 backend/.pytest-tmp*/
 .tmp-backend-*/
+.tmp-pytest-*/
+pytest-cache-files-*/
 
 # Local databases and secrets
 backend/data/*.db
