@@ -42,6 +42,47 @@ test("authenticated backend snapshots are mirrored to local storage", () => {
   assert.deepEqual(JSON.parse(stored.jizhangben_custom_categories), ["旅行"]);
 });
 
+test("network failure switches the app to the local mobile snapshot", async () => {
+  const runtime = createRuntime({
+    jizhangben_books: JSON.stringify([{ id: "book-1", name: "手机账本", category: "个人" }]),
+    jizhangben_current_book: JSON.stringify("book-1"),
+    "jizhangben_accounts_book-1": JSON.stringify([{ id: "account-1", name: "现金", kind: "资金", initial: 0 }])
+  });
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "loading";
+    dataState.authUser = null;
+    window.fetch = async () => { throw new TypeError("Failed to fetch"); };
+    initializeLocalLedger = () => {
+      dataState.books = [{ id: "book-1", name: "手机账本", category: "个人" }];
+      dataState.currentBookId = "book-1";
+      window.localInitialized = true;
+    };
+  })()`);
+
+  assert.equal(await runtime.run("hydrateAuthSession()"), false);
+  assert.equal(runtime.run("dataState.offlineMode"), true);
+  assert.equal(runtime.run("backendApi.baseUrl()"), null);
+  assert.equal(runtime.run("window.localInitialized"), true);
+  assert.equal(runtime.run("document.getElementById('authStatus').textContent"), "本机离线模式");
+  assert.equal(runtime.run("document.getElementById('authOpenBtn').textContent"), "联网登录");
+  assert.match(runtime.run("uiState.startupNotice"), /网络暂时不可用/);
+});
+
+test("offline mode can be left before opening the network login form", () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.offlineMode = true;
+    dataState.authStatus = "guest";
+    openAuthPanel("login");
+  })()`);
+  assert.equal(runtime.run("dataState.offlineMode"), false);
+  assert.equal(runtime.run("document.getElementById('authPanel').hidden"), false);
+});
+
 function installFormDom(runtime) {
   runtime.run(`(() => {
     const ids = [

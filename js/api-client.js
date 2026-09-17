@@ -27,6 +27,7 @@ async function readBackendJSON(response, path) {
 const backendApi = {
   // 直接打开 index.html 时没有可用的同源 API；用 HTTP 服务打开时默认请求 /api。
   baseUrl() {
+    if (typeof dataState !== "undefined" && dataState.offlineMode) return null;
     const configured = typeof window !== "undefined" && window.JIZHANGBEN_API_BASE_URL;
     if (typeof configured === "string" && configured.trim()) {
       return configured.trim().replace(/\/$/, "");

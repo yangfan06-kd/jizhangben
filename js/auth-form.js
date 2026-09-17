@@ -124,6 +124,7 @@ function renderAuthStatus() {
   if (!status || !open || !sync || !logout) return;
   if (dataState.authStatus === "authenticated" && dataState.authUser) {
     status.textContent = "已登录：" + dataState.authUser.display_name;
+    dataState.offlineMode = false;
     open.hidden = true;
     sync.hidden = false;
     sync.disabled = syncInFlight;
@@ -135,7 +136,10 @@ function renderAuthStatus() {
     sync.disabled = false;
     logout.hidden = true;
   } else {
-    status.textContent = backendApi.baseUrl() ? "未登录，请先登录" : "本地模式";
+    status.textContent = dataState.offlineMode
+      ? "本机离线模式"
+      : (backendApi.baseUrl() ? "未登录，请先登录" : "本地模式");
+    open.textContent = dataState.offlineMode ? "联网登录" : "登录";
     open.hidden = false;
     sync.hidden = true;
     sync.disabled = false;
@@ -190,6 +194,10 @@ function isValidAuthEmail(email) {
 function openAuthPanel(mode = "login") {
   const panel = document.getElementById("authPanel");
   if (!panel) return;
+  if (dataState.offlineMode) {
+    dataState.offlineMode = false;
+    renderAuthStatus();
+  }
   setAuthMode(mode);
   authPanelOpen = true;
   panel.hidden = false;
@@ -293,6 +301,13 @@ async function hydrateAuthSession() {
     dataState.authUser = null;
     dataState.authStatus = "guest";
     dataState.authHydrated = true;
+    if (error && !error.status) {
+      dataState.offlineMode = true;
+      if (typeof initializeLocalLedger === "function") initializeLocalLedger();
+      showAuthDataNotice("网络暂时不可用，已切换到本机数据；恢复网络后点击“联网登录”即可同步。 ");
+      renderAuthStatus();
+      return false;
+    }
     clearLedgerStateForAuthGate();
     renderAuthStatus();
     return false;

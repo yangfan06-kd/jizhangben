@@ -38,6 +38,7 @@ const dataState = {
   authUser: null,
   authStatus: "guest",
   authHydrated: false,
+  offlineMode: false,
   books: [],
   records: [],
   accounts: [],

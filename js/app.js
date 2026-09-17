@@ -74,13 +74,17 @@ document.getElementById("migrationFile").onchange = async (e) => {
 document.getElementById("migrationConfirmBtn").onclick = confirmMigrationImport;
 document.getElementById("migrationCancelBtn").onclick = clearMigrationPreview;
 
-function initializeLocalLedger() {
-  // 直接打开文件时使用原有 localStorage 流程，保留离线兼容能力。
+function loadLocalLedgerState() {
   loadBooks();
   load();
   loadAccounts();
   loadCustomTypes();
   loadCustomCategories();
+}
+
+function initializeLocalLedger() {
+  // 直接打开文件或网络暂时不可用时使用 localStorage 流程。
+  loadLocalLedgerState();
   renderBookSelect();
   renderBookList();
   renderTypeChips();
@@ -93,6 +97,8 @@ function initializeLocalLedger() {
 
 // HTTP 页面先进入登录入口，不读取或显示浏览器里的本地账本；登录成功后再读取服务端数据。
 if (backendApi.baseUrl()) {
+  // 先准备本机快照，网络不可达时可以立即切换到离线模式；认证成功后再用服务端快照替换。
+  loadLocalLedgerState();
   renderAuthStatus();
   hydrateAuthSession();
 } else {
