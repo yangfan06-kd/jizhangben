@@ -27,7 +27,7 @@
 1. 已把 Android Studio、JDK 21、Android SDK 和 Gradle 缓存放在 `G:\project\android-tools`。
 2. 已安装 Android API 36、Build Tools 35.0.0/36.0.0 和 Platform Tools，并通过 USB 调试连接真实 Android 手机。
 3. 已执行 `npx cap add android`，创建 `android/` 原生工程，并成功生成调试 APK。
-4. 已运行 `npm run app:install:debug` 并成功安装、启动调试 APK；下一步手动验收登录入口、记账、押金结算、筛选、总览和本地备份。
+4. 已运行 `npm run app:install:debug` 并成功安装、启动调试 APK；登录、建账本、建账户、普通记账和押金结算已通过真机验收，下一步验收筛选、总览和本地备份。
 
 ### C. 手机与电脑共享数据
 
