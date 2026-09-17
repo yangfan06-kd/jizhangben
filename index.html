@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>记账本</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -25,7 +26,7 @@
 
   <div id="startupNotice" class="startup-notice" role="alert" hidden></div>
 
-  <section id="authPanel" class="card auth-panel" hidden>
+  <form id="authForm" class="card auth-panel" hidden>
     <div class="auth-panel-head">
       <h2 id="authTitle">登录记账本</h2>
       <button id="authCloseBtn" class="mini-btn" type="button">关闭</button>
@@ -52,9 +53,9 @@
       <div class="field-label">确认密码</div>
       <input id="authPasswordConfirm" type="password" autocomplete="new-password" placeholder="再次输入密码" minlength="8" maxlength="200">
     </div>
-    <button id="authSubmitBtn" class="btn-primary" type="button">登录</button>
+    <button id="authSubmitBtn" class="btn-primary" type="submit">登录</button>
     <div id="authMsg" class="form-msg"></div>
-  </section>
+  </form>
 
   <main id="ledgerApp" hidden>
   <!-- 统计卡片：本月结余 / 收入 / 支出 -->

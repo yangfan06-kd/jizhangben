@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="记账本">
+  <rect width="64" height="64" rx="14" fill="#1769aa"/>
+  <path d="M18 13h28a5 5 0 0 1 5 5v28a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5V18a5 5 0 0 1 5-5Z" fill="#fff"/>
+  <path d="M22 23h20M22 32h20M22 41h12" stroke="#1769aa" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="43" cy="43" r="7" fill="#f0a202"/>
+  <path d="M40 43h6M43 40v6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -49,7 +49,10 @@ document.getElementById("authLogoutBtn").onclick = logoutAuth;
 document.getElementById("authCloseBtn").onclick = closeAuthPanel;
 document.getElementById("authLoginTab").onclick = () => setAuthMode("login");
 document.getElementById("authRegisterTab").onclick = () => setAuthMode("register");
-document.getElementById("authSubmitBtn").onclick = submitAuth;
+document.getElementById("authForm").onsubmit = event => {
+  event.preventDefault();
+  submitAuth();
+};
 document.getElementById("exportBtn").onclick = exportBackup;
 document.getElementById("importBtn").onclick = () => {
   document.getElementById("importFile").click();

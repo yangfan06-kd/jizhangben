@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend backend
 COPY index.html frontend/index.html
+COPY favicon.svg frontend/favicon.svg
 COPY css frontend/css
 COPY js frontend/js
 

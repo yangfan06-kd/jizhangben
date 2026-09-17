@@ -22,6 +22,7 @@ fs.writeFileSync(
 );
 fs.cpSync(path.join(repoRoot, "css"), path.join(webDir, "css"), { recursive: true });
 fs.cpSync(path.join(repoRoot, "js"), path.join(webDir, "js"), { recursive: true });
+fs.copyFileSync(path.join(repoRoot, "favicon.svg"), path.join(webDir, "favicon.svg"));
 
 console.log(`已同步 App 网页资源：${path.relative(repoRoot, webDir)}`);
 console.log(`App API 地址：${apiBaseUrl}`);
