@@ -40,6 +40,88 @@ test("authenticated backend snapshots are mirrored to local storage", () => {
   assert.equal(JSON.parse(stored["jizhangben_accounts_book-1"])[0].initialCents, 10000);
   assert.equal(JSON.parse(stored["jizhangben_records_book-1"])[0].amountCents, 1250);
   assert.deepEqual(JSON.parse(stored.jizhangben_custom_categories), ["旅行"]);
+  assert.equal(JSON.parse(stored.jizhangben_snapshot_owner), "user-1");
+});
+
+test("a successful backend snapshot clears the local pending-sync marker", () => {
+  const runtime = createRuntime({
+    jizhangben_pending_sync: JSON.stringify({ version: 1, reason: "record_write" })
+  });
+  runtime.run(`(() => {
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    dataState.books = [{ id: "book-1", name: "移动账本", category: "个人" }];
+    dataState.currentBookId = "book-1";
+    dataState.accounts = [];
+    dataState.records = [];
+    dataState.customTypes = [];
+    dataState.customCategories = [];
+  })()`);
+
+  assert.equal(runtime.run("persistBackendSnapshotLocally()"), true);
+  assert.equal(runtime.localStorage.toObject().jizhangben_pending_sync, undefined);
+});
+
+test("pending offline changes keep the local snapshot when the server already has books", async () => {
+  const runtime = createRuntime({
+    jizhangben_books: JSON.stringify([{ id: "book-local", name: "手机账本", category: "个人" }]),
+    jizhangben_current_book: JSON.stringify("book-local"),
+    "jizhangben_records_book-local": JSON.stringify([{ id: 1, type: "支出", amountCents: 100, category: "餐饮" }]),
+    jizhangben_pending_sync: JSON.stringify({ version: 1, reason: "record_write" })
+  });
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    window.localInitialized = false;
+    initializeLocalLedger = () => { window.localInitialized = true; };
+    backendApi.getJSON = async () => ({ items: [{ id: "book-server", name: "服务端账本" }] });
+  })()`);
+
+  assert.equal(await runtime.run("maybeOfferLocalMigration()"), "local");
+  assert.equal(runtime.run("window.localInitialized"), true);
+  assert.match(runtime.run("uiState.startupNotice"), /尚未同步/);
+});
+
+test("a cached snapshot from another account is never offered for migration", async () => {
+  const runtime = createRuntime({
+    jizhangben_books: JSON.stringify([{ id: "book-local", name: "上个账号账本", category: "个人" }]),
+    jizhangben_current_book: JSON.stringify("book-local"),
+    "jizhangben_records_book-local": JSON.stringify([{ id: 1, type: "支出", amountCents: 100, category: "餐饮" }]),
+    jizhangben_snapshot_owner: JSON.stringify("user-a"),
+    jizhangben_pending_sync: JSON.stringify({ version: 1, reason: "record_write", userId: "user-a" })
+  });
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-b", display_name: "另一个用户" };
+    window.localInitialized = false;
+    initializeLocalLedger = () => { window.localInitialized = true; };
+    backendApi.getJSON = async () => ({ items: [] });
+  })()`);
+
+  assert.equal(await runtime.run("maybeOfferLocalMigration()"), "none");
+  assert.equal(runtime.run("window.localInitialized"), false);
+});
+
+test("manual sync refuses to replace a snapshot with pending offline changes", async () => {
+  const runtime = createRuntime({
+    jizhangben_pending_sync: JSON.stringify({ version: 1, reason: "record_write" })
+  });
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    startBackendReadHydration = async () => { window.hydrationCalled = true; return true; };
+    renderAuthStatus();
+  })()`);
+
+  assert.equal(await runtime.run("syncBackendData()"), false);
+  assert.equal(runtime.run("window.hydrationCalled"), undefined);
+  assert.match(runtime.run("document.getElementById('startupNotice').textContent"), /尚未同步/);
 });
 
 test("network failure switches the app to the local mobile snapshot", async () => {

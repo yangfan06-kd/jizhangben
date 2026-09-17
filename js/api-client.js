@@ -182,6 +182,70 @@ function backendRecordWritesEnabled() {
   );
 }
 
+function getPendingLocalChange() {
+  try {
+    const raw = appStorage.get(PENDING_SYNC_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== "object" || value.version !== 1) return null;
+    return value;
+  } catch (error) {
+    return null;
+  }
+}
+
+function shouldMarkLocalChange() {
+  return !!(
+    dataState.offlineMode ||
+    (dataState.authStatus === "authenticated" && !dataState.backendBooksLoaded)
+  );
+}
+
+function markLocalChangePending(reason = "offline_write") {
+  try {
+    const previous = getPendingLocalChange();
+    appStorage.set(PENDING_SYNC_KEY, JSON.stringify({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      reason: String(reason || "offline_write"),
+      userId: dataState.authUser && dataState.authUser.id ? dataState.authUser.id : null,
+      firstSeenAt: previous && previous.firstSeenAt ? previous.firstSeenAt : new Date().toISOString()
+    }));
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function clearPendingLocalChange() {
+  try {
+    appStorage.remove(PENDING_SYNC_KEY);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function getLocalSnapshotOwnerId() {
+  try {
+    const raw = appStorage.get(LOCAL_SNAPSHOT_OWNER_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    return value && (typeof value === "string" || typeof value === "number")
+      ? String(value)
+      : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function localSnapshotMatchesCurrentUser() {
+  const ownerId = getLocalSnapshotOwnerId();
+  const currentUserId = dataState.authUser && dataState.authUser.id;
+  // 没有归属信息的旧 localStorage 数据仍允许首次迁移；有归属信息时必须匹配。
+  return !ownerId || !currentUserId || String(ownerId) === String(currentUserId);
+}
+
 // 服务端成功读取或写入后，把当前账号的完整快照留在设备 localStorage。
 // 这份副本用于网络暂时不可用时的本地回退，不改变服务端作为跨设备同步来源的角色。
 function persistBackendSnapshotLocally() {
@@ -195,6 +259,8 @@ function persistBackendSnapshotLocally() {
       saveAccounts();
       save();
     }
+    appStorage.set(LOCAL_SNAPSHOT_OWNER_KEY, JSON.stringify(String(dataState.authUser.id)));
+    clearPendingLocalChange();
     return true;
   } catch (error) {
     return false;

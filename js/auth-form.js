@@ -114,6 +114,11 @@ async function syncBackendData() {
   }
   showAuthDataNotice("正在同步服务端账本、账户、明细和总览…");
   try {
+    if (typeof getPendingLocalChange === "function" && getPendingLocalChange()) {
+      showAuthDataNotice("检测到本机有尚未同步的离线修改；为避免覆盖服务端数据，本次暂不替换本机数据。请先导出本机备份，再在账本管理中预览并迁移。 ");
+      showAuthMsg("本机有待同步数据，请先备份或迁移", true);
+      return false;
+    }
     const hydrated = await startBackendReadHydration(true);
     if (!hydrated) {
       if (dataState.authStatus === "authenticated") {

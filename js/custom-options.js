@@ -205,6 +205,9 @@ async function addCustom(kind) {
     backendFallback = true;
   }
   finishCustomAdd(kind, name, backendItem);
+  if (backendFallback || (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange())) {
+    if (typeof markLocalChangePending === "function") markLocalChangePending(isType ? "type_write" : "category_write");
+  }
   if (typeof showMsg === "function" && backendFallback) {
     showMsg("服务端暂不可用，已保存到本地，恢复网络后可迁移", "local");
   } else if (typeof showMsg === "function" && backendItem) {
@@ -263,6 +266,9 @@ async function removeCustom(kind, name) {
       filterState.category = "";
       document.getElementById("filterCategorySel").value = "";
     }
+  }
+  if (backendFallback || (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange())) {
+    if (typeof markLocalChangePending === "function") markLocalChangePending(kind === "type" ? "type_delete" : "category_delete");
   }
   if (kind === "type") delete dataState.backendTypeIds[name];
   else delete dataState.backendCategoryIds[name];

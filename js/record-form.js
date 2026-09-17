@@ -74,6 +74,7 @@ function saveRecordLocally(record, message, restore, status = "local") {
   record.id = nextId(dataState.records);
   dataState.records.push(record);
   save();
+  if (typeof markLocalChangePending === "function") markLocalChangePending("record_write");
   resetForm();
   showMsg(message, status);
   render();
@@ -173,6 +174,7 @@ function saveEditedRecordLocally(draft, originalFingerprint, message) {
   }
   applyRecordDraft(target, draft);
   save();
+  if (typeof markLocalChangePending === "function") markLocalChangePending("record_edit");
   resetForm();
   showMsg(message, "local");
   render();
@@ -363,6 +365,9 @@ async function handleSave() {
   }
 
   save();
+  if (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange() && typeof markLocalChangePending === "function") {
+    markLocalChangePending(wasEdit ? "record_edit" : "record_write");
+  }
   resetForm();
   showMsg(wasEdit ? "已保存修改" : "已记一笔", "local");
   render();
@@ -434,6 +439,7 @@ async function deleteRec(id) {
         } else {
           dataState.records = dataState.records.filter(r => r !== localTarget);
           save();
+          if (typeof markLocalChangePending === "function") markLocalChangePending("record_delete");
           showMsg("服务端不可用，已在本地删除", "local");
           render();
         }
@@ -446,6 +452,9 @@ async function deleteRec(id) {
 
   dataState.records = dataState.records.filter(r => String(r.id) !== String(id));
   save();
+  if (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange() && typeof markLocalChangePending === "function") {
+    markLocalChangePending("record_delete");
+  }
   showMsg("已删除", "local");
   render();
 }

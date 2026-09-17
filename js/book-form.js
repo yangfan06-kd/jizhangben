@@ -224,6 +224,7 @@ async function handleBookSave() {
           localBook.name = name;
           localBook.category = category;
           saveBooks();
+          if (typeof markLocalChangePending === "function") markLocalChangePending("book_edit");
           resetBookForm();
           showBookMsg("服务端不可用，已在本地保存修改", true);
           renderBookSelect();
@@ -287,6 +288,9 @@ async function handleBookSave() {
     dataState.books.push({ id: nextId(dataState.books), name: name, category: category });
   }
   saveBooks();
+  if (backendFallback || (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange())) {
+    if (typeof markLocalChangePending === "function") markLocalChangePending(wasEdit ? "book_edit" : "book_write");
+  }
   resetBookForm();
   // 先重置再提示，否则 resetBookForm 会把提示清掉
   if (wasEdit) {
@@ -359,6 +363,7 @@ async function deleteBook(id) {
           showBookMsg("服务端不可用，本地无法安全删除这本账", true);
         } else {
           applyLocalBookDelete(localBook.id);
+          if (typeof markLocalChangePending === "function") markLocalChangePending("book_delete");
           resetBookForm();
           showBookMsg("服务端不可用，已在本地删除账本", true);
           renderBookSelect();
@@ -373,6 +378,9 @@ async function deleteBook(id) {
   }
 
   applyLocalBookDelete(id);
+  if (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange() && typeof markLocalChangePending === "function") {
+    markLocalChangePending("book_delete");
+  }
   resetBookForm();
   renderBookSelect();
   renderBookList();

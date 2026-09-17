@@ -117,6 +117,7 @@ async function handleAccountSave() {
           localAccount.initial = initialCents / 100;
           localAccount.initialCents = initialCents;
           saveAccounts();
+          if (typeof markLocalChangePending === "function") markLocalChangePending("account_edit");
           resetAccountForm();
           showAccMsg("服务端不可用，已在本地保存修改");
           render();
@@ -165,6 +166,9 @@ async function handleAccountSave() {
     dataState.accounts.push({ id: nextId(dataState.accounts), name: name, kind: kind, initial: initialCents / 100, initialCents: initialCents });
   }
   saveAccounts();
+  if (backendFallback || (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange())) {
+    if (typeof markLocalChangePending === "function") markLocalChangePending(wasEdit ? "account_edit" : "account_write");
+  }
   resetAccountForm();
   showAccMsg(wasEdit ? "已保存修改" : (backendFallback ? "服务端不可用，已保存到本地" : "已添加账户"));
   render();
@@ -216,6 +220,7 @@ async function deleteAccount(id) {
         } else {
           dataState.accounts = dataState.accounts.filter(item => item !== localAccount);
           saveAccounts();
+          if (typeof markLocalChangePending === "function") markLocalChangePending("account_delete");
           resetAccountForm();
           showAccMsg("服务端不可用，已在本地删除账户");
           render();
@@ -229,6 +234,9 @@ async function deleteAccount(id) {
 
   dataState.accounts = dataState.accounts.filter(x => String(x.id) !== String(id));
   saveAccounts();
+  if (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange() && typeof markLocalChangePending === "function") {
+    markLocalChangePending("account_delete");
+  }
   resetAccountForm();
   showAccMsg("已删除账户");
   render();

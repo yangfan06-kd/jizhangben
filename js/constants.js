@@ -7,6 +7,10 @@ const TYPES = ["支出", "收入", "转账", "余额", "借贷", "代付", "报�
 const CATEGORIES = ["餐饮", "交通", "购物", "娱乐", "居住", "医疗", "教育", "其他"];
 const CUSTOM_TYPES_KEY = "jizhangben_custom_types";
 const CUSTOM_CATEGORIES_KEY = "jizhangben_custom_categories";
+// 手机离线写入的保护标记，不属于用户备份内容。
+const PENDING_SYNC_KEY = "jizhangben_pending_sync";
+// 最近一次服务端快照所属账号，仅用于切换账号时的本机缓存保护。
+const LOCAL_SNAPSHOT_OWNER_KEY = "jizhangben_snapshot_owner";
 const BOOKS_KEY = "jizhangben_books";
 const CURRENT_BOOK_KEY = "jizhangben_current_book";
 const STORAGE_SCHEMA_KEY = "jizhangben_schema_version";

@@ -119,6 +119,8 @@ async function confirmMigrationImport() {
 // 把所有 jizhangben_ 开头的本地数据打包成带版本号的 JSON 文件下载
 function exportBackup() {
   const storage = appStorage.entries("jizhangben_");
+  delete storage[PENDING_SYNC_KEY];
+  delete storage[LOCAL_SNAPSHOT_OWNER_KEY];
   const data = {
     format: "jizhangben-backup",
     version: DATA_VERSION,
@@ -141,6 +143,8 @@ function exportBackup() {
 // 只把有实际账目的本地数据作为候选，避免新用户仅因默认空账本被反复提醒。
 function getLocalMigrationCandidate() {
   const storage = appStorage.entries("jizhangben_");
+  delete storage[PENDING_SYNC_KEY];
+  delete storage[LOCAL_SNAPSHOT_OWNER_KEY];
   if (!storage[BOOKS_KEY]) return null;
   let books = [];
   try { books = JSON.parse(storage[BOOKS_KEY]); } catch (e) { return null; }
@@ -177,10 +181,10 @@ function getLocalMigrationCandidate() {
   }
 }
 
-function showLocalMigrationFallback() {
+function showLocalMigrationFallback(message = "发现本机已有账目，暂未同步到当前账号；本机数据已保留，可稍后在账本管理中导出并迁移。 ") {
   if (typeof initializeLocalLedger === "function") initializeLocalLedger();
   if (typeof showAuthDataNotice === "function") {
-    showAuthDataNotice("发现本机已有账目，暂未同步到当前账号；本机数据已保留，可稍后在账本管理中导出并迁移。 ");
+    showAuthDataNotice(message);
   }
 }
 
@@ -188,10 +192,23 @@ function showLocalMigrationFallback() {
 async function maybeOfferLocalMigration() {
   if (!backendApi.baseUrl()) return "none";
   const backup = getLocalMigrationCandidate();
-  if (!backup) return "none";
+  const pending = typeof getPendingLocalChange === "function" ? getPendingLocalChange() : null;
+  if (!backup && !pending) return "none";
+  if (typeof localSnapshotMatchesCurrentUser === "function" && !localSnapshotMatchesCurrentUser()) {
+    return "none";
+  }
   try {
     const booksPayload = await backendApi.getJSON("/books");
-    if (!booksPayload || !Array.isArray(booksPayload.items) || booksPayload.items.length > 0) return "none";
+    if (!booksPayload || !Array.isArray(booksPayload.items)) return "none";
+    if (pending && booksPayload.items.length > 0) {
+      showLocalMigrationFallback("发现本机有尚未同步的离线修改；为避免覆盖服务端账本，当前继续使用本机数据。请先导出本机备份，再在账本管理中预览并迁移。 ");
+      return "local";
+    }
+    if (!backup) {
+      showLocalMigrationFallback("发现本机有尚未同步的离线修改；当前继续使用本机数据。请先导出本机备份，再决定是否迁移到当前账号。 ");
+      return "local";
+    }
+    if (booksPayload.items.length > 0) return "none";
     const summary = await backendApi.previewLocalBackup(backup);
     const counts = summary && summary.counts ? summary.counts : {};
     const totals = summary && summary.totals ? summary.totals : {};
