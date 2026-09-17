@@ -27,11 +27,11 @@
 1. 已把 Android Studio、JDK 21、Android SDK 和 Gradle 缓存放在 `G:\project\android-tools`。
 2. 已安装 Android API 36、Build Tools 35.0.0/36.0.0 和 Platform Tools，并通过 USB 调试连接真实 Android 手机。
 3. 已执行 `npx cap add android`，创建 `android/` 原生工程，并成功生成调试 APK。
-4. 已运行 `npm run app:install:debug` 并成功安装、启动调试 APK；登录、建账本、建账户、普通记账和押金结算已通过真机验收，下一步验收筛选、总览和本地备份。
+4. 已运行 `npm run app:install:debug` 并成功安装、启动调试 APK；登录、建账本、建账户、普通记账、押金结算、对象筛选、总览和服务端备份读取已通过真机验收。
 
 ### C. 手机与电脑共享数据
 
-1. 当前调试包通过 USB 转发访问本机 API；下一阶段为 App 配置正式 HTTPS API 地址，不能把 `127.0.0.1` 或局域网地址写进发布包。
+1. 当前调试包通过 USB 转发访问本机 API；下一阶段先让手机通过局域网访问 Docker，再配置正式 HTTPS API 地址，不能把 `127.0.0.1` 或局域网地址写进发布包。
 2. 验证 Android WebView 的 Cookie、CORS、会话过期和失败提示。
 3. 用同一账号在电脑浏览器、手机浏览器和 APK 之间核对账本、账目和净资产。
 
