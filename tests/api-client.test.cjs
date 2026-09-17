@@ -79,6 +79,7 @@ function installRecordDom(runtime) {
     globalThis.renderBookList = () => {};
     globalThis.renderAccountSelects = () => {};
     globalThis.fillCategoryFilter = () => {};
+    globalThis.refreshDetail = () => {};
     globalThis.resetAccountForm = () => {};
     globalThis.resetBookForm = () => {};
     globalThis.clearTimeout = () => {};
@@ -205,6 +206,55 @@ test("custom categories created in an authenticated page sync to the backend", a
   assert.equal(runtime.run("JSON.parse(window.customRequest.options.body).name"), "旅行");
   assert.equal(JSON.stringify(runtime.run("dataState.customCategories")), JSON.stringify(["旅行"]));
   assert.equal(runtime.run("dataState.backendCategoryIds['旅行']"), "category-travel");
+});
+
+test("custom record types created in an authenticated page sync behavior and UUID", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.backendOptionsLoaded = true;
+    uiState.customTypeSideDraft = "income";
+    window.fetch = async (url, options) => {
+      window.customRequest = { url, options };
+      return { ok: true, status: 201, json: async () => ({
+        id: "type-salary", code: "custom-salary", name: "工资", behavior: "income", is_system: false
+      }) };
+    };
+    formElements.customInput.value = "工资";
+  })()`);
+
+  await runtime.run("addCustom('type')");
+  const payload = runtime.run("JSON.parse(window.customRequest.options.body)");
+  assert.equal(runtime.run("window.customRequest.url"), "/api/record-types");
+  assert.equal(payload.behavior, "income");
+  assert.equal(payload.name, "工资");
+  assert.match(payload.code, /^custom-/);
+  assert.equal(runtime.run("dataState.backendTypeIds['工资']"), "type-salary");
+  assert.equal(runtime.run("dataState.customTypes[0].side"), "income");
+});
+
+test("deleting a synced custom category archives it on the backend", async () => {
+  const runtime = createRuntime();
+  installRecordDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "authenticated";
+    dataState.backendOptionsLoaded = true;
+    dataState.customCategories = ["旅行"];
+    dataState.backendCategoryIds = { "旅行": "category-travel" };
+    window.fetch = async (url, options) => {
+      window.deleteRequest = { url, options };
+      return { ok: true, status: 204, json: async () => null };
+    };
+  })()`);
+
+  await runtime.run("removeCustom('category', '旅行')");
+  assert.equal(runtime.run("window.deleteRequest.url"), "/api/categories/category-travel");
+  assert.equal(runtime.run("window.deleteRequest.options.method"), "DELETE");
+  assert.equal(JSON.stringify(runtime.run("dataState.customCategories")), "[]");
+  assert.equal(runtime.run("dataState.backendCategoryIds['旅行']"), undefined);
 });
 
 test("auth form login accepts an authenticated user with no server books yet", async () => {
