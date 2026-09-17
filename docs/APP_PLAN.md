@@ -27,7 +27,7 @@
 1. 已把 Android Studio、JDK 21、Android SDK 和 Gradle 缓存放在 `G:\project\android-tools`。
 2. 已安装 Android API 36、Build Tools 35.0.0/36.0.0 和 Platform Tools；真实手机尚未连接。
 3. 已执行 `npx cap add android`，创建 `android/` 原生工程，并成功生成调试 APK。
-4. 待在真实手机上验收登录入口、记账、押金结算、筛选、总览和本地备份。
+4. 已准备 `npm run app:install:debug` 真机安装命令；待连接真实手机后验收登录入口、记账、押金结算、筛选、总览和本地备份。
 
 ### C. 手机与电脑共享数据
 
