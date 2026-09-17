@@ -1114,3 +1114,15 @@
 - 关键知识：网络连通、HTTP 接口可用、浏览器 Cookie 能跨站发送是三个不同层次；手机能访问健康接口，并不代表登录态已经能在 APK 中跨域复用。
 - 面试表达：我把“容器健康、手机到主机连通、带会话读取、WebView Cookie 策略”分层验证，发现 HTTP 局域网方案的限制后保留可复现的 USB 调试路径，把正式跨设备同步收敛到 HTTPS 部署。
 - 下一步：用手机浏览器访问局域网同源页面，完成一次完整业务验收，再在正式 HTTPS 地址下重新构建 APK。
+
+## 第 92 步：为正式 HTTPS 配置会话 Cookie
+
+- 日期：2026-09-17
+- 目标：让后续使用正式 HTTPS API 的 Capacitor 页面能够保持登录，同时不改变当前局域网同源浏览器的安全默认值。
+- 实际完成：后端新增 `JIZHANGBEN_SESSION_SAMESITE` 和 `JIZHANGBEN_SESSION_SECURE` 配置；默认使用 `SameSite=Lax`，Secure 按请求协议自动判断；正式 HTTPS 的跨来源 App 可显式设置 `SameSite=None` 和 `Secure=1`。Compose 已加入对应环境变量入口，部署文档补充了 `http://localhost` App 来源和 HTTPS 要求。
+- 遇到的问题：Android WebView 页面来源是 `http://localhost`，远程 HTTPS API 属于跨来源请求；默认 `SameSite=Lax` Cookie 不会在这个场景自动发送，登录后读取接口会返回 401。
+- 解决方法：保留同源网页的默认配置；为 HTTPS 部署提供显式 Cookie 策略，要求 `SameSite=None` 与 Secure Cookie 一起使用，并继续通过 `JIZHANGBEN_CORS_ORIGINS` 限定允许的前端来源，不放开任意跨域。
+- 验证方式：新增 HTTPS 注册 Cookie 测试；认证接口 9 项、后端完整回归 102 项、前端 55 项全部通过。Docker 镜像重建后容器 healthy，健康接口返回 200，数据库中的 1 个账本、7 个账户、8 个分类、9 个类型和 5 笔记录保持不变。
+- 关键知识：Cookie 的来源策略、Secure 标志、CORS 凭据和 API 地址必须一起设计；只把地址从 HTTP 改成 HTTPS，不能自动解决跨来源登录态。
+- 面试表达：我先用真实 WebView 复现跨来源 Cookie 限制，再把 Cookie 策略抽成部署配置，使用默认安全值兼容同源开发环境，并用 HTTPS 响应头测试证明跨来源 App 所需属性确实生效。
+- 下一步：准备正式 HTTPS 部署入口，在该地址下重新构建 APK 并完成登录、数据读取和会话过期验收。

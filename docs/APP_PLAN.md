@@ -35,6 +35,8 @@
 2. 验证 Android WebView 的 Cookie、CORS、会话过期和失败提示。
 3. 用同一账号在电脑浏览器、手机浏览器和 APK 之间核对账本、账目和净资产。
 
+HTTPS 配置要求：远程 API 给 Capacitor 的 `http://localhost` 页面使用时，将会话 Cookie 设置为 `SameSite=None; Secure`，并显式允许 `http://localhost` 的凭据跨域请求；局域网 HTTP 同源网页不需要这个跨来源配置。
+
 ### D. 可选发布准备
 
 1. 添加应用图标、启动页、签名密钥和版本号管理。

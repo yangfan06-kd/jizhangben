@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from ..dependencies import SESSION_COOKIE_NAME, get_authenticated_user
@@ -14,14 +16,28 @@ from ..services.auth_service import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-def _set_session_cookie(response: Response, token: str, secure: bool) -> None:
+def _session_cookie_secure(request: Request) -> bool:
+    configured = os.getenv("JIZHANGBEN_SESSION_SECURE", "auto").strip().lower()
+    if configured in {"1", "true", "yes", "on"}:
+        return True
+    if configured in {"0", "false", "no", "off"}:
+        return False
+    return request.url.scheme.lower() == "https"
+
+
+def _session_cookie_samesite() -> str:
+    configured = os.getenv("JIZHANGBEN_SESSION_SAMESITE", "lax").strip().lower()
+    return configured if configured in {"lax", "strict", "none"} else "lax"
+
+
+def _set_session_cookie(response: Response, token: str, request: Request) -> None:
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         max_age=SESSION_TTL_SECONDS,
         httponly=True,
-        samesite="lax",
-        secure=secure,
+        samesite=_session_cookie_samesite(),
+        secure=_session_cookie_secure(request),
         path="/",
     )
 
@@ -41,7 +57,7 @@ def register(
     _set_session_cookie(
         response,
         create_session(request.app.state.database_path, str(user["id"])),
-        request.url.scheme == "https",
+        request,
     )
     return user
 
@@ -60,7 +76,7 @@ def login(
     _set_session_cookie(
         response,
         create_session(request.app.state.database_path, str(user["id"])),
-        request.url.scheme == "https",
+        request,
     )
     return user
 

@@ -24,6 +24,8 @@ docker compose up --build -d
 
 Android 调试包默认使用 `http://localhost:8000/api`，安装脚本会通过 USB 转发把手机的 8000 端口连接到电脑服务；这只适合开发验收。正式 App 应改为可从手机访问的 HTTPS 地址，并重新配置 API 地址与跨域策略。
 
+正式 HTTPS 后端供 APK 使用时，建议在部署环境设置 `JIZHANGBEN_SESSION_SAMESITE=none` 和 `JIZHANGBEN_SESSION_SECURE=1`，并在 `JIZHANGBEN_CORS_ORIGINS` 中保留 App 的 `http://localhost` 来源。`SameSite=None` 必须配合 HTTPS 和 Secure Cookie 使用；局域网 HTTP 同源浏览器继续使用默认的 `lax` 和自动 Secure 判断。构建 APK 前设置 `$env:JIZHANGBEN_API_BASE_URL` 为 HTTPS API 地址，再重新打包。
+
 ## 数据和安全默认值
 
 - `jizhangben-data` 是 Docker 命名卷，数据库位于 `/data/jizhangben.db`，删除容器不会删除该卷。

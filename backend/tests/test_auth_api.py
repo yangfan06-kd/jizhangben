@@ -82,6 +82,29 @@ async def test_login_logout_and_invalid_credentials(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_https_session_cookie_can_be_configured_for_capacitor_origin(tmp_path, monkeypatch):
+    monkeypatch.setenv("JIZHANGBEN_SESSION_SAMESITE", "none")
+    monkeypatch.setenv("JIZHANGBEN_SESSION_SECURE", "1")
+    application = create_app(tmp_path / "auth-https-cookie.db")
+    transport = ASGITransport(app=application)
+
+    async with application.router.lifespan_context(application):
+        async with AsyncClient(transport=transport, base_url="https://testserver") as client:
+            registered = await client.post(
+                "/api/auth/register",
+                json={
+                    "email": "https@example.com",
+                    "password": "correct-horse-battery",
+                    "display_name": "HTTPS 用户",
+                },
+            )
+
+    cookie = registered.headers["set-cookie"].lower()
+    assert "samesite=none" in cookie
+    assert "secure" in cookie
+
+
+@pytest.mark.anyio
 async def test_invalid_session_cookie_cannot_use_development_fallback(tmp_path):
     application = create_app(tmp_path / "auth-invalid-session.db")
     transport = ASGITransport(app=application)

@@ -8,6 +8,8 @@ services:
       JIZHANGBEN_STATIC_DIR: /app/frontend
       JIZHANGBEN_ALLOW_DEV_FALLBACK: "0"
       JIZHANGBEN_CORS_ORIGINS: "${JIZHANGBEN_CORS_ORIGINS:-http://localhost}"
+      JIZHANGBEN_SESSION_SAMESITE: "${JIZHANGBEN_SESSION_SAMESITE:-lax}"
+      JIZHANGBEN_SESSION_SECURE: "${JIZHANGBEN_SESSION_SECURE:-auto}"
     volumes:
       - jizhangben-data:/data
     restart: unless-stopped
