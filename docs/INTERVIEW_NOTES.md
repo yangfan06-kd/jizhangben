@@ -234,7 +234,7 @@ SQLite 默认创建时间是秒级的，连续插入的数据可能拥有完全�
 
 ### 你的持续集成检查什么？
 
-GitHub Actions 在 Ubuntu 干净环境中固定 Node.js 22 和 Python 3.12，运行与本地相同的前端 50 项测试、逐文件 JavaScript 语法检查，以及从 `requirements.txt` 安装依赖后的后端 101 项回归。工作流同时监听 `main` 推送和合并请求，能发现依赖、运行环境和代码回归问题。之前 CI 失败是因为项目使用了 Node.js 23/24 风格的 `--test-isolation=none`，而 Node.js 22 需要实验性参数名；我根据具体失败步骤改正测试脚本，并保留 Node.js 22 的 CI 运行时。
+GitHub Actions 在 Ubuntu 干净环境中固定 Node.js 22 和 Python 3.12，运行与本地相同的前端 59 项测试、逐文件 JavaScript 语法检查，以及从 `requirements.txt` 安装依赖后的后端 102 项回归。工作流同时监听 `main` 推送和合并请求，能发现依赖、运行环境和代码回归问题。之前 CI 失败是因为项目使用了 Node.js 23/24 风格的 `--test-isolation=none`，而 Node.js 22 需要实验性参数名；我根据具体失败步骤改正测试脚本，并保留 Node.js 22 的 CI 运行时。
 
 ### 你如何验证部署后的跨设备会话？
 
