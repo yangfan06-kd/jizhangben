@@ -28,6 +28,15 @@ Android 调试包默认使用 `http://localhost:8000/api`，安装脚本会通�
 
 正式 HTTPS 后端供 APK 使用时，建议在部署环境设置 `JIZHANGBEN_SESSION_SAMESITE=none` 和 `JIZHANGBEN_SESSION_SECURE=1`，并在 `JIZHANGBEN_CORS_ORIGINS` 中保留 App 的 `http://localhost` 来源。`SameSite=None` 必须配合 HTTPS 和 Secure Cookie 使用；局域网 HTTP 同源浏览器继续使用默认的 `lax` 和自动 Secure 判断。构建 APK 前设置 `$env:JIZHANGBEN_API_BASE_URL` 为 HTTPS API 地址，再重新打包。
 
+正式 App 构建前先执行地址预检：
+
+```powershell
+$env:JIZHANGBEN_API_BASE_URL = "https://你的真实域名/api"
+npm run app:validate:release
+```
+
+预检会拒绝 HTTP、localhost、回环地址、示例域名、缺少 `/api` 的路径，以及带查询参数或账号密码的 URL。调试构建不执行这道门槛，仍可使用 `http://localhost:8000/api` 和 USB 转发。
+
 ## 正式 HTTPS 入口模板
 
 仓库中的 [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) 是反向代理模板。它把公开的 HTTPS 请求转发到本机 FastAPI 的 8000 端口，Caddy 负责自动申请和续期证书；域名必须已经解析到部署服务器，并且 80、443 端口可以从公网访问。

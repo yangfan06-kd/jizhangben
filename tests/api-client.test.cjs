@@ -1,6 +1,23 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRuntime } = require("./runtime.cjs");
+const { validateReleaseApiBaseUrl } = require("../mobile/validate-api-url.cjs");
+
+test("release API URL requires a real HTTPS API endpoint", () => {
+  assert.equal(validateReleaseApiBaseUrl("http://localhost:8000/api").code, "https-required");
+  assert.equal(validateReleaseApiBaseUrl("https://ledger.example.com/api").code, "local-or-example");
+  assert.equal(validateReleaseApiBaseUrl("https://ledger.my-domain.cn").code, "api-path-required");
+  assert.deepEqual(validateReleaseApiBaseUrl("https://ledger.my-domain.cn/api"), {
+    ok: true,
+    value: "https://ledger.my-domain.cn/api"
+  });
+});
+
+test("release API URL rejects missing and unsafe credentials", () => {
+  assert.equal(validateReleaseApiBaseUrl("").code, "missing");
+  assert.equal(validateReleaseApiBaseUrl("https://ledger.my-domain.cn/api?debug=1").code, "unsafe-url");
+  assert.equal(validateReleaseApiBaseUrl("https://user:pass@ledger.my-domain.cn/api").code, "unsafe-url");
+});
 
 function installFormDom(runtime) {
   runtime.run(`(() => {

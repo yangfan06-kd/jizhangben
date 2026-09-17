@@ -32,13 +32,22 @@
 
 ### C. 手机与电脑共享数据
 
-1. 当前调试包通过 USB 转发访问本机 API；手机到 Docker 的局域网健康接口和带会话账本读取已验证。手机浏览器已通过 `http://10.141.156.100:8000/` 完成局域网同源验收，APK 写入 45 元支出后两端统计已对账；下一阶段配置正式 HTTPS API 地址，不能把 `127.0.0.1` 或局域网地址写进发布包。
+1. 当前调试包通过 USB 转发访问本机 API；手机到 Docker 的局域网健康接口和带会话账本读取已验证。手机浏览器已通过 `http://10.141.156.100:8000/` 完成局域网同源验收，APK 写入 45 元支出后两端统计已对账；发布前使用 `npm run app:validate:release` 检查正式 HTTPS API 地址，不能把 `127.0.0.1` 或局域网地址写进发布包。
 2. 验证 Android WebView 的 Cookie、CORS、会话过期和失败提示。
 3. 用同一账号在电脑浏览器、手机浏览器和 APK 之间核对账本、账目和净资产；已通过 APK 写入 45 元支出并在手机浏览器回读，登录后可使用“同步”按钮主动读取另一端的新数据。
 
 HTTPS 配置要求：远程 API 给 Capacitor 的 `http://localhost` 页面使用时，将会话 Cookie 设置为 `SameSite=None; Secure`，并显式允许 `http://localhost` 的凭据跨域请求；局域网 HTTP 同源网页不需要这个跨来源配置。
 
 正式入口可使用 `deploy/Caddyfile.example`：Caddy 终止 HTTPS 并反向代理到 FastAPI 8000 端口，应用容器不需要直接处理证书。域名和 80/443 公网入口准备好后，再用 HTTPS API 地址重新同步网页资源并构建 APK。
+
+发布 API 地址预检：
+
+```powershell
+$env:JIZHANGBEN_API_BASE_URL = "https://你的真实域名/api"
+npm run app:validate:release
+```
+
+检查器会拒绝 HTTP、localhost、回环地址、示例域名、缺少 `/api` 路径以及带查询参数或账号密码的地址。它只负责发布前的配置门槛，不会替代真实服务器健康检查。
 
 ### D. 可选发布准备
 

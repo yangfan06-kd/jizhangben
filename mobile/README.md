@@ -23,6 +23,8 @@ npx cap open android
 
 开发版默认把 API 配置为 `http://localhost:8000/api`。安装脚本会自动执行 USB 端口转发，让手机的 8000 端口连接到电脑的 8000 端口，因此调试时需要保持 USB 调试连接和电脑后端运行。也可以在构建前设置 `$env:JIZHANGBEN_API_BASE_URL` 覆盖地址；正式环境应使用 HTTPS 地址。
 
+正式包准备真实域名后，先设置 `$env:JIZHANGBEN_API_BASE_URL` 并运行 `npm run app:validate:release`。检查通过后再同步网页资源；检查器会拦截本机地址、示例域名、非 HTTPS 地址和不完整的 `/api` 路径，避免把调试配置带进发布包。
+
 本机工具放在 `G:\project\android-tools`。环境脚本会选择其中的 Java 21、Android SDK，并把 Android 用户缓存和 Gradle 缓存都放到 G 盘；每次打开新的 PowerShell 窗口后，先重新执行脚本。
 
 以后网页代码有更新，直接运行 `npm run app:build:debug`，脚本会先同步网页资源，再生成新的 `android/app/build/outputs/apk/debug/app-debug.apk`。
