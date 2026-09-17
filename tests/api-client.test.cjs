@@ -19,6 +19,29 @@ test("release API URL rejects missing and unsafe credentials", () => {
   assert.equal(validateReleaseApiBaseUrl("https://user:pass@ledger.my-domain.cn/api").code, "unsafe-url");
 });
 
+test("authenticated backend snapshots are mirrored to local storage", () => {
+  const runtime = createRuntime();
+  runtime.run(`(() => {
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    dataState.books = [{ id: "book-1", name: "移动账本", category: "个人" }];
+    dataState.currentBookId = "book-1";
+    dataState.accounts = [{ id: "account-1", name: "手机钱包", kind: "资金", initial: 100, initialCents: 10000 }];
+    dataState.records = [{ id: "record-1", type: "支出", amount: 12.5, amountCents: 1250,
+      category: "餐饮", note: "本机缓存", date: "2026-09-17", account: "account-1" }];
+    dataState.customTypes = [{ name: "自定义", side: "neutral" }];
+    dataState.customCategories = ["旅行"];
+  })()`);
+
+  assert.equal(runtime.run("persistBackendSnapshotLocally()"), true);
+  const stored = runtime.localStorage.toObject();
+  assert.equal(JSON.parse(stored.jizhangben_books)[0].id, "book-1");
+  assert.equal(JSON.parse(stored.jizhangben_current_book), "book-1");
+  assert.equal(JSON.parse(stored["jizhangben_accounts_book-1"])[0].initialCents, 10000);
+  assert.equal(JSON.parse(stored["jizhangben_records_book-1"])[0].amountCents, 1250);
+  assert.deepEqual(JSON.parse(stored.jizhangben_custom_categories), ["旅行"]);
+});
+
 function installFormDom(runtime) {
   runtime.run(`(() => {
     const ids = [

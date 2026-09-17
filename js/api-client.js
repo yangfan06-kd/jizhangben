@@ -181,6 +181,25 @@ function backendRecordWritesEnabled() {
   );
 }
 
+// 服务端成功读取或写入后，把当前账号的完整快照留在设备 localStorage。
+// 这份副本用于网络暂时不可用时的本地回退，不改变服务端作为跨设备同步来源的角色。
+function persistBackendSnapshotLocally() {
+  if (dataState.authStatus !== "authenticated" || !dataState.authUser) return false;
+  try {
+    saveBooks();
+    appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(dataState.currentBookId));
+    saveCustomTypes();
+    saveCustomCategories();
+    if (dataState.currentBookId) {
+      saveAccounts();
+      save();
+    }
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 function backendOptionId(map, name) {
   if (!map || !name) return null;
   const id = map[name];
@@ -190,8 +209,12 @@ function backendOptionId(map, name) {
 async function refreshBackendOverviewAfterWrite() {
   if (!dataState.backendBooksLoaded) return false;
   try {
-    return await hydrateOverviewFromBackend();
+    const loaded = await hydrateOverviewFromBackend();
+    persistBackendSnapshotLocally();
+    return loaded;
   } catch (error) {
+    // 统计刷新失败不应抹掉刚刚已经成功写入的本地镜像。
+    persistBackendSnapshotLocally();
     return false;
   }
 }
@@ -199,7 +222,9 @@ async function refreshBackendOverviewAfterWrite() {
 async function refreshBackendRecordsAfterWrite() {
   if (!dataState.backendBooksLoaded || !dataState.currentBookId) return false;
   try {
-    return await hydrateRecordsFromBackend();
+    const loaded = await hydrateRecordsFromBackend();
+    if (loaded) persistBackendSnapshotLocally();
+    return loaded;
   } catch (error) {
     return false;
   }
@@ -436,7 +461,7 @@ async function startBackendReadHydration(allowEmptyBooks = false) {
     if (!await hydrateRecordsFromBackend()) throw new Error("records_response_invalid");
     if (!await hydrateOverviewFromBackend()) throw new Error("overview_response_invalid");
     if (!uiState.startupNotice) {
-      uiState.startupNotice = "已读取服务端账本、账户、选项和当前账本明细；新建账本、账户和账目会优先同步服务端，账目修改与删除也会优先同步服务端，网络异常时再回退到浏览器本地。";
+      uiState.startupNotice = "已读取服务端账本、账户、选项和当前账本明细，并缓存到本机；新建账本、账户和账目会优先同步服务端，网络异常时再回退到本机数据。";
     }
     renderBookSelect();
     renderBookList();
@@ -446,6 +471,7 @@ async function startBackendReadHydration(allowEmptyBooks = false) {
     if (typeof renderCategoryChips === "function") renderCategoryChips();
     updateFormFields();
     render();
+    persistBackendSnapshotLocally();
     return true;
   } catch (e) {
     if (backendApi.baseUrl() && dataState.authStatus !== "authenticated") {
