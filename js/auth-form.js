@@ -109,12 +109,28 @@ function setAuthMode(mode) {
   const submit = document.getElementById("authSubmitBtn");
   const loginTab = document.getElementById("authLoginTab");
   const registerTab = document.getElementById("authRegisterTab");
+  const confirmField = document.getElementById("authConfirmField");
+  const passwordHint = document.getElementById("authPasswordHint");
+  const passwordInput = document.getElementById("authPassword");
+  const confirmInput = document.getElementById("authPasswordConfirm");
   if (title) title.textContent = authMode === "register" ? "创建账号" : "登录记账本";
   if (nameField) nameField.hidden = authMode !== "register";
+  if (confirmField) confirmField.hidden = authMode !== "register";
+  if (passwordHint) passwordHint.textContent = authMode === "register"
+    ? "密码至少 8 个字符，注册后会自动登录。"
+    : "登录时填写注册账号的密码。";
+  if (passwordInput && typeof passwordInput.setAttribute === "function") {
+    passwordInput.setAttribute("autocomplete", authMode === "register" ? "new-password" : "current-password");
+  }
+  if (authMode === "login" && confirmInput) confirmInput.value = "";
   if (submit) submit.textContent = authMode === "register" ? "注册并登录" : "登录";
   if (loginTab) loginTab.classList.toggle("active", authMode === "login");
   if (registerTab) registerTab.classList.toggle("active", authMode === "register");
   showAuthMsg("");
+}
+
+function isValidAuthEmail(email) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
 }
 
 function openAuthPanel(mode = "login") {
@@ -150,9 +166,14 @@ async function submitAuth() {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
   const displayName = document.getElementById("authDisplayName").value.trim();
+  const passwordConfirm = document.getElementById("authPasswordConfirm").value;
   if (!email) { showAuthMsg("请填写邮箱"); return; }
+  if (!isValidAuthEmail(email)) { showAuthMsg("请输入有效的邮箱地址"); return; }
   if (!password) { showAuthMsg("请填写密码"); return; }
+  if (authMode === "register" && password.length < 8) { showAuthMsg("密码至少需要 8 个字符"); return; }
   if (authMode === "register" && !displayName) { showAuthMsg("请填写显示名称"); return; }
+  if (authMode === "register" && displayName.length > 100) { showAuthMsg("显示名称不能超过 100 个字符"); return; }
+  if (authMode === "register" && password !== passwordConfirm) { showAuthMsg("两次输入的密码不一致"); return; }
   if (!backendApi.baseUrl()) {
     showAuthMsg("当前是本地文件模式，请先用 HTTP 服务打开页面");
     return;

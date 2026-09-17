@@ -45,7 +45,12 @@
     </div>
     <div class="field">
       <div class="field-label">密码</div>
-      <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 8 个字符">
+      <input id="authPassword" type="password" autocomplete="current-password" placeholder="至少 8 个字符" minlength="8" maxlength="200">
+      <div id="authPasswordHint" class="auth-password-hint">登录时填写注册账号的密码；注册密码至少 8 个字符。</div>
+    </div>
+    <div class="field" id="authConfirmField" hidden>
+      <div class="field-label">确认密码</div>
+      <input id="authPasswordConfirm" type="password" autocomplete="new-password" placeholder="再次输入密码" minlength="8" maxlength="200">
     </div>
     <button id="authSubmitBtn" class="btn-primary" type="button">登录</button>
     <div id="authMsg" class="form-msg"></div>

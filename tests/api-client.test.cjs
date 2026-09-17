@@ -9,7 +9,8 @@ function installFormDom(runtime) {
       "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg",
       "authStatus", "authOpenBtn", "authLogoutBtn", "authPanel", "authTitle", "authCloseBtn",
       "authLoginTab", "authRegisterTab", "authNameField", "authEmail", "authDisplayName",
-      "authPassword", "authSubmitBtn", "authMsg", "startupNotice", "ledgerApp", "authEntryHint"
+      "authPassword", "authPasswordHint", "authConfirmField", "authPasswordConfirm",
+      "authSubmitBtn", "authMsg", "startupNotice", "ledgerApp", "authEntryHint"
     ];
     const elements = Object.fromEntries(ids.map(id => [id, {
       value: "",
@@ -196,6 +197,34 @@ test("HTTP entry hides the ledger until authentication succeeds", () => {
   })()`);
   assert.equal(runtime.run("document.getElementById('ledgerApp').hidden"), false);
   assert.equal(runtime.run("document.getElementById('authPanel').hidden"), true);
+});
+
+test("registration validates password confirmation before sending credentials", async () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    setAuthMode("register");
+    formElements.authEmail.value = "new-user@example.com";
+    formElements.authDisplayName.value = "新用户";
+    formElements.authPassword.value = "correct-horse-battery";
+    formElements.authPasswordConfirm.value = "different-password";
+    window.calls = [];
+    window.fetch = async (url, options) => {
+      window.calls.push({ url, options });
+      return { ok: true, json: async () => ({ id: "user-1", display_name: "新用户" }) };
+    };
+  })()`);
+
+  await runtime.run("submitAuth()");
+  assert.equal(runtime.run("window.calls.length"), 0);
+  assert.match(runtime.run("document.getElementById('authMsg').textContent"), /密码不一致/);
+
+  runtime.run("formElements.authPasswordConfirm.value = 'correct-horse-battery'; startBackendReadHydration = async () => false;");
+  await runtime.run("submitAuth()");
+  assert.equal(runtime.run("window.calls.length"), 1);
+  assert.equal(JSON.parse(runtime.run("window.calls[0].options.body")).password_confirm, undefined);
+  assert.equal(runtime.run("dataState.authStatus"), "authenticated");
 });
 
 test("an expired backend session returns the page to the login gate", async () => {

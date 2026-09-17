@@ -73,6 +73,12 @@
     font-size: 14px;
     line-height: 1.6;
   }
+  .auth-password-hint {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
   .auth-panel-head {
     display: flex;
     align-items: center;
@@ -186,7 +192,8 @@
   .field-row { display: flex; gap: 12px; }
   .field-row .field { flex: 1; }
 
-  input[type="number"], input[type="text"], input[type="date"] {
+  input[type="number"], input[type="text"], input[type="date"],
+  input[type="email"], input[type="password"] {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--line);
@@ -484,7 +491,8 @@
     .tab { min-height: 44px; }
     .chip, .mini-btn, .btn-ghost { min-height: 44px; }
     .mini-btn { min-width: 44px; padding: 8px 10px; }
-    input[type="number"], input[type="text"], input[type="date"], select {
+    input[type="number"], input[type="text"], input[type="date"],
+    input[type="email"], input[type="password"], select {
       min-height: 44px;
     }
   }
