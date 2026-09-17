@@ -390,7 +390,6 @@ function startEdit(id) {
   renderTypeChips();
   renderCategoryChips();
   switchTab("record");
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function cancelEdit() {

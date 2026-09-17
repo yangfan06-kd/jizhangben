@@ -247,5 +247,4 @@ function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }

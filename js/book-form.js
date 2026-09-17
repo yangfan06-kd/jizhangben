@@ -376,5 +376,4 @@ function toggleBookPanel(show) {
     document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
     renderBookList();
   }
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
