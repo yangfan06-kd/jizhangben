@@ -26,6 +26,17 @@ Android 调试包默认使用 `http://localhost:8000/api`，安装脚本会通�
 
 正式 HTTPS 后端供 APK 使用时，建议在部署环境设置 `JIZHANGBEN_SESSION_SAMESITE=none` 和 `JIZHANGBEN_SESSION_SECURE=1`，并在 `JIZHANGBEN_CORS_ORIGINS` 中保留 App 的 `http://localhost` 来源。`SameSite=None` 必须配合 HTTPS 和 Secure Cookie 使用；局域网 HTTP 同源浏览器继续使用默认的 `lax` 和自动 Secure 判断。构建 APK 前设置 `$env:JIZHANGBEN_API_BASE_URL` 为 HTTPS API 地址，再重新打包。
 
+## 正式 HTTPS 入口模板
+
+仓库中的 [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) 是反向代理模板。它把公开的 HTTPS 请求转发到本机 FastAPI 的 8000 端口，Caddy 负责自动申请和续期证书；域名必须已经解析到部署服务器，并且 80、443 端口可以从公网访问。
+
+1. 复制 [`deploy/.env.production.example`](../deploy/.env.production.example) 为部署机上的 `.env`，填写真实域名。
+2. 确认 `JIZHANGBEN_BIND=127.0.0.1`，再启动应用：`docker compose --env-file .env up --build -d`。这样 8000 端口只对本机开放，公网请求统一经过 Caddy。
+3. 在安装了 Caddy 的部署机上设置同名 `JIZHANGBEN_DOMAIN` 环境变量，并运行 `caddy run --config deploy/Caddyfile.example`。
+4. 用 `https://你的域名/api/health` 检查健康接口，再把 `$env:JIZHANGBEN_API_BASE_URL` 设置为 `https://你的域名/api` 后重新构建 APK。
+
+当前仓库只提供模板，不会在本地局域网环境自动申请证书；没有域名时继续使用 HTTP 局域网验收即可。
+
 ## 数据和安全默认值
 
 - `jizhangben-data` 是 Docker 命名卷，数据库位于 `/data/jizhangben.db`，删除容器不会删除该卷。

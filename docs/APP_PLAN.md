@@ -38,6 +38,8 @@
 
 HTTPS 配置要求：远程 API 给 Capacitor 的 `http://localhost` 页面使用时，将会话 Cookie 设置为 `SameSite=None; Secure`，并显式允许 `http://localhost` 的凭据跨域请求；局域网 HTTP 同源网页不需要这个跨来源配置。
 
+正式入口可使用 `deploy/Caddyfile.example`：Caddy 终止 HTTPS 并反向代理到 FastAPI 8000 端口，应用容器不需要直接处理证书。域名和 80/443 公网入口准备好后，再用 HTTPS API 地址重新同步网页资源并构建 APK。
+
 ### D. 可选发布准备
 
 1. 添加应用图标、启动页、签名密钥和版本号管理。

@@ -1,0 +1,8 @@
+# 正式 HTTPS 反向代理模板。
+# 使用前把 JIZHANGBEN_DOMAIN 设置为已经解析到服务器的域名。
+# Caddy 会自动申请并续期证书，应用本身继续监听 8000。
+
+{$JIZHANGBEN_DOMAIN} {
+    encode gzip
+    reverse_proxy 127.0.0.1:8000
+}
