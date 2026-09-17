@@ -2,6 +2,53 @@
 
 let authMode = "login";
 let authMsgTimer = null;
+let authPanelOpen = false;
+
+function isBackendAuthGateEnabled() {
+  return !!(typeof backendApi !== "undefined" && backendApi.baseUrl());
+}
+
+function clearLedgerStateForAuthGate() {
+  dataState.currentBookId = null;
+  dataState.books = [];
+  dataState.records = [];
+  dataState.accounts = [];
+  dataState.customTypes = [];
+  dataState.customCategories = [];
+  dataState.backendCategoryIds = Object.create(null);
+  dataState.backendTypeIds = Object.create(null);
+  dataState.backendBooksLoaded = false;
+  dataState.backendOptionsLoaded = false;
+  dataState.backendRecordsLoaded = false;
+  dataState.backendOverview = null;
+  if (typeof document !== "undefined" && typeof resetForm === "function") resetForm();
+  if (typeof document !== "undefined" && typeof resetAccountForm === "function") resetAccountForm();
+  if (typeof document !== "undefined" && typeof resetBookForm === "function") resetBookForm();
+  if (typeof resetFilterState === "function") resetFilterState();
+}
+
+function renderAuthGate() {
+  const ledger = document.getElementById("ledgerApp");
+  const panel = document.getElementById("authPanel");
+  const close = document.getElementById("authCloseBtn");
+  const hint = document.getElementById("authEntryHint");
+  const isAuthenticated = dataState.authStatus === "authenticated" && !!dataState.authUser;
+  const gateActive = isBackendAuthGateEnabled() && !isAuthenticated;
+  const app = typeof document.querySelector === "function" ? document.querySelector(".app") : null;
+  const bookBar = typeof document.querySelector === "function" ? document.querySelector(".book-bar") : null;
+  const authBar = typeof document.querySelector === "function" ? document.querySelector(".auth-bar") : null;
+
+  if (ledger) ledger.hidden = gateActive;
+  if (panel) {
+    panel.classList.toggle("auth-entry-panel", gateActive);
+    panel.hidden = gateActive ? false : !authPanelOpen;
+  }
+  if (close) close.hidden = gateActive;
+  if (hint) hint.hidden = !gateActive;
+  if (app) app.classList.toggle("auth-gate", gateActive);
+  if (bookBar) bookBar.hidden = gateActive;
+  if (authBar) authBar.hidden = gateActive;
+}
 
 function showAuthMsg(text, isError = true) {
   const message = document.getElementById("authMsg");
@@ -33,13 +80,14 @@ function renderAuthStatus() {
     logout.hidden = false;
   } else if (dataState.authStatus === "loading") {
     status.textContent = "正在检查登录状态…";
-    open.hidden = false;
+    open.hidden = true;
     logout.hidden = true;
   } else {
-    status.textContent = backendApi.baseUrl() ? "未登录（本地兼容模式）" : "本地模式";
+    status.textContent = backendApi.baseUrl() ? "未登录，请先登录" : "本地模式";
     open.hidden = false;
     logout.hidden = true;
   }
+  renderAuthGate();
 }
 
 function handleBackendAuthExpired() {
@@ -47,9 +95,8 @@ function handleBackendAuthExpired() {
   dataState.authUser = null;
   dataState.authStatus = "guest";
   dataState.authHydrated = true;
-  // 会话失效后不继续把页面当成服务端数据，恢复到浏览器本地快照。
-  restoreLocalStateFromStorage();
-  showAuthDataNotice("登录状态已过期，请重新登录；当前显示浏览器本地数据。");
+  clearLedgerStateForAuthGate();
+  showAuthDataNotice("登录状态已过期，请重新登录后继续使用。");
   renderAuthStatus();
   if (wasAuthenticated) showAuthMsg("登录状态已过期，请重新登录");
   if (typeof render === "function") render();
@@ -74,13 +121,18 @@ function openAuthPanel(mode = "login") {
   const panel = document.getElementById("authPanel");
   if (!panel) return;
   setAuthMode(mode);
+  authPanelOpen = true;
   panel.hidden = false;
+  renderAuthGate();
   document.getElementById("authEmail").focus();
 }
 
 function closeAuthPanel() {
   const panel = document.getElementById("authPanel");
+  if (isBackendAuthGateEnabled() && dataState.authStatus !== "authenticated") return;
+  authPanelOpen = false;
   if (panel) panel.hidden = true;
+  renderAuthGate();
 }
 
 function setAuthBusy(busy) {
@@ -125,15 +177,15 @@ async function submitAuth() {
   dataState.authUser = user;
   dataState.authStatus = "authenticated";
   dataState.authHydrated = true;
-  closeAuthPanel();
-  renderAuthStatus();
   // 登录用户可能还没有账本，必须允许空账本响应替换本地兼容数据。
   uiState.startupNotice = "";
   const hydrated = await startBackendReadHydration(true);
   if (!hydrated && dataState.authStatus === "authenticated") {
-    showAuthDataNotice("已登录，但服务端账本暂时无法读取；当前显示浏览器本地数据，可稍后重试。");
+    showAuthDataNotice("已登录，但服务端账本暂时无法读取，请稍后重试。当前未显示本地账本数据。");
     showAuthMsg("服务端数据暂时无法读取", true);
   }
+  closeAuthPanel();
+  renderAuthStatus();
   render();
   setAuthBusy(false);
 }
@@ -148,8 +200,8 @@ async function logoutAuth() {
   dataState.authUser = null;
   dataState.authStatus = "guest";
   dataState.authHydrated = true;
-  restoreLocalStateFromStorage();
-  showAuthDataNotice("已退出登录，当前显示浏览器本地数据。");
+  clearLedgerStateForAuthGate();
+  showAuthDataNotice("已退出登录，请重新登录后继续使用。");
   renderAuthStatus();
   if (typeof render === "function") render();
 }
@@ -171,20 +223,20 @@ async function hydrateAuthSession() {
     dataState.authUser = null;
     dataState.authStatus = "guest";
     dataState.authHydrated = true;
+    clearLedgerStateForAuthGate();
     renderAuthStatus();
-    await startBackendReadHydration(false);
     return false;
   }
   dataState.authUser = user;
   dataState.authStatus = "authenticated";
   dataState.authHydrated = true;
-  renderAuthStatus();
   uiState.startupNotice = "";
   const hydrated = await startBackendReadHydration(true);
   if (!hydrated && dataState.authStatus === "authenticated") {
-    showAuthDataNotice("已登录，但服务端账本暂时无法读取；当前显示浏览器本地数据，可稍后重试。");
+    showAuthDataNotice("已登录，但服务端账本暂时无法读取，请稍后重试。当前未显示本地账本数据。");
     showAuthMsg("服务端数据暂时无法读取", true);
   }
+  renderAuthStatus();
   render();
   return true;
 }

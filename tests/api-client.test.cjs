@@ -9,7 +9,7 @@ function installFormDom(runtime) {
       "accName", "accKind", "accInitial", "accSaveBtn", "accCancelBtn", "accMsg",
       "authStatus", "authOpenBtn", "authLogoutBtn", "authPanel", "authTitle", "authCloseBtn",
       "authLoginTab", "authRegisterTab", "authNameField", "authEmail", "authDisplayName",
-      "authPassword", "authSubmitBtn", "authMsg", "startupNotice"
+      "authPassword", "authSubmitBtn", "authMsg", "startupNotice", "ledgerApp", "authEntryHint"
     ];
     const elements = Object.fromEntries(ids.map(id => [id, {
       value: "",
@@ -174,7 +174,31 @@ test("auth form login accepts an authenticated user with no server books yet", a
   assert.equal(runtime.run("document.getElementById('authPanel').hidden"), true);
 });
 
-test("an expired backend session returns the page to local compatibility mode", async () => {
+test("HTTP entry hides the ledger until authentication succeeds", () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.location = { protocol: "http:" };
+    dataState.authStatus = "guest";
+    dataState.authUser = null;
+    renderAuthStatus();
+  })()`);
+
+  assert.equal(runtime.run("document.getElementById('ledgerApp').hidden"), true);
+  assert.equal(runtime.run("document.getElementById('authPanel').hidden"), false);
+  assert.equal(runtime.run("document.getElementById('authEntryHint').hidden"), false);
+  assert.equal(runtime.run("document.getElementById('authCloseBtn').hidden"), true);
+
+  runtime.run(`(() => {
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
+    renderAuthStatus();
+  })()`);
+  assert.equal(runtime.run("document.getElementById('ledgerApp').hidden"), false);
+  assert.equal(runtime.run("document.getElementById('authPanel').hidden"), true);
+});
+
+test("an expired backend session returns the page to the login gate", async () => {
   const runtime = createRuntime();
   installFormDom(runtime);
   runtime.run(`(() => {
@@ -196,8 +220,10 @@ test("an expired backend session returns the page to local compatibility mode", 
   );
   assert.equal(runtime.run("dataState.authStatus"), "guest");
   assert.equal(runtime.run("dataState.authUser"), null);
-  assert.equal(runtime.run("window.restored"), true);
+  assert.equal(runtime.run("window.restored"), false);
   assert.match(runtime.run("uiState.startupNotice"), /登录状态已过期/);
+  assert.equal(runtime.run("document.getElementById('ledgerApp').hidden"), true);
+  assert.equal(runtime.run("document.getElementById('authPanel').hidden"), false);
 });
 
 test("a successful login keeps the user visible when server data is temporarily unavailable", async () => {
@@ -220,7 +246,7 @@ test("a successful login keeps the user visible when server data is temporarily 
   assert.match(runtime.run("uiState.startupNotice"), /服务端账本暂时无法读取/);
 });
 
-test("logout clears the session state and labels the local compatibility mode", async () => {
+test("logout clears the session state and returns to the login gate", async () => {
   const runtime = createRuntime();
   installFormDom(runtime);
   runtime.run(`(() => {
@@ -235,9 +261,11 @@ test("logout clears the session state and labels the local compatibility mode", 
   await runtime.run("logoutAuth()");
   assert.equal(runtime.run("dataState.authStatus"), "guest");
   assert.equal(runtime.run("dataState.authUser"), null);
-  assert.equal(runtime.run("window.restored"), true);
+  assert.equal(runtime.run("window.restored"), false);
   assert.equal(runtime.run("document.getElementById('authOpenBtn').hidden"), false);
   assert.equal(runtime.run("document.getElementById('authLogoutBtn').hidden"), true);
+  assert.equal(runtime.run("document.getElementById('ledgerApp').hidden"), true);
+  assert.equal(runtime.run("document.getElementById('authPanel').hidden"), false);
   assert.match(runtime.run("uiState.startupNotice"), /已退出登录/);
 });
 
@@ -1052,6 +1080,8 @@ test("startBackendReadHydration restores the local snapshot when account loading
     dataState.books = [{ id: 7, name: "本地账本", category: "个人" }];
     dataState.currentBookId = 7;
     dataState.accounts = [{ id: 9, name: "现金", kind: "资金", initial: 0, initialCents: 0 }];
+    dataState.authStatus = "authenticated";
+    dataState.authUser = { id: "user-1", display_name: "学习者" };
   })()`);
 
   assert.equal(await runtime.run("startBackendReadHydration()"), false);

@@ -1,5 +1,5 @@
 // 后端读取层：只负责请求和响应映射，不直接操作 DOM 或 localStorage。
-// 当前阶段采用“后端读取 + 分阶段写入”的渐进接入方式，失败时由原有本地流程继续工作。
+// HTTP 页面登录后读取服务端数据；直接打开文件时继续由原有本地流程工作。
 
 function notifyBackendAuthExpired(path, error) {
   // 登录接口自己的 401（例如密码错误）应该留在登录表单里，不要清理已有页面状态。
@@ -385,8 +385,9 @@ async function hydrateOverviewFromBackend() {
   return true;
 }
 
-// 启动时异步尝试一次，不阻塞原有本地页面；任何网络错误都静默回到 localStorage。
+// 读取服务端账本时保留调用前快照，普通网络失败可以回退；认证失效则由登录入口接管。
 async function startBackendReadHydration(allowEmptyBooks = false) {
+  if (backendApi.baseUrl() && dataState.authStatus !== "authenticated") return false;
   const localBooks = dataState.books;
   const localCurrentBookId = dataState.currentBookId;
   const localAccounts = dataState.accounts;
@@ -414,6 +415,10 @@ async function startBackendReadHydration(allowEmptyBooks = false) {
     render();
     return true;
   } catch (e) {
+    if (backendApi.baseUrl() && dataState.authStatus !== "authenticated") {
+      if (typeof clearLedgerStateForAuthGate === "function") clearLedgerStateForAuthGate();
+      return false;
+    }
     // 账本和账户要么一起切换，要么一起回到启动时的本地快照。
     dataState.books = localBooks;
     dataState.currentBookId = localCurrentBookId;

@@ -57,6 +57,22 @@
     font-size: 13px;
   }
   .auth-panel { margin-bottom: 20px; }
+  .auth-entry-panel {
+    max-width: 480px;
+    margin: 28px auto 20px;
+    padding: 28px 24px 24px;
+  }
+  .auth-entry-panel .auth-panel-head {
+    display: block;
+    margin-bottom: 8px;
+  }
+  .auth-entry-panel .auth-panel-head h2 { font-size: 22px; }
+  .auth-entry-hint {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+  }
   .auth-panel-head {
     display: flex;
     align-items: center;
@@ -77,6 +93,10 @@
     font-size: 14px;
     line-height: 1.6;
   }
+
+  .app.auth-gate .book-bar,
+  .app.auth-gate .auth-bar { display: none; }
+  .app.auth-gate header { margin-bottom: 8px; }
 
   /* ===== 统计卡片（深色，是本页的视觉中心） ===== */
   .stats {

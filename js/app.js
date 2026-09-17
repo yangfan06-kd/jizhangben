@@ -70,21 +70,28 @@ document.getElementById("migrationFile").onchange = async (e) => {
 document.getElementById("migrationConfirmBtn").onclick = confirmMigrationImport;
 document.getElementById("migrationCancelBtn").onclick = clearMigrationPreview;
 
-// 先读账本清单，定好当前是哪个账本，再读该账本的数据
-loadBooks();
-load();
-loadAccounts();
-loadCustomTypes();
-loadCustomCategories();
-renderBookSelect();
-renderBookList();
-renderTypeChips();
-renderCategoryChips();
-renderAccountSelects();
-fillCategoryFilter();
-updateFormFields();
-render();
+function initializeLocalLedger() {
+  // 直接打开文件时使用原有 localStorage 流程，保留离线兼容能力。
+  loadBooks();
+  load();
+  loadAccounts();
+  loadCustomTypes();
+  loadCustomCategories();
+  renderBookSelect();
+  renderBookList();
+  renderTypeChips();
+  renderCategoryChips();
+  renderAccountSelects();
+  fillCategoryFilter();
+  updateFormFields();
+  render();
+}
 
-// 本地页面先立即可用，再检查会话；登录用户允许服务端返回空账本替换本地兼容数据。
-renderAuthStatus();
-hydrateAuthSession();
+// HTTP 页面先进入登录入口，不读取或显示浏览器里的本地账本；登录成功后再读取服务端数据。
+if (backendApi.baseUrl()) {
+  renderAuthStatus();
+  hydrateAuthSession();
+} else {
+  initializeLocalLedger();
+  renderAuthStatus();
+}
