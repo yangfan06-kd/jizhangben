@@ -42,6 +42,7 @@ function createRuntime(initialStorage = {}) {
     "js/constants.js",
     "js/state.js",
     "js/helpers.js",
+    "js/filters.js",
     "js/deposit-form.js",
     "js/storage-adapter.js",
     "js/migrations.js",

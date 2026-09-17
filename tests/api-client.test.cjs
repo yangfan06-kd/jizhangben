@@ -125,6 +125,19 @@ test("backendApi explains a successful HTML response instead of exposing a JSON 
   );
 });
 
+test("local detail search includes the deposit counterpart", () => {
+  const runtime = createRuntime();
+  runtime.run(`(() => {
+    filterState.searchKey = "房东";
+  })()`);
+  assert.equal(runtime.run(`matchesSearch({
+    note: "押金测试", depositTarget: "房东", category: "居住", type: "押金"
+  })`), true);
+  assert.equal(runtime.run(`matchesSearch({
+    note: "押金测试", depositTarget: "中介", category: "居住", type: "押金"
+  })`), false);
+});
+
 test("migration preview money formatting keeps cents exact", () => {
   const runtime = createRuntime();
   assert.equal(runtime.run("formatPreviewMoney(31200)"), "¥312.00");

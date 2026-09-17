@@ -12,11 +12,11 @@ function filterByPeriod(recs) {
   });
 }
 
-// 搜索关键字：匹配备注 / 类别 / 类型（不区分大小写）
+// 搜索关键字：匹配备注 / 押金对象 / 类别 / 类型（不区分大小写）
 function matchesSearch(r) {
   const k = filterState.searchKey.trim().toLowerCase();
   if (!k) return true;
-  const hay = ((r.note || "") + " " + r.category + " " + r.type).toLowerCase();
+  const hay = ((r.note || "") + " " + (r.depositTarget || "") + " " + r.category + " " + r.type).toLowerCase();
   return hay.includes(k);
 }
 

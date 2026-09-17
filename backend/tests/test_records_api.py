@@ -282,6 +282,20 @@ async def test_get_records_returns_display_data_and_supports_filters(tmp_path):
         category_records = await get_records(application, params={"category_id": "category-2"})
         type_keyword_records = await get_records(application, params={"q": "收入"})
         category_keyword_records = await get_records(application, params={"q": "交通"})
+        deposit = await post_record(
+            application,
+            {
+                "type_id": "type-deposit",
+                "category_id": "category-1",
+                "account_id": "account-1",
+                "amount_cents": 100000,
+                "occurred_on": "2026-09-08",
+                "note": "",
+                "deposit_direction": "pay",
+                "deposit_target": "房东",
+            },
+        )
+        deposit_keyword_records = await get_records(application, params={"q": "房东"})
 
     assert newest.status_code == 201
     assert middle.status_code == 201
@@ -303,6 +317,9 @@ async def test_get_records_returns_display_data_and_supports_filters(tmp_path):
     assert [item["id"] for item in category_records.json()["items"]] == [middle_id, oldest_id]
     assert [item["id"] for item in type_keyword_records.json()["items"]] == [middle_id]
     assert [item["id"] for item in category_keyword_records.json()["items"]] == [middle_id, oldest_id]
+    assert deposit.status_code == 201
+    assert len(deposit_keyword_records.json()["items"]) == 1
+    assert deposit_keyword_records.json()["items"][0]["deposit_target"] == "房东"
 
 
 @pytest.mark.anyio

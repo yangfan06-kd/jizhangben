@@ -247,9 +247,10 @@ def list_records(
     if query and query.strip():
         keyword = f"%{query.strip()}%"
         conditions.append(
-            "(records.note LIKE ? OR categories.name LIKE ? OR record_types.name LIKE ?)"
+            "(records.note LIKE ? OR records.deposit_target LIKE ? "
+            "OR categories.name LIKE ? OR record_types.name LIKE ?)"
         )
-        parameters.extend((keyword, keyword, keyword))
+        parameters.extend((keyword, keyword, keyword, keyword))
 
     with connect_database(database_path) as connection:
         book = connection.execute(
