@@ -70,6 +70,24 @@ function showAuthDataNotice(text) {
   }
 }
 
+function bindNetworkStatusEvents() {
+  if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+  window.addEventListener("online", () => {
+    if (dataState.offlineMode) {
+      showAuthDataNotice("网络已恢复，请点击“联网登录”同步本机数据。 ");
+    } else if (dataState.authStatus === "authenticated") {
+      showAuthDataNotice("网络已恢复，可以点击“同步”读取其他设备的新数据。 ");
+    }
+  });
+  window.addEventListener("offline", () => {
+    if (dataState.offlineMode) {
+      showAuthDataNotice("网络已断开，当前继续使用本机数据。 ");
+    } else if (dataState.authStatus === "authenticated") {
+      showAuthDataNotice("网络已断开，新记录会先保存在本机，恢复后可继续同步。 ");
+    }
+  });
+}
+
 async function hydrateAuthenticatedData() {
   uiState.startupNotice = "";
   const migration = typeof maybeOfferLocalMigration === "function"

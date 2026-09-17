@@ -96,6 +96,7 @@ function initializeLocalLedger() {
 }
 
 // HTTP 页面先进入登录入口，不读取或显示浏览器里的本地账本；登录成功后再读取服务端数据。
+bindNetworkStatusEvents();
 if (backendApi.baseUrl()) {
   // 先准备本机快照，网络不可达时可以立即切换到离线模式；认证成功后再用服务端快照替换。
   loadLocalLedgerState();

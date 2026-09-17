@@ -83,6 +83,27 @@ test("offline mode can be left before opening the network login form", () => {
   assert.equal(runtime.run("document.getElementById('authPanel').hidden"), false);
 });
 
+test("network status events explain recovery and offline saving", () => {
+  const runtime = createRuntime();
+  installFormDom(runtime);
+  runtime.run(`(() => {
+    window.listeners = {};
+    window.addEventListener = (name, handler) => { window.listeners[name] = handler; };
+    dataState.offlineMode = true;
+    dataState.authStatus = "guest";
+    bindNetworkStatusEvents();
+    window.listeners.online();
+  })()`);
+  assert.match(runtime.run("uiState.startupNotice"), /网络已恢复/);
+
+  runtime.run(`(() => {
+    dataState.offlineMode = false;
+    dataState.authStatus = "authenticated";
+    window.listeners.offline();
+  })()`);
+  assert.match(runtime.run("uiState.startupNotice"), /新记录会先保存在本机/);
+});
+
 function installFormDom(runtime) {
   runtime.run(`(() => {
     const ids = [
