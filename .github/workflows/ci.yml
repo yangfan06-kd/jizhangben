@@ -75,3 +75,25 @@ jobs:
           JIZHANGBEN_PORT=8000
           "@ | Set-Content -LiteralPath $envFile
           ./deploy/preflight.ps1 -EnvFile $envFile -SkipDns
+
+      - name: Build and smoke test Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker compose down -v
+          }
+          trap cleanup EXIT
+
+          docker compose build
+          docker compose up -d
+          for attempt in $(seq 1 30); do
+            if response=$(curl --fail --silent --show-error http://127.0.0.1:8000/api/health); then
+              echo "$response"
+              [[ "$response" == *'"status":"ok"'* ]]
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs
+          exit 1
