@@ -11,6 +11,7 @@ pytest-cache-files-*/
 # Local databases and secrets
 backend/data/*.db
 backend/data/*.db-*
+backups/
 .env
 
 # Frontend tooling

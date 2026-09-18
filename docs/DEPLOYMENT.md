@@ -65,7 +65,16 @@ npm run app:validate:release
 
 ```powershell
 docker compose down
-docker run --rm -v jizhangben_jizhangben-data:/data -v "${PWD}:/backup" alpine tar czf /backup/jizhangben-data.tgz -C /data .
+./deploy/backup-volume.ps1
 ```
 
-卷名如果被项目目录名改变，以 `docker volume ls` 显示的实际名称为准。网页内的 JSON 备份仍应定期导出，作为数据库卷之外的第二份备份。
+`backup-volume.ps1` 使用 SQLite backup API 从运行中的数据库生成一致的 `.db` 副本，并执行完整性检查和 SHA-256 输出。默认文件写入仓库旁的 `backups/` 目录，该目录已加入 Git 忽略；正式服务器应把输出目录改到独立磁盘或对象存储同步目录。
+
+如果 Compose 项目名或卷名不同，先用下面的命令查出实际卷名，再传给脚本：
+
+```powershell
+docker volume ls
+./deploy/backup-volume.ps1 -VolumeName "实际卷名" -OutputDirectory "D:\backup\jizhangben"
+```
+
+恢复演练不要直接覆盖正在使用的正式卷。先创建临时卷，把备份复制进去，再用临时容器执行结构和业务数量检查；确认恢复结果后删除临时卷。网页内的 JSON 备份仍应定期导出，作为数据库卷之外的第二份备份。
