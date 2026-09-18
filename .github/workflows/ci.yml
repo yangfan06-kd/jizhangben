@@ -42,3 +42,36 @@ jobs:
 
       - name: Run backend tests
         run: python -m pytest -q backend/tests
+
+      - name: Validate deployment scripts
+        shell: pwsh
+        run: |
+          $parseErrors = @()
+          foreach ($script in Get-ChildItem deploy -Filter *.ps1) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $script.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $parseErrors += ($script.Name + ": " + (($errors | ForEach-Object { $_.Message }) -join "; "))
+            }
+          }
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | Write-Error
+            exit 1
+          }
+
+          $envFile = Join-Path $env:RUNNER_TEMP "jizhangben-preflight.env"
+          @"
+          JIZHANGBEN_DOMAIN=ledger.test
+          JIZHANGBEN_CORS_ORIGINS=http://localhost
+          JIZHANGBEN_SESSION_SAMESITE=none
+          JIZHANGBEN_SESSION_SECURE=1
+          JIZHANGBEN_ALLOW_DEV_FALLBACK=0
+          JIZHANGBEN_BIND=127.0.0.1
+          JIZHANGBEN_PORT=8000
+          "@ | Set-Content -LiteralPath $envFile
+          ./deploy/preflight.ps1 -EnvFile $envFile -SkipDns
