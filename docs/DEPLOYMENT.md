@@ -41,6 +41,22 @@ npm run app:validate:release
 
 预检通过后可运行 `npm run app:build:release` 生成未签名发布 APK。当前工程没有签名密钥，产物只用于验证发布构建和网页资源注入；正式分发前还要配置签名并生成 AAB。
 
+## 正式部署前预检
+
+把 `deploy/.env.production.example` 复制为部署机上的 `deploy/.env`，填写真实域名后运行：
+
+```powershell
+./deploy/preflight.ps1 -EnvFile "./deploy/.env"
+```
+
+预检会检查域名格式、`http://localhost` App 来源、Secure Cookie、关闭开发回退、本机端口绑定、Compose 配置和正式 API 地址。服务器还没有 DNS 记录时可以暂时跳过 DNS 检查：
+
+```powershell
+./deploy/preflight.ps1 -EnvFile "./deploy/.env" -SkipDns
+```
+
+如果部署机安装了 Caddy，脚本也会验证 `deploy/Caddyfile.example`；本地没有 Caddy 时会明确标记为跳过，不会把局域网开发环境误判为正式部署完成。
+
 ## 正式 HTTPS 入口模板
 
 仓库中的 [`deploy/Caddyfile.example`](../deploy/Caddyfile.example) 是反向代理模板。它把公开的 HTTPS 请求转发到本机 FastAPI 的 8000 端口，Caddy 负责自动申请和续期证书；域名必须已经解析到部署服务器，并且 80、443 端口可以从公网访问。
