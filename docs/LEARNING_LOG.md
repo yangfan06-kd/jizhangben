@@ -1306,3 +1306,13 @@
 - 关键知识：本地缓存不只要保存内容，还要保存作用域；跨账号场景必须在迁移前验证缓存归属。
 - 面试表达：我在离线保护上继续补充账号作用域检查，把“防止覆盖自己的离线数据”和“防止把别人的缓存带入当前账号”拆成两条独立的安全边界。
 - 下一步：准备真实 HTTPS 域名和服务器后，验证同账号离线恢复与跨账号登录两条移动端路径。
+
+## 第 110 步：恢复 Docker Desktop 的临时 socket
+
+- 目标：在 Docker Desktop 启动失败时恢复本地记账本容器，同时保护已有 SQLite 数据卷。
+- 遇到的问题：Docker 后端启动时反复报 `sailor-ingest.sock` 和 `docker-secrets-engine\engine.sock` 无法重命名，Windows 返回错误 1920；直接删除 socket、关闭 WSL 和重启 Docker 都不能解除这些 AF_UNIX 临时文件的系统锁。
+- 解决方法：先确认 Docker 进程全部停止，再把只包含临时 socket 的 `AppData\Local\Docker\run` 和 `AppData\Local\docker-secrets-engine` 目录改名保留备份，创建空的同名目录后以正常系统权限重新启动 Docker Desktop。没有删除 `G:\DockerData`，也没有执行 Docker 的恢复出厂操作。
+- 验证方式：Docker 引擎恢复并报告 Server `29.8.0`；`jizhangben-app-1` 状态为 `Up (healthy)`，端口映射为 `0.0.0.0:8000->8000/tcp`；`/api/health` 返回 `{"status":"ok","database":"ok","schema_version":5}`；Git 工作区没有代码改动。
+- 关键知识：Docker 的临时运行 socket 与容器卷是两类数据，排障时应先按日志定位具体运行目录，只替换无法释放的临时目录，不能把“重置 Docker”当成默认修复方式。
+- 面试表达：我根据后端日志把故障从应用层缩小到 Windows AF_UNIX 临时 socket，保留原目录作为回退证据，用容器健康检查、API 数据库状态和 Git 工作区三层结果验证恢复没有破坏业务数据。
+- 下一步：继续准备真实 HTTPS 域名和服务器，完成移动网络登录、离线恢复、同步和会话过期验收。
