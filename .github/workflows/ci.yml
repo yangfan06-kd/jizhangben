@@ -97,3 +97,11 @@ jobs:
           done
           docker compose logs
           exit 1
+
+      - name: Validate Caddy HTTPS template
+        shell: bash
+        run: |
+          docker run --rm \
+            -e JIZHANGBEN_DOMAIN=ledger.test \
+            -v "$PWD/deploy/Caddyfile.example:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
