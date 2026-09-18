@@ -65,14 +65,16 @@
 - 第一个业务接口 `POST /api/books/{book_id}/records` 已支持创建普通账目、转账和押金关联
 - 已加入 GitHub Actions 持续集成，在提交和合并请求中自动运行前端 71 项、JavaScript 语法检查和后端回归
 - 已加入单容器 Docker Compose 部署基线，FastAPI 同源提供网页和 API，SQLite 使用持久化卷；详见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-- 已确定 Android App 路线：使用 Capacitor 复用现有网页，当前先建立 `mobile/www` 网页资源基线；Android 工具链、APK 和手机端 HTTPS 同步按 [`docs/APP_PLAN.md`](docs/APP_PLAN.md) 分阶段完成
+- 已确定 Android App 路线：使用 Capacitor 复用现有网页，当前优先交付个人离线 APK；安装到手机后不需要服务器、Docker、USB 或移动网络，数据保存在手机本地并可用 JSON 备份迁移。登录、HTTPS 同步和应用商店发布按 [`docs/APP_PLAN.md`](docs/APP_PLAN.md) 作为后续可选阶段
 - 已增加正式 App API 地址预检：发布构建前必须使用真实 HTTPS `/api` 地址，拒绝 localhost、回环地址和示例域名；调试包仍使用 USB 转发的本机地址
 
 ## 使用方法
 
 1. 下载或克隆本项目到本地
 2. 直接用浏览器打开 `index.html` 即可，无需安装或配置任何环境；此时使用 localStorage。本地联调后端或使用 Docker 时，通过 HTTP 页面访问，进入后先登录，登录成功后才读取服务端账本
-3. 数据存在当前浏览器的本地存储里，换浏览器或清除浏览器数据会丢失所有账本和账目，建议定期用「导出备份」留个底
+3. 数据存在当前浏览器或 App 的本地存储里，换浏览器、换手机或清除 App 数据不会自动带来原设备账目，建议定期用「导出备份」留个底
+
+安装 Android APK 后，个人离线模式直接使用手机本地存储；首次打开如果没有可用后端，会自动进入本机离线模式。此模式不提供账号登录和跨设备同步，换设备时使用 JSON 备份导入。
 
 通过 HTTP 打开页面时，读取层默认请求同源的 `/api`；如果前端和后端使用不同端口，可在加载入口脚本前设置 `window.JIZHANGBEN_API_BASE_URL`，例如 `http://127.0.0.1:8000/api`。登录后新建账本、账户和账目会优先写入服务端；账本、账户和账目修改与删除也优先使用服务端接口，网络异常时恢复当前会话开始前的快照。未登录时不会显示浏览器本地账本数据。
 

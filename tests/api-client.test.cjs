@@ -278,6 +278,12 @@ test("backendApi disables requests when the page is opened as a local file", () 
   assert.equal(runtime.run("backendApi.baseUrl()"), null);
 });
 
+test("backendApi stays disabled for an explicitly offline App build", () => {
+  const runtime = createRuntime();
+  runtime.run("window.JIZHANGBEN_OFFLINE_MODE = true");
+  assert.equal(runtime.run("backendApi.baseUrl()"), null);
+});
+
 test("backendApi posts local migration JSON and preserves server error codes", async () => {
   const runtime = createRuntime();
   runtime.run(`(() => {

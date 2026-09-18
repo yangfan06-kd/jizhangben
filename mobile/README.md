@@ -9,6 +9,19 @@
 - `www/` 是生成目录，不直接编辑；修改网页后运行 `npm run app:sync`。
 - Android 原生工程、JDK 21、Android SDK 和 ADB 已准备完成，工具与缓存统一放在 `G:\project\android-tools`。
 
+## 个人离线使用
+
+个人版不需要启动 Docker、不需要服务器或域名，也不需要一直连接 USB。安装 APK 后，账本、账户和账目保存在手机本地；没有可用后端时 App 会自动进入“本机离线模式”。不同手机的数据彼此独立，请在「备份」中导出 JSON 文件后再迁移到另一台设备。
+
+生成并安装个人调试 APK：
+
+```powershell
+npm run app:build:offline
+npm run app:install:offline
+```
+
+APK 文件仍位于 `android/app/build/outputs/apk/debug/app-debug.apk`。安装完成后可以拔掉 USB；USB 只用于把 APK 安装到手机，不是 App 日常使用条件。
+
 ## 后续命令
 
 ```powershell
@@ -21,7 +34,7 @@ npm run app:install:debug
 npx cap open android
 ```
 
-开发版默认把 API 配置为 `http://localhost:8000/api`。安装脚本会自动执行 USB 端口转发，让手机的 8000 端口连接到电脑的 8000 端口，因此调试时需要保持 USB 调试连接和电脑后端运行。也可以在构建前设置 `$env:JIZHANGBEN_API_BASE_URL` 覆盖地址；正式环境应使用 HTTPS 地址。
+联网调试版默认把 API 配置为 `http://localhost:8000/api`。安装脚本会自动执行 USB 端口转发，让手机的 8000 端口连接到电脑的 8000 端口；这只用于后端联调。个人离线版使用 `app:build:offline`，不会把联网调试作为运行前提。也可以在构建前设置 `$env:JIZHANGBEN_API_BASE_URL` 覆盖地址；正式联网环境应使用 HTTPS 地址。
 
 正式包准备真实域名后，先设置 `$env:JIZHANGBEN_API_BASE_URL` 并运行 `npm run app:validate:release`。检查通过后再同步网页资源；检查器会拦截本机地址、示例域名、非 HTTPS 地址和不完整的 `/api` 路径，避免把调试配置带进发布包。
 

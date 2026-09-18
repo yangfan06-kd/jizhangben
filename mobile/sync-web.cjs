@@ -3,6 +3,7 @@ const path = require("node:path");
 
 const repoRoot = path.resolve(__dirname, "..");
 const webDir = path.join(repoRoot, "mobile", "www");
+const offlineMode = /^(1|true|yes)$/i.test(String(process.env.JIZHANGBEN_OFFLINE_MODE || "").trim());
 const apiBaseUrl = (process.env.JIZHANGBEN_API_BASE_URL || "http://localhost:8000/api")
   .trim()
   .replace(/\/$/, "");
@@ -17,7 +18,8 @@ const mobileIndexHtml = indexHtml.replace(
 fs.writeFileSync(path.join(webDir, "index.html"), mobileIndexHtml, "utf8");
 fs.writeFileSync(
   path.join(webDir, "runtime-config.js"),
-  `window.JIZHANGBEN_API_BASE_URL = ${JSON.stringify(apiBaseUrl)};\n`,
+  `window.JIZHANGBEN_OFFLINE_MODE = ${offlineMode ? "true" : "false"};\n` +
+    `window.JIZHANGBEN_API_BASE_URL = ${offlineMode ? "null" : JSON.stringify(apiBaseUrl)};\n`,
   "utf8"
 );
 fs.cpSync(path.join(repoRoot, "css"), path.join(webDir, "css"), { recursive: true });
@@ -25,4 +27,4 @@ fs.cpSync(path.join(repoRoot, "js"), path.join(webDir, "js"), { recursive: true 
 fs.copyFileSync(path.join(repoRoot, "favicon.svg"), path.join(webDir, "favicon.svg"));
 
 console.log(`已同步 App 网页资源：${path.relative(repoRoot, webDir)}`);
-console.log(`App API 地址：${apiBaseUrl}`);
+console.log(offlineMode ? "App 运行模式：个人离线模式" : `App API 地址：${apiBaseUrl}`);

@@ -7,8 +7,10 @@
     "app:sync-capacitor": "npm run app:sync && npx cap sync",
     "app:validate:release": "node mobile/validate-api-url.cjs",
     "app:build:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/build-debug.ps1",
+    "app:build:offline": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/build-offline.ps1",
     "app:build:release": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/build-release.ps1",
-    "app:install:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/install-debug.ps1"
+    "app:install:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/install-debug.ps1",
+    "app:install:offline": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/install-offline.ps1"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
