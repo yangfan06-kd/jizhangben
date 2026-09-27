@@ -4,13 +4,17 @@
 // ============ 统计图（按明细筛选，收入/支出/综合按类别） ============
 function renderChartKindChips() {
   const box = document.getElementById("chartKindChips");
+  if (!box) return;
   box.innerHTML = "";
+  box.setAttribute("aria-label", "图表收支范围");
   ["支出", "收入", "综合"].forEach(k => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "chip";
     const val = (k === "支出") ? "expense" : (k === "收入") ? "income" : "combined";
     if (uiState.chartKind === val) b.classList.add("selected");
+    b.setAttribute("aria-pressed", uiState.chartKind === val ? "true" : "false");
+    b.setAttribute("aria-label", "按" + k + "查看统计图");
     b.textContent = k;
     b.onclick = () => {
       uiState.chartKind = val;
@@ -23,12 +27,17 @@ function renderChartKindChips() {
 
 function renderChartTypeChips() {
   const box = document.getElementById("chartTypeChips");
+  if (!box) return;
   box.innerHTML = "";
+  box.setAttribute("aria-label", "图表样式");
   ["柱形", "扇形"].forEach(t => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "chip";
-    if ((t === "柱形") === (uiState.chartType === "bar")) b.classList.add("selected");
+    const selected = (t === "柱形") === (uiState.chartType === "bar");
+    if (selected) b.classList.add("selected");
+    b.setAttribute("aria-pressed", selected ? "true" : "false");
+    b.setAttribute("aria-label", "使用" + t + "图");
     b.textContent = t;
     b.onclick = () => {
       uiState.chartType = (t === "柱形") ? "bar" : "pie";
@@ -78,9 +87,57 @@ function renderChart() {
   else renderPieChart(box, entries, total);
 }
 
+// 首页本月按日显示收入、支出的趋势，金额取实际收支口径，借贷和账户转账保持中性。
+function renderHomeTrendChart() {
+  const box = document.getElementById("homeTrendChart");
+  if (!box) return;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const days = now.getDate();
+  const income = Array(days).fill(0);
+  const expense = Array(days).fill(0);
+  dataState.records.forEach(record => {
+    const date = parseLocalDate(record.date);
+    if (!date || date.getFullYear() !== year || date.getMonth() !== month || date.getDate() > days) return;
+    const index = date.getDate() - 1;
+    const inc = incomeEffect(record);
+    const exp = expenseEffect(record);
+    if (inc > 0) income[index] += inc;
+    if (exp > 0) expense[index] += exp;
+  });
+  const total = income.reduce((sum, value) => sum + value, 0) + expense.reduce((sum, value) => sum + value, 0);
+  if (!total) {
+    box.innerHTML = '<div class="empty small">本月还没有收入或支出</div>';
+    return;
+  }
+  const W = 680, H = 250, padL = 42, padR = 14, padT = 26, padB = 34;
+  const chartW = W - padL - padR, chartH = H - padT - padB;
+  const max = Math.max(...income, ...expense, 1);
+  const x = index => padL + (days === 1 ? chartW / 2 : (index / (days - 1)) * chartW);
+  const y = value => padT + chartH - (value / max) * chartH;
+  const points = values => values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(" ");
+  let svg = `<svg class="home-trend-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="本月每日收入和支出趋势">`;
+  [0, 0.5, 1].forEach(level => {
+    const gy = padT + chartH * (1 - level);
+    const label = (max * level).toFixed(0);
+    svg += `<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${W - padR}" y2="${gy.toFixed(1)}" stroke="#E7EAF0" stroke-width="1"/>`;
+    svg += `<text x="${padL - 8}" y="${(gy + 4).toFixed(1)}" text-anchor="end" font-size="12" fill="#8A93A1">¥${label}</text>`;
+  });
+  svg += `<polyline points="${points(income)}" fill="none" stroke="#C03A3A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  svg += `<polyline points="${points(expense)}" fill="none" stroke="#2F8F83" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const labelStep = days > 14 ? 5 : 2;
+  for (let index = 0; index < days; index += labelStep) {
+    svg += `<text x="${x(index).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="12" fill="#8A93A1">${index + 1}日</text>`;
+  }
+  if ((days - 1) % labelStep !== 0) svg += `<text x="${x(days - 1).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="12" fill="#8A93A1">${days}日</text>`;
+  svg += `</svg>`;
+  box.innerHTML = `<div class="home-trend-legend"><span><i style="background:#C03A3A"></i>收入</span><span><i style="background:#2F8F83"></i>支出</span><span class="home-trend-month">${year}年${month + 1}月</span></div>${svg}`;
+}
+
 // ============ 综合图：柱形（每类两根柱子：红=收入，绿=支出） ============
 function renderCombinedBarChart(box, cats, incomeMap, expenseMap) {
-  const W = 600, H = 280, padT = 30, padB = 34, padL = 8, padR = 8;
+  const W = 640, H = 310, padT = 38, padB = 50, padL = 8, padR = 8;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const max = Math.max(
@@ -109,14 +166,14 @@ function renderCombinedBarChart(box, cats, incomeMap, expenseMap) {
     if (inc > 0) {
       const yIn = padT + (chartH - hIn);
       svg += `<rect x="${xIn.toFixed(1)}" y="${yIn.toFixed(1)}" width="${barW}" height="${hIn.toFixed(1)}" rx="3" fill="#C03A3A"/>`;
-      svg += `<text x="${(xIn + barW / 2).toFixed(1)}" y="${(yIn - 5).toFixed(1)}" font-size="9" text-anchor="middle" fill="#C03A3A">${inc.toFixed(0)} · ${incPct.toFixed(0)}%</text>`;
+      svg += `<text x="${(xIn + barW / 2).toFixed(1)}" y="${(yIn - 7).toFixed(1)}" font-size="12" font-weight="600" text-anchor="middle" fill="#C03A3A">${inc.toFixed(0)} · ${incPct.toFixed(0)}%</text>`;
     }
     if (exp > 0) {
       const yEx = padT + (chartH - hEx);
       svg += `<rect x="${xEx.toFixed(1)}" y="${yEx.toFixed(1)}" width="${barW}" height="${hEx.toFixed(1)}" rx="3" fill="#147D5A"/>`;
-      svg += `<text x="${(xEx + barW / 2).toFixed(1)}" y="${(yEx - 5).toFixed(1)}" font-size="9" text-anchor="middle" fill="#147D5A">${exp.toFixed(0)} · ${expPct.toFixed(0)}%</text>`;
+      svg += `<text x="${(xEx + barW / 2).toFixed(1)}" y="${(yEx - 7).toFixed(1)}" font-size="12" font-weight="600" text-anchor="middle" fill="#147D5A">${exp.toFixed(0)} · ${expPct.toFixed(0)}%</text>`;
     }
-    svg += `<text x="${cx.toFixed(1)}" y="${H - padB + 16}" font-size="10" text-anchor="middle" fill="#6B7280">${esc(cat)}</text>`;
+    svg += `<text x="${cx.toFixed(1)}" y="${H - padB + 19}" font-size="13" text-anchor="middle" fill="#6B7280">${esc(cat)}</text>`;
   });
   svg += `</svg>`;
 
@@ -168,7 +225,7 @@ function renderCombinedPieChart(box, cats, incomeMap, expenseMap) {
 }
 
 function renderBarChart(box, entries) {
-  const W = 600, H = 260, padT = 24, padB = 34, padL = 8, padR = 8;
+  const W = 640, H = 290, padT = 34, padB = 50, padL = 8, padR = 8;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const max = entries[0][1];
@@ -185,8 +242,8 @@ function renderBarChart(box, entries) {
     const color = CHART_COLORS[i % CHART_COLORS.length];
     const pct = total ? (amt / total * 100) : 0;
     svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="4" fill="${color}"/>`;
-    svg += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - padB + 16}" font-size="11" text-anchor="middle" fill="#6B7280">${esc(cat)}</text>`;
-    svg += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 6).toFixed(1)}" font-size="10" text-anchor="middle" fill="#1E2227">${amt.toFixed(0)} · ${pct.toFixed(0)}%</text>`;
+    svg += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - padB + 19}" font-size="13" text-anchor="middle" fill="#6B7280">${esc(cat)}</text>`;
+    svg += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 8).toFixed(1)}" font-size="12" font-weight="600" text-anchor="middle" fill="#1E2227">${amt.toFixed(0)} · ${pct.toFixed(0)}%</text>`;
   });
   svg += `</svg>`;
   box.innerHTML = svg;

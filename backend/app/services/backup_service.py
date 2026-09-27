@@ -249,6 +249,33 @@ def _preview_deposit_settlement(
     return difference, 0
 
 
+def _preview_deposit_net_worth_adjustment(
+    records: list[object],
+    types_by_id: dict[str, object],
+) -> int:
+    deposit_records = [
+        record for record in records
+        if types_by_id[record.type_id].behavior == "deposit"
+    ]
+    returns_by_original: dict[str, list[object]] = {}
+    for record in deposit_records:
+        if record.deposit_link_id:
+            returns_by_original.setdefault(str(record.deposit_link_id), []).append(record)
+
+    adjustment = 0
+    for original in deposit_records:
+        direction = original.deposit_direction
+        if direction not in {"pay", "receive"}:
+            continue
+        linked_returns = returns_by_original.get(str(original.id), [])
+        if any(record.deposit_final for record in linked_returns):
+            continue
+        returned_cents = sum(int(record.amount_cents) for record in linked_returns)
+        outstanding_cents = max(0, int(original.amount_cents) - returned_cents)
+        adjustment += outstanding_cents if direction == "pay" else -outstanding_cents
+    return adjustment
+
+
 def preview_backup(payload: BackupPayload) -> dict[str, object]:
     """只校验并计算备份摘要，不写入当前用户或任何数据库。"""
     grouped = _validate_payload(payload)
@@ -300,7 +327,7 @@ def preview_backup(payload: BackupPayload) -> dict[str, object]:
         net_worth_cents = sum(
             balances[account.id] if account.kind == "asset" else -balances[account.id]
             for account in accounts
-        )
+        ) + _preview_deposit_net_worth_adjustment(records, types_by_id)
         preview_books.append(
             {
                 "id": book.id,

@@ -3,6 +3,65 @@
 
 let msgTimer = null;
 
+function defaultRecordCategory() {
+  const categories = typeof allCategories === "function" ? allCategories() : [];
+  return categories.includes("餐饮") ? "餐饮" : (categories[0] || null);
+}
+
+function defaultRecordAccountId() {
+  const accounts = Array.isArray(dataState.accounts) ? dataState.accounts : [];
+  const preferred = accounts.find(account => account.name === "微信");
+  return preferred ? preferred.id : (accounts[0] ? accounts[0].id : "");
+}
+
+// 类型切换时只给“支出”提供常用默认值；其它类型要求用户自行选择。
+// 编辑旧账目不套用新建表单默认值，避免改类型时覆盖原有选择。
+function selectRecordType(type) {
+  const nextType = String(type || "");
+  const previousType = uiState.selectedType;
+  uiState.selectedType = nextType;
+  if (uiState.editingRecordId !== null) return;
+  if (nextType === "借贷") uiState.selectedCategory = null;
+  if (previousType === "借贷" && nextType !== "借贷") uiState.selectedLoanMode = null;
+  if (nextType === "代付") uiState.selectedCategory = null;
+  if (previousType === "代付" && nextType !== "代付") uiState.selectedPayMode = null;
+  if (nextType === "报销") uiState.selectedCategory = null;
+  if (nextType === "退款") uiState.selectedCategory = null;
+  if (nextType === "转账") uiState.selectedTransferMode = uiState.selectedTransferMode || "账户间转账";
+  if (previousType === "转账" && nextType !== "转账") uiState.selectedTransferMode = null;
+  const accountSel = typeof document !== "undefined" ? document.getElementById("accountSel") : null;
+  if (nextType === "支出") {
+    if (previousType !== "支出" || !uiState.selectedCategory) {
+      uiState.selectedCategory = defaultRecordCategory();
+    }
+    if (accountSel && (previousType !== "支出" || !accountSel.value)) {
+      accountSel.value = defaultRecordAccountId();
+      if (typeof syncAccountPickerValue === "function") syncAccountPickerValue("accountSel");
+    }
+    return;
+  }
+  if (previousType === "支出") {
+    uiState.selectedCategory = null;
+    if (accountSel) {
+      accountSel.value = "";
+      if (typeof syncAccountPickerValue === "function") syncAccountPickerValue("accountSel");
+    }
+  }
+}
+
+// 顶部类型栏与键盘快捷类型共用入口：先更新表单，再展开金额键盘。
+function chooseRecordType(type) {
+  selectRecordType(type);
+  renderTypeChips();
+  renderCategoryChips();
+  updateFormFields();
+  if (typeof showRecordKeyboard === "function") {
+    showRecordKeyboard();
+    const input = document.getElementById("amount");
+    if (input) input.focus({ preventScroll: true });
+  }
+}
+
 function showMsg(text, status = "error") {
   const m = document.getElementById("formMsg");
   m.textContent = text;
@@ -18,19 +77,49 @@ function showMsg(text, status = "error") {
 }
 
 function resetForm() {
-  uiState.selectedType = null;
-  uiState.selectedCategory = null;
+  // 新建账目默认从“支出”开始，减少一次点击；编辑时仍由 startEdit 覆盖。
+  if (typeof closeCategoryPicker === "function") closeCategoryPicker();
+  if (typeof resetRecordKeyboard === "function") resetRecordKeyboard();
+  uiState.selectedType = "支出";
+  uiState.selectedCategory = defaultRecordCategory();
   uiState.selectedDepositDir = null;
+  uiState.selectedLoanMode = null;
+  uiState.selectedPayMode = null;
+  uiState.selectedTransferMode = null;
+  uiState.balanceTargetAccountId = null;
+  uiState.balanceTargetRecordId = null;
   uiState.editingRecordId = null;
   uiState.recordSaveStatus = "idle";
   document.getElementById("amount").value = "";
   document.getElementById("note").value = "";
   document.getElementById("date").value = todayStr();
-  document.getElementById("accountSel").value = "";
+  document.getElementById("accountSel").value = defaultRecordAccountId();
   document.getElementById("toAccountSel").value = "";
+  const balancePrincipal = document.getElementById("balancePrincipal");
+  if (balancePrincipal) balancePrincipal.value = "";
+  const transferParty = document.getElementById("transferParty");
+  if (transferParty) transferParty.value = "";
+  if (typeof syncAccountPickerValue === "function") {
+    syncAccountPickerValue("accountSel");
+    syncAccountPickerValue("toAccountSel");
+  }
   document.getElementById("depositTarget").value = "";
   document.getElementById("depositLinkSel").value = "";
   document.getElementById("depositFinal").checked = false;
+  const loanPartyInput = document.getElementById("loanParty");
+  const loanLinkSelect = document.getElementById("loanLinkSel");
+  if (loanPartyInput) loanPartyInput.value = "";
+  if (loanLinkSelect) loanLinkSelect.value = "";
+  const payPartyInput = document.getElementById("payParty");
+  const payLinkSelect = document.getElementById("payLinkSel");
+  if (payPartyInput) payPartyInput.value = "";
+  if (payLinkSelect) payLinkSelect.value = "";
+  const reimbursementPartyInput = document.getElementById("reimbursementParty");
+  const reimbursementLinkSelect = document.getElementById("reimbursementLinkSel");
+  if (reimbursementPartyInput) reimbursementPartyInput.value = "";
+  if (reimbursementLinkSelect) reimbursementLinkSelect.value = "";
+  const refundLinkSelect = document.getElementById("refundLinkSel");
+  if (refundLinkSelect) refundLinkSelect.value = "";
   document.getElementById("saveBtn").textContent = "保存这笔账";
   document.getElementById("cancelBtn").style.display = "none";
   document.getElementById("formMsg").textContent = "";
@@ -38,6 +127,9 @@ function resetForm() {
   document.getElementById("categoryCustomBox").innerHTML = "";
   renderTypeChips();
   renderCategoryChips();
+  if (typeof renderLoanModeChips === "function") renderLoanModeChips();
+  if (typeof renderPayModeChips === "function") renderPayModeChips();
+  if (typeof renderTransferModeChips === "function") renderTransferModeChips();
   updateFormFields();
 }
 
@@ -94,7 +186,7 @@ function backendRecordPayload(record, typeId, categoryId) {
     type_id: typeId,
     category_id: categoryId,
     account_id: needsAccount(record.type) ? (record.account || null) : null,
-    to_account_id: record.type === "转账" ? (record.toAccount || null) : null,
+    to_account_id: record.type === "转账" && record.transferMode !== "转账他人" ? (record.toAccount || null) : null,
     amount_cents: record.amountCents,
     occurred_on: record.date,
     note: record.note || "",
@@ -122,7 +214,18 @@ function recordFingerprint(record) {
     accountName: accountNameById(record.account),
     toAccountName: accountNameById(record.toAccount),
     depositDir: record.depositDir || null,
-    depositTarget: record.depositTarget || null
+    depositTarget: record.depositTarget || null,
+    loanMode: record.loanMode || null,
+    loanParty: record.loanParty || null,
+    loanLinkId: record.loanLinkId || null,
+    payMode: record.payMode || null,
+    payParty: record.payParty || null,
+    payLinkId: record.payLinkId || null,
+    transferMode: record.transferMode || null,
+    transferParty: record.transferParty || null,
+    reimbursementParty: record.reimbursementParty || null,
+    reimbursementLinkId: record.reimbursementLinkId || null,
+    refundLinkId: record.refundLinkId || null
   };
 }
 
@@ -135,8 +238,19 @@ function localRecordMatchesFingerprint(record, fingerprint) {
     (record.note || "") === fingerprint.note &&
     accountNameById(record.account) === fingerprint.accountName &&
     accountNameById(record.toAccount) === fingerprint.toAccountName &&
+    (record.transferMode || null) === fingerprint.transferMode &&
+    (record.transferParty || null) === fingerprint.transferParty &&
     (record.depositDir || null) === fingerprint.depositDir &&
-    (record.depositTarget || null) === fingerprint.depositTarget;
+    (record.depositTarget || null) === fingerprint.depositTarget &&
+    (record.loanMode || null) === fingerprint.loanMode &&
+    (record.loanParty || null) === fingerprint.loanParty &&
+    (record.loanLinkId || null) === fingerprint.loanLinkId &&
+    (record.payMode || null) === fingerprint.payMode &&
+    (record.payParty || null) === fingerprint.payParty &&
+    (record.payLinkId || null) === fingerprint.payLinkId &&
+    (record.reimbursementParty || null) === fingerprint.reimbursementParty &&
+    (record.reimbursementLinkId || null) === fingerprint.reimbursementLinkId &&
+    (record.refundLinkId || null) === fingerprint.refundLinkId;
 }
 
 function findLocalRecordByFingerprint(fingerprint) {
@@ -153,10 +267,21 @@ function applyRecordDraft(target, draft) {
   target.date = draft.date;
   target.account = draft.account;
   target.toAccount = draft.toAccount;
+  target.transferMode = draft.transferMode;
+  target.transferParty = draft.transferParty;
   target.depositDir = draft.depositDir;
   target.depositTarget = draft.depositTarget;
   target.depositLinkId = draft.depositLinkId;
   target.depositFinal = draft.depositFinal;
+  target.loanMode = draft.loanMode;
+  target.loanParty = draft.loanParty;
+  target.loanLinkId = draft.loanLinkId;
+  target.payMode = draft.payMode;
+  target.payParty = draft.payParty;
+  target.payLinkId = draft.payLinkId;
+  target.reimbursementParty = draft.reimbursementParty;
+  target.reimbursementLinkId = draft.reimbursementLinkId;
+  target.refundLinkId = draft.refundLinkId;
 }
 
 function saveEditedRecordLocally(draft, originalFingerprint, message) {
@@ -187,6 +312,9 @@ function setRecordSaveBusy(busy) {
   const saveBtn = document.getElementById("saveBtn");
   const cancelBtn = document.getElementById("cancelBtn");
   if (saveBtn) {
+    if (typeof saveBtn.setAttribute === "function") {
+      saveBtn.setAttribute("aria-busy", busy ? "true" : "false");
+    }
     if (busy) {
       if (saveBtn.dataset) saveBtn.dataset.idleText = saveBtn.textContent;
       saveBtn.disabled = true;
@@ -211,30 +339,90 @@ async function handleSave() {
     showMsg("正在删除，请稍候", "busy");
     return;
   }
-  const amount = parseFloat(document.getElementById("amount").value);
+  const amount = typeof recordAmountValue === "function"
+    ? recordAmountValue()
+    : parseFloat(document.getElementById("amount").value);
   const amountCents = toCents(amount);
   const note = document.getElementById("note").value.trim();
   const date = document.getElementById("date").value;
-  const account = document.getElementById("accountSel").value || null;
-  const toAccount = document.getElementById("toAccountSel").value || null;
+  const payMode = (uiState.selectedType === "代付") ? uiState.selectedPayMode : null;
+  const account = (uiState.selectedType === "代付" && payMode === "转为支出")
+    ? null : (document.getElementById("accountSel").value || null);
+  const transferMode = (uiState.selectedType === "转账") ? (uiState.selectedTransferMode || "账户间转账") : null;
+  const transferParty = (uiState.selectedType === "转账" && transferMode === "转账他人")
+    ? document.getElementById("transferParty").value.trim() : null;
+  const toAccount = (uiState.selectedType === "转账" && transferMode !== "转账他人")
+    ? (document.getElementById("toAccountSel").value || null) : null;
+  const balancePrincipalInput = document.getElementById("balancePrincipal");
+  const balancePrincipal = uiState.selectedType === "余额" && balancePrincipalInput && balancePrincipalInput.value !== ""
+    ? parseFloat(balancePrincipalInput.value) : null;
   const depositDir = (uiState.selectedType === "押金") ? uiState.selectedDepositDir : null;
   const depositTarget = document.getElementById("depositTarget").value.trim();
   const depositLinkId = (uiState.selectedType === "押金") ? (document.getElementById("depositLinkSel").value || null) : null;
   const depositFinal = (uiState.selectedType === "押金") ? document.getElementById("depositFinal").checked : false;
+  const loanMode = (uiState.selectedType === "借贷") ? uiState.selectedLoanMode : null;
+  const loanParty = (uiState.selectedType === "借贷") ? document.getElementById("loanParty").value.trim() : null;
+  const loanLinkId = (uiState.selectedType === "借贷") ? (document.getElementById("loanLinkSel").value || null) : null;
+  const payParty = (uiState.selectedType === "代付") ? document.getElementById("payParty").value.trim() : null;
+  const payLinkId = (uiState.selectedType === "代付") ? (document.getElementById("payLinkSel").value || null) : null;
+  const reimbursementParty = (uiState.selectedType === "报销") ? document.getElementById("reimbursementParty").value.trim() : null;
+  const reimbursementLinkId = (uiState.selectedType === "报销") ? (document.getElementById("reimbursementLinkSel").value || null) : null;
+  const refundLinkId = (uiState.selectedType === "退款") ? (document.getElementById("refundLinkSel").value || null) : null;
 
   if (!uiState.selectedType) { showMsg("请先选择一个类型"); return; }
-  if (!uiState.selectedCategory) { showMsg("请先选择一个类别"); return; }
-  if (isNaN(amount) || amountCents <= 0) { showMsg("请输入大于 0 的金额"); return; }
+  if (!["余额", "借贷", "代付", "报销", "退款"].includes(uiState.selectedType) && !uiState.selectedCategory) { showMsg("请先选择一个类别"); return; }
+  const amountInvalid = !Number.isFinite(amount) || (uiState.selectedType === "余额" ? amountCents < 0 : amountCents <= 0);
+  if (amountInvalid) {
+    showMsg(uiState.selectedType === "余额" ? "请输入不小于 0 的账户余额" : "请输入大于 0 的金额");
+    return;
+  }
   if (!date) { showMsg("请选择日期"); return; }
   if (needsAccount(uiState.selectedType) && !account) { showMsg("请选择账户"); return; }
   if (uiState.selectedType === "转账") {
-    if (!toAccount) { showMsg("转账需要选择转入账户"); return; }
-    if (account === toAccount) { showMsg("转出和转入账户不能相同"); return; }
+    if (transferMode === "转账他人") {
+      if (!transferParty) { showMsg("请填写转账对象"); return; }
+    } else {
+      if (!toAccount) { showMsg("转账需要选择转入账户"); return; }
+      if (account === toAccount) { showMsg("转出和转入账户不能相同"); return; }
+    }
+  }
+  if (uiState.selectedType === "余额" && balancePrincipal !== null &&
+      (!Number.isFinite(balancePrincipal) || toCents(balancePrincipal) < 0)) {
+    showMsg("请输入不小于 0 的账户本金"); return;
   }
   if (uiState.selectedType === "押金") {
     if (!depositDir) { showMsg("请选择押金方向（主动收/别人退回/主动付/我退）"); return; }
     if (!depositTarget) { showMsg("请填写押金对象（谁对谁押）"); return; }
     if (depositCounterpartDir(depositDir) && !depositLinkId) { showMsg("请选择要对应的原押金"); return; }
+  }
+  if (uiState.selectedType === "借贷") {
+    if (!loanMode) { showMsg("请选择借贷动作"); return; }
+    if (!loanParty) { showMsg("请填写借贷对象"); return; }
+    if (!isLoanOriginalMode(loanMode) && !loanLinkId) { showMsg("请关联原借贷"); return; }
+    if (!isLoanOriginalMode(loanMode) && loanLinkId) {
+      const original = dataState.records.find(record => String(record.id) === String(loanLinkId));
+      if (!original || loanOutstandingFor(original) < amount) { showMsg("本次金额不能超过未结清金额"); return; }
+    }
+  }
+  if (uiState.selectedType === "代付") {
+    if (!payMode) { showMsg("请选择代付动作"); return; }
+    if (!payParty) { showMsg("请填写代付对象"); return; }
+    if (payMode !== "代付" && !payLinkId) { showMsg("请关联原代付"); return; }
+    if (payMode !== "代付" && payLinkId) {
+      const original = dataState.records.find(record => String(record.id) === String(payLinkId));
+      if (!original || payOutstandingFor(original) < amount) { showMsg("本次金额不能超过待收回金额"); return; }
+    }
+  }
+  if (uiState.selectedType === "报销") {
+    if (!reimbursementParty) { showMsg("请填写报销来源"); return; }
+    if (!reimbursementLinkId) { showMsg("请关联原支出"); return; }
+    const original = dataState.records.find(record => String(record.id) === String(reimbursementLinkId));
+    if (!original || reimbursementOutstandingFor(original, dataState.records, uiState.editingRecordId) <= 0) { showMsg("原支出已经没有可报销金额"); return; }
+  }
+  if (uiState.selectedType === "退款") {
+    if (!refundLinkId) { showMsg("请关联原支出"); return; }
+    const original = dataState.records.find(record => String(record.id) === String(refundLinkId));
+    if (!original || refundOutstandingFor(original, dataState.records, uiState.editingRecordId) <= 0) { showMsg("原支出已经没有可退款金额"); return; }
   }
 
   const wasEdit = uiState.editingRecordId !== null;
@@ -254,15 +442,27 @@ async function handleSave() {
     type: selectedType,
     amount: amountCents / 100,
     amountCents: amountCents,
-    category: selectedCategory,
+    // 余额不向用户要求类别；内部用“其他”兼容旧备份和当前存储结构。
+    category: selectedCategory || "其他",
     note: note,
     date: date,
     account: account,
     toAccount: (selectedType === "转账") ? toAccount : null,
+    transferMode: transferMode,
+    transferParty: transferParty,
     depositDir: depositDir,
     depositTarget: (selectedType === "押金") ? depositTarget : null,
     depositLinkId: depositLinkId,
     depositFinal: depositFinal,
+    loanMode: loanMode,
+    loanParty: loanParty,
+    loanLinkId: loanLinkId,
+    payMode: payMode,
+    payParty: payParty,
+    payLinkId: payLinkId,
+    reimbursementParty: reimbursementParty,
+    reimbursementLinkId: reimbursementLinkId,
+    refundLinkId: refundLinkId,
   };
   const fallbackRecord = Object.assign({}, localRecord, {
     accountName: accountName,
@@ -278,7 +478,10 @@ async function handleSave() {
     } : null
   });
 
-  if (!wasEdit && backendRecordWritesEnabled()) {
+  const localOnlyTransfer = selectedType === "转账" && transferMode === "转账他人";
+
+  // 余额校准先在本机完成；服务端当前的中性类型契约不允许账户字段，联网同步留到余额模型升级批次。
+  if (!wasEdit && backendRecordWritesEnabled() && !localOnlyTransfer && !["余额", "借贷", "代付", "报销", "退款"].includes(selectedType)) {
     const typeId = backendOptionId(dataState.backendTypeIds, selectedType);
     const categoryId = backendOptionId(dataState.backendCategoryIds, selectedCategory);
     if (!typeId || !categoryId) {
@@ -303,9 +506,10 @@ async function handleSave() {
         : "已记一笔（服务端已保存，明细刷新稍后重试）",
         recordsRefreshed ? "success" : "info");
       render();
+      if (typeof switchTab === "function") switchTab("home", { replaceHistory: true });
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showMsg(error.message || "服务端拒绝了这笔账，请检查输入", "conflict");
+        showMsg(userFacingError(error, "服务端拒绝了这笔账，请检查输入"), "conflict");
       } else {
         saveRecordLocally(fallbackRecord, "服务端不可用，已保存到本地", true, "local");
       }
@@ -315,7 +519,7 @@ async function handleSave() {
     return;
   }
 
-  if (wasEdit && backendRecordWritesEnabled()) {
+  if (wasEdit && backendRecordWritesEnabled() && !localOnlyTransfer && !["余额", "借贷", "代付", "报销", "退款"].includes(selectedType)) {
     const typeId = backendOptionId(dataState.backendTypeIds, selectedType);
     const categoryId = backendOptionId(dataState.backendCategoryIds, selectedCategory);
     if (!originalRecord || !typeId || !categoryId) {
@@ -345,9 +549,10 @@ async function handleSave() {
         : "已保存修改（服务端已保存，明细刷新稍后重试）",
         recordsRefreshed ? "success" : "info");
       render();
+      if (typeof switchTab === "function") switchTab("home", { replaceHistory: true });
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showMsg(error.message || "服务端拒绝了修改，请检查输入", "conflict");
+        showMsg(userFacingError(error, "服务端拒绝了修改，请检查输入"), "conflict");
       } else {
         saveEditedRecordLocally(fallbackRecord, originalFingerprint, "服务端不可用，已在本地保存修改");
       }
@@ -357,6 +562,9 @@ async function handleSave() {
     return;
   }
 
+  if (selectedType === "余额" && uiState.balanceTargetAccountId && balancePrincipal !== null && typeof applyAccountPrincipal === "function") {
+    applyAccountPrincipal(uiState.balanceTargetAccountId, toCents(balancePrincipal));
+  }
   if (wasEdit) {
     const rec = dataState.records.find(r => String(r.id) === String(uiState.editingRecordId));
     applyRecordDraft(rec, localRecord);
@@ -365,35 +573,81 @@ async function handleSave() {
   }
 
   save();
-  if (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange() && typeof markLocalChangePending === "function") {
+  const localOnlySpecial = localOnlyTransfer || ["余额", "借贷", "代付", "报销", "退款"].includes(selectedType);
+  if (typeof markLocalChangePending === "function" &&
+      (localOnlySpecial || (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange()))) {
     markLocalChangePending(wasEdit ? "record_edit" : "record_write");
   }
   resetForm();
-  showMsg(wasEdit ? "已保存修改" : "已记一笔", "local");
+  const localMessage = ["余额", "借贷", "代付", "报销", "退款"].includes(selectedType) && backendRecordWritesEnabled()
+    ? (selectedType === "余额" ? "余额已保存在本机，联网同步将在后续版本支持"
+      : selectedType === "借贷" ? "借贷已保存在本机，联网关联将在后续版本支持"
+        : selectedType === "代付" ? "代付已保存在本机，联网关联将在后续版本支持"
+          : selectedType === "报销" ? "报销已保存在本机，联网关联将在后续版本支持"
+            : "退款已保存在本机，联网关联将在后续版本支持")
+    : (wasEdit ? "已保存修改" : "已记一笔");
+  showMsg(localMessage, "local");
   render();
+  if (typeof switchTab === "function") switchTab("home", { replaceHistory: true });
 }
 
 function startEdit(id) {
   const r = dataState.records.find(x => String(x.id) === String(id));
   if (!r) return;
+  if (r.fundProjectId) {
+    switchTab("investment");
+    openFundDetail(r.fundProjectId);
+    return;
+  }
   uiState.editingRecordId = id;
   uiState.selectedType = r.type;
   uiState.selectedCategory = r.category;
   uiState.selectedDepositDir = r.depositDir || null;
+  uiState.selectedLoanMode = r.loanMode || null;
+  uiState.selectedPayMode = r.payMode || null;
+  uiState.selectedTransferMode = r.transferMode || (r.type === "转账" ? "账户间转账" : null);
   document.getElementById("amount").value = r.amount;
   document.getElementById("note").value = r.note;
   document.getElementById("date").value = r.date;
   document.getElementById("accountSel").value = r.account || "";
   document.getElementById("toAccountSel").value = r.toAccount || "";
+  const transferParty = document.getElementById("transferParty");
+  if (transferParty) transferParty.value = r.transferParty || "";
+  const balancePrincipal = document.getElementById("balancePrincipal");
+  if (balancePrincipal) {
+    const account = dataState.accounts.find(item => String(item.id) === String(r.account));
+    balancePrincipal.value = account ? initialOf(account).toFixed(2) : "";
+  }
+  if (typeof syncAccountPickerValue === "function") {
+    syncAccountPickerValue("accountSel");
+    syncAccountPickerValue("toAccountSel");
+  }
   document.getElementById("depositTarget").value = r.depositTarget || "";
   document.getElementById("depositLinkSel").value = r.depositLinkId || "";
   document.getElementById("depositFinal").checked = !!r.depositFinal;
+  const loanPartyInput = document.getElementById("loanParty");
+  const loanLinkSelect = document.getElementById("loanLinkSel");
+  if (loanPartyInput) loanPartyInput.value = r.loanParty || "";
+  if (loanLinkSelect) loanLinkSelect.value = r.loanLinkId || "";
+  const payPartyInput = document.getElementById("payParty");
+  const payLinkSelect = document.getElementById("payLinkSel");
+  if (payPartyInput) payPartyInput.value = r.payParty || "";
+  if (payLinkSelect) payLinkSelect.value = r.payLinkId || "";
+  const reimbursementPartyInput = document.getElementById("reimbursementParty");
+  const reimbursementLinkSelect = document.getElementById("reimbursementLinkSel");
+  if (reimbursementPartyInput) reimbursementPartyInput.value = r.reimbursementParty || "";
+  if (reimbursementLinkSelect) reimbursementLinkSelect.value = r.reimbursementLinkId || "";
+  const refundLinkSelect = document.getElementById("refundLinkSel");
+  if (refundLinkSelect) refundLinkSelect.value = r.refundLinkId || "";
   updateFormFields();
   document.getElementById("depositLinkSel").value = r.depositLinkId || "";
   document.getElementById("saveBtn").textContent = "保存修改";
   document.getElementById("cancelBtn").style.display = "block";
   renderTypeChips();
   renderCategoryChips();
+  if (typeof renderLoanModeChips === "function") renderLoanModeChips();
+  if (typeof renderPayModeChips === "function") renderPayModeChips();
+  if (typeof renderTransferModeChips === "function") renderTransferModeChips();
   switchTab("record");
 }
 
@@ -411,7 +665,12 @@ async function deleteRec(id) {
     return;
   }
   const target = dataState.records.find(r => String(r.id) === String(id));
-  if (!target || !confirm("确定删除这笔账吗？")) return;
+  if (target && target.fundProjectId) {
+    switchTab("investment");
+    openFundDetail(target.fundProjectId);
+    return;
+  }
+  if (!target || !await appConfirm("确定删除这笔账吗？")) return;
   const fingerprint = recordFingerprint(target);
 
   if (backendRecordWritesEnabled() && typeof target.id === "string" && target.id) {
@@ -429,7 +688,7 @@ async function deleteRec(id) {
       render();
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showMsg(error.message || "服务端拒绝删除，请先处理关联记录", "conflict");
+        showMsg(userFacingError(error, "服务端拒绝删除，请先处理关联记录"), "conflict");
       } else {
         restoreLocalStateFromStorage();
         const localTarget = findLocalRecordByFingerprint(fingerprint);

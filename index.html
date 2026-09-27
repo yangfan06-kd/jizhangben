@@ -15,7 +15,6 @@
     <div class="subtitle">记下每一笔，清楚每一分</div>
     <div class="book-bar">
       <select id="bookSel" title="切换账本"></select>
-      <button id="bookManageBtn" class="mini-btn" type="button">管理</button>
     </div>
     <div class="auth-bar">
       <span id="authStatus">本地模式</span>
@@ -39,7 +38,7 @@
     </div>
     <div class="field">
       <div class="field-label">邮箱</div>
-      <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+      <input id="authEmail" type="email" autocomplete="email" placeholder="请输入邮箱">
     </div>
     <div class="field" id="authNameField" hidden>
       <div class="field-label">显示名称</div>
@@ -55,37 +54,55 @@
       <input id="authPasswordConfirm" type="password" autocomplete="new-password" placeholder="再次输入密码" minlength="8" maxlength="200">
     </div>
     <button id="authSubmitBtn" class="btn-primary" type="submit">登录</button>
-    <div id="authMsg" class="form-msg"></div>
+    <div id="authMsg" class="form-msg" role="status" aria-live="polite"></div>
   </form>
 
   <main id="ledgerApp" hidden>
-  <!-- 统计卡片：本月结余 / 收入 / 支出 -->
-  <section class="stats">
-    <div class="stat-balance-label">本月结余</div>
-    <div class="stat-balance" id="balance">¥0.00</div>
-    <div class="stat-row">
-      <div class="stat">
-        <div class="label">本月收入</div>
-        <div class="value income" id="incomeTotal">+¥0.00</div>
-      </div>
-      <div class="stat">
-        <div class="label">本月支出</div>
-        <div class="value expense" id="expenseTotal">−¥0.00</div>
-      </div>
+  <!-- 首页：先看结余和期间概览，低频功能通过按钮进入专门页面。 -->
+  <section id="panelHome" class="home-panel">
+    <div class="home-shortcuts" aria-label="常用功能">
+      <button class="home-shortcut" type="button" data-tab="account">
+        <span class="home-shortcut-icon" data-icon="account" aria-hidden="true"></span><span>账户</span>
+      </button>
+      <button class="home-shortcut" type="button" data-tab="overview">
+        <span class="home-shortcut-icon" data-icon="overview" aria-hidden="true"></span><span>报表</span>
+      </button>
+      <button class="home-shortcut" type="button" data-tab="budget">
+        <span class="home-shortcut-icon" data-icon="overview" aria-hidden="true"></span><span>预算</span>
+      </button>
+      <button class="home-shortcut" type="button" data-tab="investment">
+        <span class="home-shortcut-icon" data-icon="investment" aria-hidden="true"></span><span>基金</span>
+      </button>
     </div>
-    <div class="stat-networth">
-      <span class="label">净资产（资金 − 负债）</span>
-      <span class="value" id="netWorth">¥0.00</span>
-    </div>
-  </section>
 
-  <!-- 导航切换 -->
-  <nav class="tabs">
-    <button class="tab active" data-tab="record">记一笔</button>
-    <button class="tab" data-tab="account">账户</button>
-    <button class="tab" data-tab="detail">明细</button>
-    <button class="tab" data-tab="overview">总览</button>
-  </nav>
+    <!-- 统计卡片：本月结余 / 收入 / 支出 -->
+    <section class="stats" aria-label="本月概览">
+      <div class="stat-balance-label"><span class="ui-icon" data-icon="overview" aria-hidden="true"></span><span>本月结余</span></div>
+      <div class="stat-balance" id="balance">¥0.00</div>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="label"><span class="stat-dot income" aria-hidden="true"></span>本月收入</div>
+          <div class="value income" id="incomeTotal">+¥0.00</div>
+        </div>
+        <div class="stat">
+          <div class="label"><span class="stat-dot expense" aria-hidden="true"></span>本月支出</div>
+          <div class="value expense" id="expenseTotal">−¥0.00</div>
+        </div>
+      </div>
+      <div class="stat-networth">
+        <span class="label">净资产（资金 − 负债）</span>
+        <span class="value" id="netWorth">¥0.00</span>
+      </div>
+    </section>
+
+    <div class="home-section-heading"><span>账本总收支</span></div>
+    <div id="detailPeriodCards" class="detail-period-cards home-period-cards" aria-label="明细期间"></div>
+    <div id="periodSummary" class="period-summary"></div>
+    <section class="home-trend-section" aria-label="本月收入支出趋势">
+      <div class="home-section-heading"><span>本月收入支出</span></div>
+      <div id="homeTrendChart" class="home-trend-chart"></div>
+    </section>
+  </section>
 
   <!-- 账本管理 -->
   <section class="card" id="panelBook" style="display:none;">
@@ -107,20 +124,39 @@
       </div>
       <button id="bookSaveBtn" class="btn-primary" type="button">添加账本</button>
       <button id="bookCancelBtn" class="btn-ghost" type="button">取消修改</button>
-      <div id="bookMsg" class="acc-msg"></div>
+      <div id="bookMsg" class="acc-msg" role="status" aria-live="polite"></div>
     </div>
 
     <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
       <div class="field-label">数据备份</div>
       <div class="backup-desc">导出会把所有账本和账目存成一个文件；换电脑或清缓存后，用「导入备份」选回那个文件即可恢复。</div>
       <div class="backup-actions">
-        <button id="exportBtn" class="btn-ghost" type="button">导出备份</button>
-        <button id="importBtn" class="btn-ghost" type="button">导入备份</button>
-        <button id="migrationPreviewBtn" class="btn-ghost" type="button">预览迁移</button>
+        <button id="exportBtn" class="btn-ghost icon-button" type="button"><span class="ui-icon" data-icon="export" aria-hidden="true"></span><span>导出备份</span></button>
+        <button id="importBtn" class="btn-ghost icon-button" type="button"><span class="ui-icon" data-icon="import" aria-hidden="true"></span><span>导入备份</span></button>
+        <button id="migrationPreviewBtn" class="btn-ghost icon-button" type="button"><span class="ui-icon" data-icon="migrate" aria-hidden="true"></span><span>预览迁移</span></button>
         <input id="importFile" type="file" accept=".json,application/json" style="display:none;">
         <input id="migrationFile" type="file" accept=".json,application/json" style="display:none;">
       </div>
-      <div id="backupMsg" class="acc-msg"></div>
+      <div class="external-import-entry">
+        <div class="field-label">导入其他记账 App</div>
+        <div class="backup-desc">本批支持通用 CSV；文件只在本机读取，导入前会先预览，并新建账本保存。</div>
+        <button id="externalImportBtn" class="btn-ghost icon-button" type="button"><span class="ui-icon" data-icon="import" aria-hidden="true"></span><span>选择 CSV 文件</span></button>
+        <input id="externalImportFile" type="file" accept=".csv,text/csv,text/plain" style="display:none;">
+      </div>
+      <div id="externalImportPanel" class="external-import-panel" hidden>
+        <div class="migration-preview-title">外部账本导入预览</div>
+        <div class="field-row external-import-fields">
+          <label class="field"><span class="field-label">来源</span><select id="externalImportSource"><option>女生记账</option><option>随手记</option><option>其他 CSV</option></select></label>
+          <label class="field"><span class="field-label">新账本名称</span><input id="externalImportBookName" type="text" maxlength="40" placeholder="例如：女生记账导入"></label>
+        </div>
+        <div id="externalImportSummary"></div>
+        <div id="externalImportIssues" class="external-import-issues"></div>
+        <div class="migration-actions">
+          <button id="externalImportConfirmBtn" class="btn-primary" type="button" disabled>确认导入</button>
+          <button id="externalImportCancelBtn" class="btn-ghost" type="button">取消</button>
+        </div>
+      </div>
+      <div id="backupMsg" class="acc-msg" role="status" aria-live="polite"></div>
       <div id="migrationPreview" class="migration-preview" hidden>
         <div class="migration-preview-title">迁移预览</div>
         <div id="migrationPreviewSummary"></div>
@@ -133,77 +169,344 @@
     </div>
   </section>
 
-  <!-- 记一笔 -->
-  <section class="card" id="panelRecord">
-    <h2>记一笔</h2>
+  <!-- 基金：总览、创建和赎回分别占一个轻量页面。 -->
+  <section class="card investment-panel" id="panelInvestment" style="display:none;">
+    <div class="fund-view" id="fundHome">
+      <div class="page-head"><button class="page-back page-back-home" type="button"><span aria-hidden="true">‹</span><span>基金</span></button></div>
+      <p class="fund-intro">查看每只基金的投入与取出，在专属页面完成记账。</p>
+      <div id="fundSummary" class="fund-summary"></div>
+      <div class="fund-entry-grid">
+        <button class="fund-entry" type="button" data-fund-open="recurring"><strong>基金定投</strong><span>按交易日自动记录</span><b aria-hidden="true">›</b></button>
+        <button class="fund-entry" type="button" data-fund-open="one-time"><strong>基金投资</strong><span>记录一次性投入</span><b aria-hidden="true">›</b></button>
+      </div>
+      <div id="fundCalendarNotice" class="fund-alert" hidden></div>
+      <div id="fundLegacyNotice" class="fund-alert" hidden></div>
+      <h3 class="fund-section-title">我的基金账户</h3>
+      <div id="fundProjectList"></div>
+      <p id="fundEmpty" class="fund-empty">还没有基金账户，可从上方选择一种方式开始。</p>
+      <p class="fund-footnote">这里只记录本机账目，不会向支付宝、微信或基金公司发起真实交易；具体成交日以代销或直销平台为准。</p>
+    </div>
 
-    <div class="field">
-      <div class="field-label">类型</div>
-      <div class="chips" id="typeChips"></div>
+    <div class="fund-view" id="fundFormPage" hidden>
+      <div class="page-head"><button class="page-back" type="button" data-fund-back="home"><span aria-hidden="true">‹</span><span id="fundFormTitle">基金定投</span></button></div>
+      <form id="fundCreateForm" class="fund-form">
+        <label class="field"><span class="field-label">基金名称</span><input id="fundName" type="text" maxlength="48" placeholder="例如：宽基指数基金" required></label>
+        <label class="field"><span class="field-label">代销／直销账户</span><input id="fundPlatform" type="text" maxlength="36" placeholder="支付宝/微信/直销公司名称" autocomplete="off" required></label>
+        <p class="fund-hint">保存后会自动建立一个专属基金账户，与日常资金账户分开。</p>
+        <div class="fund-form-row">
+          <label class="field"><span class="field-label" id="fundAmountLabel">每次定投金额</span><input id="fundAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required></label>
+          <div class="field fund-picker-field"><span class="field-label">投资资金账户</span><select id="fundSourceAccount" class="fund-native-select"></select><button id="fundSourceAccountBtn" class="fund-picker-trigger" type="button" data-fund-picker="fundSourceAccount" aria-label="选择投资资金账户" aria-controls="fundSourceAccountMenu" aria-expanded="false">请选择资金账户</button><div id="fundSourceAccountMenu" class="fund-picker-menu" hidden></div></div>
+        </div>
+        <label id="fundOriginalCostField" class="field"><span id="fundOriginalCostLabel" class="field-label">原始总成本（选填）</span><input id="fundOriginalCost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+        <p id="fundOriginalCostHint" class="fund-hint">填写建账前已投入的本金，不包含本次和之后的新投入；它会作为基金账户初始余额，不会补造历史转账流水。</p>
+        <div id="fundScheduleFields">
+          <div class="field fund-picker-field"><span class="field-label">定投频率</span><select id="fundFrequency" class="fund-native-select"><option value="daily">每个交易日</option><option value="weekly">每周</option><option value="monthly">每月</option></select><button id="fundFrequencyBtn" class="fund-picker-trigger" type="button" data-fund-picker="fundFrequency" aria-label="选择定投频率" aria-controls="fundFrequencyMenu" aria-expanded="false">每个交易日</button><div id="fundFrequencyMenu" class="fund-picker-menu" hidden></div></div>
+          <fieldset id="fundWeekdaysField" class="fund-weekdays" hidden><legend>选择周几（可多选）</legend>
+            <label><input type="checkbox" value="1">一</label><label><input type="checkbox" value="2">二</label><label><input type="checkbox" value="3">三</label><label><input type="checkbox" value="4">四</label><label><input type="checkbox" value="5">五</label>
+          </fieldset>
+          <div id="fundMonthDayField" class="field fund-day-field" hidden><span class="field-label">每月几日（可多选）</span><button id="fundMonthDayBtn" class="fund-day-trigger" type="button" aria-expanded="false" aria-controls="fundMonthDayMenu">选择每月日期</button><div id="fundMonthDayMenu" class="fund-day-menu" hidden></div><input id="fundMonthDay" type="hidden" value=""></div>
+        </div>
+        <div class="fund-form-row">
+          <label class="field"><span id="fundStartDateLabel" class="field-label">开始日期</span><input id="fundStartDate" type="date" required></label>
+          <label class="field" id="fundEndDateField"><span class="field-label">结束日期（选填）</span><input id="fundEndDate" type="date"></label>
+        </div>
+        <p id="fundEndHint" class="fund-hint">不填结束日期，计划会持续执行，直到你在基金详情中暂停或全部赎回。</p>
+        <p class="fund-hint">每日仅在沪深交易所交易日记账；每周所选日期遇休市日跳过；每月若没有所选日期先取月末，再顺延至下一个交易日。</p>
+        <p id="fundEditHint" class="fund-hint" hidden></p>
+        <div id="fundCreateMsg" class="form-msg" role="status" aria-live="polite"></div>
+        <button id="fundFormSubmit" class="btn-primary fund-main-action" type="submit">建立基金账户</button>
+      </form>
+    </div>
+
+    <div class="fund-view" id="fundDetailPage" hidden>
+      <div class="page-head"><button class="page-back" type="button" data-fund-back="home"><span aria-hidden="true">‹</span><span>基金详情</span></button></div>
+      <div id="fundDetailContent"></div>
+    </div>
+
+    <div class="fund-view" id="fundSettingsPage" hidden>
+      <div class="page-head"><button class="page-back" type="button" data-fund-back="detail"><span aria-hidden="true">‹</span><span>账户设置</span></button></div>
+      <h2 id="fundSettingsName" class="fund-settings-name"></h2>
+      <p id="fundSettingsEditIntro" class="fund-hint">打开建立基金时的选项，保留已填写内容供你修改。已生成的流水不会改写。</p>
+      <button id="fundEditButton" class="btn-primary fund-main-action" type="button" data-fund-action="edit">更改基金设置</button>
+      <div id="fundSettingsMsg" class="form-msg" role="status" aria-live="polite"></div>
+      <h3 class="fund-section-title">删除基金账户</h3>
+      <p id="fundDeleteHint" class="fund-hint"></p>
+      <button class="fund-delete-button" type="button" data-fund-action="delete">删除基金账户</button>
+    </div>
+
+    <div class="fund-view" id="fundRedeemPage" hidden>
+      <div class="page-head"><button class="page-back" type="button" data-fund-back="detail"><span aria-hidden="true">‹</span><span>赎回</span></button></div>
+      <form id="fundRedeemForm" class="fund-form">
+        <p id="fundRedeemName" class="fund-redeem-name"></p>
+        <div class="fund-redeem-choice" role="radiogroup" aria-label="赎回方式"><label><input type="radio" name="fundRedeemKind" value="partial" checked>部分赎回</label><label><input type="radio" name="fundRedeemKind" value="full">全部赎回</label></div>
+        <label class="field"><span class="field-label">实际取出到账金额</span><input id="fundRedeemAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="以实际到账金额填写" required></label>
+        <div class="field fund-picker-field"><span class="field-label">到账资金账户</span><select id="fundRedeemAccount" class="fund-native-select"></select><button id="fundRedeemAccountBtn" class="fund-picker-trigger" type="button" data-fund-picker="fundRedeemAccount" aria-label="选择到账资金账户" aria-controls="fundRedeemAccountMenu" aria-expanded="false">请选择资金账户</button><div id="fundRedeemAccountMenu" class="fund-picker-menu" hidden></div></div>
+        <label class="field"><span class="field-label">到账日期</span><input id="fundRedeemDate" type="date" required></label>
+        <p id="fundRedeemHint" class="fund-hint">部分赎回只记录资金转回；全部赎回时才按累计取出到账金额与总投入本金的差额，计入收入或支出。</p>
+        <div id="fundRedeemMsg" class="form-msg" role="status" aria-live="polite"></div>
+        <button class="btn-primary fund-main-action" type="submit">确认赎回记账</button>
+      </form>
+    </div>
+
+    <div class="fund-view" id="fundAdjustPage" hidden>
+      <div class="page-head"><button class="page-back" type="button" data-fund-back="detail"><span aria-hidden="true">‹</span><span>追加投资</span></button></div>
+      <form id="fundAdjustForm" class="fund-form">
+        <p id="fundAdjustName" class="fund-redeem-name"></p>
+        <label class="field"><span class="field-label">追加投资金额</span><input id="fundAdjustAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required></label>
+        <div class="field fund-picker-field"><span class="field-label">出账资金账户</span><select id="fundAdjustAccount" class="fund-native-select"></select><button id="fundAdjustAccountBtn" class="fund-picker-trigger" type="button" data-fund-picker="fundAdjustAccount" aria-label="选择资金账户" aria-controls="fundAdjustAccountMenu" aria-expanded="false">请选择资金账户</button><div id="fundAdjustAccountMenu" class="fund-picker-menu" hidden></div></div>
+        <label class="field"><span class="field-label">记账日期</span><input id="fundAdjustDate" type="date" required></label>
+        <p class="fund-hint">这笔钱从所选账户转入基金账户，增加投入本金，不计入支出。需要取出资金时，请返回基金详情选择“赎回”。</p>
+        <div id="fundAdjustMsg" class="form-msg" role="status" aria-live="polite"></div>
+        <button class="btn-primary fund-main-action" type="submit">确认追加投资</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 记一笔 -->
+  <section class="card record-panel" id="panelRecord" style="display:none;">
+    <div class="page-head">
+      <button id="recordBackBtn" class="page-back" type="button"><span aria-hidden="true">‹</span><span>记一笔</span></button>
+    </div>
+
+    <div class="field record-type-field">
+      <div class="chips" id="typeChips" aria-label="记账类型"></div>
       <div id="typeCustomBox"></div>
     </div>
 
-    <div class="field">
-      <div class="field-label">金额</div>
-      <input id="amount" type="number" min="0" step="0.01" placeholder="0.00">
+    <div id="recordKeyboard" class="record-keyboard" hidden aria-label="金额键盘">
+      <div class="record-keyboard-amount-row">
+        <div id="recordAmountTapTarget" class="field record-amount-field">
+          <label class="field-label" id="recordAmountLabel" for="amount">金额</label>
+          <div class="record-amount-value-line">
+            <input id="amount" type="text" inputmode="none" autocomplete="off" readonly placeholder="请输入金额" aria-label="金额">
+            <span id="recordAmountVisual" class="record-amount-visual is-empty" aria-hidden="true">
+              <span id="recordAmountVisualText" class="record-amount-visual-text">请输入金额</span>
+              <span class="record-amount-caret"></span>
+            </span>
+          </div>
+          <div id="recordAmountExpression" class="record-amount-expression" hidden aria-live="polite"></div>
+        </div>
+        <button id="recordKeyboardHandle" class="record-keyboard-handle" type="button" aria-label="收起金额键盘">⌄</button>
+      </div>
+      <div class="record-keyboard-layout">
+        <div class="record-keyboard-types" aria-label="常用类型">
+          <button type="button" data-record-keyboard-type="支出" aria-pressed="true">支<br>出</button>
+          <button type="button" data-record-keyboard-type="收入" aria-pressed="false">收<br>入</button>
+          <button type="button" data-record-keyboard-type="转账" aria-pressed="false">转<br>账</button>
+          <span class="record-keyboard-side-space" aria-hidden="true"></span>
+        </div>
+        <div class="record-keyboard-numbers" aria-label="数字键盘">
+          <button type="button" data-record-key="7">7</button>
+          <button type="button" data-record-key="8">8</button>
+          <button type="button" data-record-key="9">9</button>
+          <button type="button" data-record-key="4">4</button>
+          <button type="button" data-record-key="5">5</button>
+          <button type="button" data-record-key="6">6</button>
+          <button type="button" data-record-key="1">1</button>
+          <button type="button" data-record-key="2">2</button>
+          <button type="button" data-record-key="3">3</button>
+          <button type="button" data-record-key=".">.</button>
+          <button type="button" data-record-key="0">0</button>
+          <button type="button" data-record-key="backspace" aria-label="删除一位">⌫</button>
+        </div>
+        <div class="record-keyboard-operators" aria-label="计算和确认">
+          <button type="button" data-record-key="minus">−</button>
+          <button type="button" data-record-key="plus">＋</button>
+          <button type="button" class="record-keyboard-confirm" data-record-key="confirm">确定</button>
+        </div>
+      </div>
     </div>
+    <button id="recordKeyboardOpenBtn" class="record-keyboard-open-btn" type="button" aria-controls="recordKeyboard" hidden>输入金额</button>
 
-    <div class="field">
-      <div class="field-label">类别</div>
-      <div class="chips" id="categoryChips"></div>
+    <div class="field record-category-field">
+      <div class="field-label" id="recordCategoryLabel">类别</div>
+      <div class="chips" id="categoryChips" aria-label="记账类别"></div>
       <div id="categoryCustomBox"></div>
     </div>
 
-    <div class="field">
-      <div class="field-label">账户</div>
-      <select id="accountSel"><option value="">请选择账户</option></select>
+    <div class="field special-loan-field" id="loanModeField" style="display:none;">
+      <div class="field-label">借贷动作</div>
+      <div class="chips" id="loanModeChips" aria-label="借贷动作"></div>
     </div>
 
-    <div class="field" id="depositDirField" style="display:none;">
-      <div class="field-label">押金方向</div>
-      <div class="chips" id="depositDirChips"></div>
+    <div class="field special-loan-field" id="loanPartyField" style="display:none;">
+      <div class="field-label">对象</div>
+      <input id="loanParty" type="text" placeholder="如：同学、朋友、家人">
     </div>
 
-    <div class="field" id="depositTargetField" style="display:none;">
-      <div class="field-label">对象（谁对谁押）</div>
-      <input id="depositTarget" type="text" placeholder="如：房东、中介、张三">
-    </div>
-
-    <div class="field" id="depositLinkField" style="display:none;">
-      <div class="field-label">关联原押金</div>
-      <select id="depositLinkSel"><option value="">请选择对应的原押金</option></select>
-      <div class="backup-desc">退回押金时选择原来的收/付押金，系统才能计算最终差额。</div>
-    </div>
-
-    <div class="field" id="depositFinalField" style="display:none;">
-      <label class="field-label"><input id="depositFinal" type="checkbox"> 已最终结算，差额计入收入/支出</label>
-      <div id="depositSettlementHint" class="backup-desc"></div>
-    </div>
-
-    <div class="field" id="toAccountField" style="display:none;">
-      <div class="field-label">转入账户（转账）</div>
-      <select id="toAccountSel"><option value="">请选择转入账户</option></select>
-    </div>
-
-    <div class="field-row">
-      <div class="field">
-        <div class="field-label">备注</div>
-        <input id="note" type="text" placeholder="选填">
+    <div class="field special-loan-field" id="loanLinkField" style="display:none;">
+      <div class="field-label">关联原借贷</div>
+      <div class="compact-picker special-expense-picker" id="loanPicker">
+        <button id="loanLinkPickerBtn" class="compact-picker-trigger" type="button" aria-haspopup="listbox" aria-controls="loanLinkPickerMenu" aria-expanded="false">请选择原借贷<span aria-hidden="true">⌄</span></button>
+        <div id="loanLinkPickerMenu" class="compact-picker-menu" role="listbox" aria-label="选择原借贷" hidden></div>
+        <select id="loanLinkSel" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">请选择原借贷</option></select>
       </div>
-      <div class="field">
-        <div class="field-label">日期</div>
-        <input id="date" type="date">
+      <div class="backup-desc">收回或偿还时关联原借贷，系统才能计算未结清金额。</div>
+    </div>
+
+    <div class="field special-pay-field" id="payModeField" style="display:none;">
+      <div class="field-label">代付动作</div>
+      <div class="chips" id="payModeChips" aria-label="代付动作"></div>
+    </div>
+
+    <div class="field special-pay-field" id="payPartyField" style="display:none;">
+      <div class="field-label">代付对象</div>
+      <input id="payParty" type="text" placeholder="如：同学、朋友、家人">
+    </div>
+
+    <div class="field special-pay-field" id="payLinkField" style="display:none;">
+      <div class="field-label">关联原代付</div>
+      <select id="payLinkSel"><option value="">请选择原代付</option></select>
+      <div class="backup-desc">收回或确认无法收回时关联原代付，系统才能计算待收回金额。</div>
+    </div>
+
+    <div class="field special-reimbursement-field" id="reimbursementPartyField" style="display:none;">
+      <div class="field-label">报销来源</div>
+      <input id="reimbursementParty" type="text" placeholder="如：公司、学校、朋友">
+    </div>
+
+    <div class="field special-reimbursement-field" id="reimbursementLinkField" style="display:none;">
+      <div class="field-label">关联原支出</div>
+      <div class="compact-picker special-expense-picker" id="reimbursementPicker">
+        <button id="reimbursementLinkPickerBtn" class="compact-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">请选择原支出<span aria-hidden="true">⌄</span></button>
+        <div id="reimbursementLinkPickerMenu" class="compact-picker-menu" role="listbox" aria-label="选择原支出" hidden></div>
+        <select id="reimbursementLinkSel" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">请选择原支出</option></select>
+      </div>
+      <div class="backup-desc">报销金额会先抵减原支出，超过原支出的部分再计为收入。</div>
+    </div>
+
+    <div class="field special-refund-field" id="refundLinkField" style="display:none;">
+      <div class="field-label">关联原支出</div>
+      <div class="compact-picker special-expense-picker" id="refundPicker">
+        <button id="refundLinkPickerBtn" class="compact-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">请选择原支出<span aria-hidden="true">⌄</span></button>
+        <div id="refundLinkPickerMenu" class="compact-picker-menu" role="listbox" aria-label="选择原支出" hidden></div>
+        <select id="refundLinkSel" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">请选择原支出</option></select>
+      </div>
+      <div class="backup-desc">退款会先抵减原支出，超过原支出的部分再计为收入。</div>
+    </div>
+
+    <div class="record-supporting-fields">
+      <div class="field record-account-field">
+        <div class="field-label" id="recordAccountLabel">账户</div>
+        <div class="account-picker" data-account-picker="accountSel">
+          <select id="accountSel" class="native-account-select" aria-hidden="true" tabindex="-1"><option value="">请选择账户</option></select>
+          <button id="accountPickerBtn" class="account-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">请选择账户</button>
+          <div id="accountPickerMenu" class="account-picker-menu" role="listbox" hidden></div>
+        </div>
+      </div>
+
+      <div class="field" id="depositDirField" style="display:none;">
+        <div class="field-label">押金方向</div>
+        <div class="chips" id="depositDirChips"></div>
+      </div>
+
+      <div class="field" id="depositTargetField" style="display:none;">
+        <div class="field-label">对象（谁对谁押）</div>
+        <input id="depositTarget" type="text" placeholder="如：房东、中介、张三">
+      </div>
+
+      <div class="field" id="depositLinkField" style="display:none;">
+        <div class="field-label">关联原押金</div>
+        <select id="depositLinkSel"><option value="">请选择对应的原押金</option></select>
+        <div class="backup-desc">退回押金时选择原来的收/付押金，系统才能计算最终差额。</div>
+      </div>
+
+      <div class="field" id="depositFinalField" style="display:none;">
+        <label class="field-label"><input id="depositFinal" type="checkbox"> 已最终结算，差额计入收入/支出</label>
+        <div id="depositSettlementHint" class="backup-desc"></div>
+      </div>
+
+      <div class="field" id="balancePrincipalField" style="display:none;">
+        <div class="field-label">账户本金</div>
+        <input id="balancePrincipal" type="number" min="0" step="0.01" placeholder="账户本金">
+        <div id="balanceCurrentHint" class="backup-desc"></div>
+      </div>
+
+      <div class="field record-account-field" id="toAccountField" style="display:none;">
+        <div class="field-label">转入账户（转账）</div>
+        <div class="account-picker" data-account-picker="toAccountSel">
+          <select id="toAccountSel" class="native-account-select" aria-hidden="true" tabindex="-1"><option value="">请选择转入账户</option></select>
+          <button id="toAccountPickerBtn" class="account-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">请选择转入账户</button>
+          <div id="toAccountPickerMenu" class="account-picker-menu" role="listbox" hidden></div>
+        </div>
+      </div>
+
+      <div class="field special-transfer-field" id="transferModeField" style="display:none;">
+        <div class="field-label">转账方式</div>
+        <div class="chips" id="transferModeChips" aria-label="转账方式"></div>
+      </div>
+
+      <div class="field special-transfer-field" id="transferPartyField" style="display:none;">
+        <div class="field-label">转账对象</div>
+        <input id="transferParty" type="text" placeholder="如：家人、朋友、商家">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <div class="field-label">备注</div>
+          <input id="note" type="text" placeholder="选填">
+        </div>
+        <div class="field">
+          <div class="field-label">日期</div>
+          <input id="date" type="date">
+        </div>
       </div>
     </div>
 
     <button id="saveBtn" class="btn-primary">保存这笔账</button>
     <button id="cancelBtn" class="btn-ghost">取消修改</button>
-    <div id="formMsg" class="form-msg"></div>
+    <div id="formMsg" class="form-msg" role="status" aria-live="polite"></div>
+  </section>
+
+  <div id="categoryPickerDialog" class="record-picker-backdrop" hidden>
+    <section class="record-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="categoryPickerTitle">
+      <div class="record-picker-head">
+        <h2 id="categoryPickerTitle">选择类别</h2>
+        <button id="categoryPickerCloseBtn" class="record-picker-close" type="button">关闭</button>
+      </div>
+      <p class="record-picker-hint">选择这笔账的类别，常用类别会保留图标和中文名称。</p>
+      <button id="categoryPickerManageBtn" class="category-picker-manage" type="button">
+        <span><strong>自定义类别系统</strong><small>管理大类、小类和显示顺序</small></span>
+        <span aria-hidden="true">›</span>
+      </button>
+      <div id="categoryPickerOptions" class="category-picker-options" role="listbox" aria-label="可选类别"></div>
+    </section>
+  </div>
+
+  <!-- 类别系统：大类、小类及顺序集中管理，不改动历史流水。 -->
+  <section id="panelCategorySystem" class="category-system-page" style="display:none;">
+    <div class="page-head category-system-head">
+      <button id="categorySystemBackBtn" class="page-back" type="button"><span aria-hidden="true">‹</span><span>记一笔</span></button>
+      <h2>自定义类别系统</h2>
+      <span class="page-head-spacer" aria-hidden="true"></span>
+    </div>
+    <p class="category-system-intro">长按大类整行或小类图标卡片，拖动即可排序。移除类别不会删除已有流水。</p>
+    <div class="category-system-list-head">
+      <div><h3>我的类别</h3><span id="categorySystemSummary"></span></div>
+      <button id="categoryGroupCreateToggle" class="category-system-add-toggle" type="button" aria-expanded="false">＋ 新增大类</button>
+    </div>
+    <form id="categoryGroupForm" class="category-system-create" hidden>
+      <label for="categoryGroupName">新增大类</label>
+      <div class="category-system-create-row">
+        <input id="categoryGroupName" type="text" maxlength="20" autocomplete="off" placeholder="例如：旅行出游">
+        <button class="btn-primary" type="submit">添加</button>
+      </div>
+      <div class="category-system-choice-label">图标</div>
+      <div id="categoryGroupIconChoices" class="category-system-icon-choices" aria-label="大类图标"></div>
+      <div class="category-system-choice-label">颜色</div>
+      <div id="categoryGroupColorChoices" class="category-system-color-choices" aria-label="大类颜色"></div>
+    </form>
+    <div id="categorySystemGroups" class="category-system-groups"></div>
+    <button id="categorySystemRestoreBtn" class="category-system-restore" type="button">补回默认类别</button>
   </section>
 
   <!-- 账户 -->
   <section class="card" id="panelAccount" style="display:none;">
-    <h2>账户</h2>
+    <div class="page-head">
+      <button class="page-back page-back-home" type="button"><span aria-hidden="true">‹</span><span>返回首页</span></button>
+      <h2>账户</h2>
+      <span class="page-head-spacer" aria-hidden="true"></span>
+    </div>
     <div id="accountList"></div>
 
     <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
@@ -220,73 +523,182 @@
         </div>
       </div>
       <div class="field" style="margin-bottom:12px;">
-        <input id="accInitial" type="number" min="0" step="0.01" placeholder="本金（初始余额）">
+          <input id="accInitial" type="number" min="0" step="0.01" placeholder="本金（初始余额）">
       </div>
       <button id="accSaveBtn" class="btn-primary">添加账户</button>
       <button id="accCancelBtn" class="btn-ghost">取消修改</button>
-      <div id="accMsg" class="acc-msg"></div>
+      <div id="accMsg" class="acc-msg" role="status" aria-live="polite"></div>
     </div>
   </section>
 
   <!-- 明细 -->
-  <section class="card" id="panelDetail" style="display:none;">
-    <h2>明细</h2>
-    <div class="field-row" style="margin-bottom:12px;">
-      <div class="field" style="margin-bottom:0;">
-        <div class="field-label">从</div>
-        <input id="fromDate" type="date">
-      </div>
-      <div class="field" style="margin-bottom:0;">
-        <div class="field-label">到</div>
-        <input id="toDate" type="date">
-      </div>
+  <section class="card detail-panel" id="panelDetail" style="display:none;">
+    <div class="page-head">
+      <button class="page-back page-back-home" type="button"><span aria-hidden="true">‹</span><span>流水明细</span></button>
     </div>
-    <div class="field-row" style="margin-bottom:12px;">
-      <div class="field" style="margin-bottom:0;">
-        <div class="field-label">账户</div>
-        <select id="filterAccountSel"><option value="">全部账户</option></select>
-      </div>
-      <div class="field" style="margin-bottom:0;">
-        <div class="field-label">类别</div>
-        <select id="filterCategorySel"><option value="">全部类别</option></select>
-      </div>
-    </div>
-    <div class="field" style="margin-bottom:12px;">
+    <div class="field detail-search-field">
       <input id="searchInput" type="text" placeholder="搜索备注 / 类别 / 类型">
     </div>
-    <div id="periodSummary" class="period-summary"></div>
-    <button id="detailToggle" class="chip chip-toggle" style="margin-bottom:8px;">▾ 展开明细</button>
+    <button id="filterToggle" class="chip chip-toggle detail-filter-toggle" type="button" aria-expanded="false">展开筛选条件</button>
+    <div id="detailFilters" class="detail-filters" hidden>
+      <div class="field-row">
+        <div class="field">
+          <div class="field-label">从</div>
+          <input id="fromDate" type="date">
+        </div>
+        <div class="field">
+          <div class="field-label">到</div>
+          <input id="toDate" type="date">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <div class="field-label">账户</div>
+          <div class="compact-picker detail-filter-picker" id="filterAccountPicker">
+            <button id="filterAccountPickerBtn" class="compact-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">全部账户<span aria-hidden="true">⌄</span></button>
+            <div id="filterAccountPickerMenu" class="compact-picker-menu" role="listbox" aria-label="选择账户" hidden></div>
+            <select id="filterAccountSel" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">全部账户</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">类别</div>
+          <div class="compact-picker detail-filter-picker" id="filterCategoryPicker">
+            <button id="filterCategoryPickerBtn" class="compact-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">全部类别<span aria-hidden="true">⌄</span></button>
+            <div id="filterCategoryPickerMenu" class="compact-picker-menu" role="listbox" aria-label="选择类别" hidden></div>
+            <select id="filterCategorySel" class="sr-only" tabindex="-1" aria-hidden="true"><option value="">全部类别</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="detail-filter-actions">
+        <button id="filterResetBtn" class="btn-ghost detail-filter-clear" type="button" disabled>清除筛选</button>
+      </div>
+    </div>
+    <div class="detail-list-heading">
+      <button id="detailToggle" class="chip chip-toggle">▾ 展开明细</button>
+      <div id="detailCategoryTotal" class="detail-category-total" hidden></div>
+    </div>
     <div id="listWrap">
       <div id="list"></div>
       <div class="empty" id="empty">还没有账目，先记一笔吧</div>
+      <button id="emptyRecordBtn" class="btn-primary empty-action icon-button" type="button" hidden><span class="ui-icon" data-icon="record" aria-hidden="true"></span><span>记第一笔账</span></button>
     </div>
+  </section>
 
-    <div style="margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:12px; flex-wrap:wrap;">
-        <span class="field-label" style="margin:0;">统计图（按类别）</span>
-        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+  <!-- 图表总览（跨账本） -->
+  <section class="card" id="panelOverview" style="display:none;">
+    <div class="page-head">
+      <button class="page-back page-back-home" type="button"><span aria-hidden="true">‹</span><span>返回首页</span></button>
+      <h2>图表总览</h2>
+      <span class="page-head-spacer" aria-hidden="true"></span>
+    </div>
+    <div class="detail-chart-section overview-chart-section">
+      <div class="detail-chart-controls">
+        <span class="field-label" style="margin:0;">收支趋势与类别</span>
+        <div class="detail-chart-chip-groups">
           <div class="chips" id="chartKindChips"></div>
           <div class="chips" id="chartTypeChips"></div>
         </div>
       </div>
       <div id="chartBox"></div>
     </div>
-  </section>
-
-  <!-- 总览（跨账本） -->
-  <section class="card" id="panelOverview" style="display:none;">
-    <h2>总览（所有账本）</h2>
+    <h3 class="subsection-title">所有账本</h3>
     <div id="overviewList"></div>
     <div id="overviewTotal" class="overview-total"></div>
   </section>
+
+  <!-- 预算页：按月设置总预算，也可按类别设置重点额度。 -->
+  <section class="card budget-panel" id="panelBudget" style="display:none;">
+    <div class="page-head">
+      <button class="page-back page-back-home" type="button"><span aria-hidden="true">‹</span><span>返回首页</span></button>
+      <h2>预算</h2>
+      <span class="page-head-spacer" aria-hidden="true"></span>
+    </div>
+
+    <div class="budget-month-bar">
+      <button id="budgetPrevBtn" class="mini-btn" type="button" aria-label="上一个月">‹</button>
+      <label class="budget-month-picker">
+        <span class="field-label">预算月份</span>
+        <input id="budgetMonthInput" type="month" aria-label="预算月份">
+      </label>
+      <button id="budgetNextBtn" class="mini-btn" type="button" aria-label="下一个月">›</button>
+      <button id="budgetCurrentBtn" class="btn-ghost" type="button">本月</button>
+    </div>
+
+    <section id="budgetSummary" class="budget-summary" aria-live="polite"></section>
+
+    <section class="budget-card">
+      <div class="budget-card-heading">
+        <div>
+          <h3>月度总预算</h3>
+          <p>控制本月全部支出，转账、借贷本金和押金本金不计入。</p>
+        </div>
+      </div>
+      <div class="budget-total-form">
+        <label class="budget-input-label" for="budgetTotalInput">预算额度</label>
+        <div class="budget-input-row">
+          <span class="budget-currency">¥</span>
+          <input id="budgetTotalInput" type="number" min="0" step="0.01" inputmode="decimal" placeholder="暂不设置">
+          <button id="budgetSaveTotalBtn" class="btn-primary" type="button">保存总预算</button>
+          <button id="budgetClearTotalBtn" class="btn-ghost" type="button">清除</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="budget-card">
+      <div class="budget-card-heading">
+        <div>
+          <h3>分类预算</h3>
+          <p>只为需要重点控制的类别设置额度，未设置的类别仍会计入总预算。</p>
+        </div>
+      </div>
+      <div class="budget-category-form">
+        <label class="sr-only" for="budgetCategorySelect">选择预算类别</label>
+        <div class="budget-category-picker">
+          <select id="budgetCategorySelect" class="native-budget-category-select" tabindex="-1" aria-hidden="true"><option value="">选择类别</option></select>
+          <button id="budgetCategoryPickerBtn" class="budget-category-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">选择类别<span aria-hidden="true">⌄</span></button>
+          <div id="budgetCategoryPickerMenu" class="budget-category-picker-menu" role="listbox" hidden></div>
+        </div>
+        <label class="sr-only" for="budgetCategoryInput">分类预算额度</label>
+        <input id="budgetCategoryInput" type="number" min="0" step="0.01" inputmode="decimal" placeholder="额度">
+        <button id="budgetAddCategoryBtn" class="btn-ghost" type="button">添加</button>
+      </div>
+      <div id="budgetCategoryList" class="budget-category-list"></div>
+      <div id="budgetCategoryEmpty" class="budget-empty">还没有分类预算，可以先设置餐饮或交通。</div>
+    </section>
+
+    <div id="budgetMsg" class="form-msg" role="status" aria-live="polite"></div>
+    <p class="budget-footnote">预算按当月实际发生的支出计算；退款和报销会冲减对应支出，超过预算时会明确显示超支金额。</p>
+  </section>
+    </div>
+  </section>
+
+  <!-- 固定底部导航：高频入口始终可见。 -->
+  <nav class="tabs bottom-nav" aria-label="主导航">
+    <button class="tab" data-tab="detail"><span class="tab-icon" data-icon="detail" aria-hidden="true"></span><span>流水</span></button>
+    <button class="tab bottom-record-tab" data-tab="record"><span class="tab-icon bottom-plus-icon" aria-hidden="true">＋</span><span>记一笔</span></button>
+    <button id="bookManageBtn" class="tab" data-tab="book"><span class="tab-icon" data-icon="book" aria-hidden="true"></span><span>设置</span></button>
+  </nav>
 
   </main>
 
 </div>
 
+<div id="confirmDialog" class="confirm-dialog-backdrop" hidden>
+  <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage" tabindex="-1">
+    <h2 id="confirmDialogTitle">请确认</h2>
+    <p id="confirmDialogMessage"></p>
+    <div class="confirm-dialog-actions">
+      <button id="confirmDialogCancel" class="btn-ghost" type="button">取消</button>
+      <button id="confirmDialogOk" class="btn-primary" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/constants.js"></script>
 <script src="js/state.js"></script>
 <script src="js/helpers.js"></script>
+<script src="js/dialogs.js"></script>
+<script src="js/special-record-form.js"></script>
 <script src="js/deposit-form.js"></script>
 <script src="js/selects.js"></script>
 <script src="js/storage-adapter.js"></script>
@@ -294,16 +706,22 @@
 <script src="js/storage.js"></script>
 <script src="js/api-client.js"></script>
 <script src="js/backup.js"></script>
+<script src="js/external-import.js"></script>
 <script src="js/records.js"></script>
+<script src="js/budget.js"></script>
 <script src="js/filters.js"></script>
 <script src="js/custom-options.js"></script>
+<script src="js/category-system.js"></script>
 <script src="js/record-form.js"></script>
+<script src="js/record-keyboard.js"></script>
 <script src="js/account-form.js"></script>
 <script src="js/book-form.js"></script>
 <script src="js/auth-form.js"></script>
 <script src="js/view.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/overview.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/investment-plans.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

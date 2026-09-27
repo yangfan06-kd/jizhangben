@@ -108,6 +108,14 @@ def seed_overview_data(database_path, user_id):
                     "overview-old-expense", "overview-book", "overview-expense", "overview-category",
                     "overview-asset", None, 400, str(previous_month_end), "上月支出", None, None, None, 0,
                 ),
+                (
+                    "overview-open-paid-deposit", "overview-book", "overview-deposit", "overview-category",
+                    "overview-asset", None, 6000, str(today - timedelta(days=3)), "尚未退回的押金", "pay", "新房东", None, 0,
+                ),
+                (
+                    "overview-open-received-deposit", "overview-book", "overview-deposit", "overview-category",
+                    "overview-asset", None, 5000, str(today - timedelta(days=2)), "尚未退给租客的押金", "receive", "租客", None, 0,
+                ),
             ),
         )
 
@@ -142,7 +150,7 @@ async def test_overview_matches_account_and_period_rules(tmp_path):
             "name": "银行卡",
             "kind": "asset",
             "initial_cents": 10000,
-            "balance_cents": 5100,
+            "balance_cents": 4100,
         },
         {
             "id": "overview-liability",

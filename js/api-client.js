@@ -406,6 +406,8 @@ function restoreLocalStateFromStorage() {
   loadAccounts();
   loadCustomTypes();
   loadCustomCategories();
+  loadCustomCategoryIcons();
+  loadCategorySystem();
   resetForm();
   resetAccountForm();
   resetBookForm();
@@ -476,6 +478,7 @@ async function hydrateOptionsFromBackend() {
   dataState.customCategories = mappedCategories
     .filter(category => !category.isSystem)
     .map(category => category.name);
+  if (typeof syncCategorySystemWithCustomCategories === "function") syncCategorySystemWithCustomCategories();
   dataState.customTypes = mappedTypes
     .filter(recordType => !recordType.isSystem)
     .map(recordType => ({ name: recordType.name, side: recordType.side }));
@@ -524,6 +527,8 @@ async function startBackendReadHydration(allowEmptyBooks = false) {
   try {
     const loaded = await hydrateBooksFromBackend(allowEmptyBooks);
     if (!loaded) return false;
+    // 预算按账本本地隔离；服务端切换当前账本后不能继续显示登录前账本的预算。
+    if (typeof loadBudgetData === "function") loadBudgetData();
     if (!await hydrateOptionsFromBackend()) throw new Error("options_response_invalid");
     if (!await hydrateAccountsFromBackend()) throw new Error("accounts_response_invalid");
     if (!await hydrateRecordsFromBackend()) throw new Error("records_response_invalid");
@@ -554,6 +559,7 @@ async function startBackendReadHydration(allowEmptyBooks = false) {
     dataState.customCategories = localCustomCategories;
     dataState.records = localRecords;
     dataState.backendOverview = localOverview;
+    if (typeof loadBudgetData === "function") loadBudgetData();
     dataState.backendCategoryIds = Object.create(null);
     dataState.backendTypeIds = Object.create(null);
     dataState.backendBooksLoaded = false;

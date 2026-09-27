@@ -1,24 +1,132 @@
 // 应用启动模块：在页面结构、状态和功能函数准备完成后绑定事件并初始化数据。
 // 该文件必须在所有功能模块之后加载。
 
+if (typeof renderUiIcons === "function") renderUiIcons();
+
+// 使用浏览器历史承接 Android 的系统返回/边缘返回；专项页面的系统返回直接回首页。
+if (window.history && typeof window.history.replaceState === "function") {
+  window.history.replaceState({ tab: "home" }, "", "#home");
+  window.addEventListener("popstate", event => {
+    const tab = event.state && event.state.tab ? event.state.tab : "home";
+    switchTab(tab, { fromHistory: true });
+  });
+}
+
+// 原生 Android 返回键会调用这个函数；在专项页面直接回首页，首页才交回系统退出。
+window.handleNativeBack = function handleNativeBack() {
+  const categoryDialog = document.getElementById("categoryPickerDialog");
+  if (categoryDialog && !categoryDialog.hidden) {
+    closeCategoryPicker();
+    return true;
+  }
+  if (uiState.activeTab === "investment" && typeof fundUi !== "undefined" && fundUi.view !== "home") {
+    fundBack();
+    return true;
+  }
+  if (uiState.activeTab === "categorySystem") {
+    switchTab("record", { replaceHistory: true });
+    return true;
+  }
+  if (uiState && uiState.activeTab && uiState.activeTab !== "home") {
+    switchTab("home", { replaceHistory: true });
+    return true;
+  }
+  return false;
+};
+
+function openRecordPage() {
+  // 新建时从干净的“支出”表单开始；编辑记录时保留编辑草稿。
+  if (uiState.editingRecordId === null && typeof resetForm === "function") resetForm();
+  switchTab("record");
+  const amount = document.getElementById("amount");
+  if (amount) setTimeout(() => {
+    amount.focus({ preventScroll: true });
+  }, 0);
+}
+
 document.getElementById("saveBtn").onclick = handleSave;
 document.getElementById("cancelBtn").onclick = cancelEdit;
 document.getElementById("detailToggle").onclick = () => {
   uiState.detailExpanded = !uiState.detailExpanded;
   renderList();
 };
-document.querySelectorAll(".tab").forEach(b => {
-  b.onclick = () => switchTab(b.dataset.tab);
+document.getElementById("emptyRecordBtn").onclick = openRecordPage;
+document.getElementById("filterToggle").onclick = () => {
+  uiState.detailFiltersExpanded = !uiState.detailFiltersExpanded;
+  renderDetailFilters();
+};
+document.getElementById("filterAccountPickerBtn").onclick = () => toggleCompactPicker("filterAccountPickerBtn", "filterAccountPickerMenu");
+document.getElementById("filterCategoryPickerBtn").onclick = () => toggleCompactPicker("filterCategoryPickerBtn", "filterCategoryPickerMenu");
+document.getElementById("reimbursementLinkPickerBtn").onclick = () => toggleCompactPicker("reimbursementLinkPickerBtn", "reimbursementLinkPickerMenu");
+document.getElementById("refundLinkPickerBtn").onclick = () => toggleCompactPicker("refundLinkPickerBtn", "refundLinkPickerMenu");
+document.getElementById("loanLinkPickerBtn").onclick = () => toggleCompactPicker("loanLinkPickerBtn", "loanLinkPickerMenu");
+document.getElementById("filterResetBtn").onclick = () => {
+  resetFilterState();
+  uiState.detailPeriod = "month";
+  ["fromDate", "toDate", "filterAccountSel", "filterCategorySel", "searchInput"].forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) field.value = "";
+  });
+  refreshDetail();
+};
+document.getElementById("detailPeriodCards").onclick = event => {
+  const card = event.target.closest("[data-detail-period]");
+  if (!card) return;
+  uiState.detailPeriod = card.dataset.detailPeriod;
+  uiState.detailExpanded = true;
+  switchTab("detail");
+};
+document.querySelectorAll(".bottom-nav .tab").forEach(b => {
+  b.onclick = () => b.dataset.tab === "record" ? openRecordPage() : switchTab(b.dataset.tab);
+});
+document.querySelectorAll("[data-tab]:not(.tab)").forEach(b => {
+  b.onclick = () => b.dataset.tab === "record" ? openRecordPage() : switchTab(b.dataset.tab);
+});
+document.getElementById("recordBackBtn").onclick = () => switchTab("home", { replaceHistory: true });
+document.querySelectorAll(".page-back-home").forEach(b => {
+  b.onclick = () => switchTab("home", { replaceHistory: true });
+});
+document.getElementById("categoryPickerCloseBtn").onclick = closeCategoryPicker;
+document.getElementById("categoryPickerManageBtn").onclick = () => {
+  closeCategoryPicker();
+  openCategorySystem();
+};
+document.getElementById("categoryPickerDialog").onclick = event => {
+  if (event.target.id === "categoryPickerDialog") closeCategoryPicker();
+};
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    closeCompactPickers();
+    const dialog = document.getElementById("categoryPickerDialog");
+    if (dialog && !dialog.hidden) {
+      event.preventDefault();
+      closeCategoryPicker();
+    }
+  }
+});
+document.addEventListener("click", event => {
+  if (!event.target.closest(".compact-picker")) closeCompactPickers();
 });
 document.getElementById("date").value = todayStr();
 document.getElementById("amount").oninput = updateDepositSettlementHint;
+document.getElementById("accountSel").onchange = () => {
+  if (uiState.selectedType === "余额" && uiState.balanceTargetAccountId === null) {
+    const account = dataState.accounts.find(item => String(item.id) === String(document.getElementById("accountSel").value));
+    const principal = document.getElementById("balancePrincipal");
+    if (account && principal && principal.value === "") principal.value = initialOf(account).toFixed(2);
+  }
+  updateFormFields();
+};
+document.getElementById("toAccountSel").onchange = () => updateFormFields();
 document.getElementById("depositLinkSel").onchange = updateDepositSettlementHint;
 document.getElementById("fromDate").onchange = () => {
   filterState.fromDate = document.getElementById("fromDate").value;
+  uiState.detailPeriod = "all";
   refreshDetail();
 };
 document.getElementById("toDate").onchange = () => {
   filterState.toDate = document.getElementById("toDate").value;
+  uiState.detailPeriod = "all";
   refreshDetail();
 };
 document.getElementById("filterAccountSel").onchange = () => {
@@ -40,10 +148,11 @@ document.getElementById("accCancelBtn").onclick = resetAccountForm;
 document.getElementById("bookSel").onchange = () => {
   switchBook(document.getElementById("bookSel").value);
 };
-document.getElementById("bookManageBtn").onclick = () => toggleBookPanel(true);
-document.getElementById("bookBackBtn").onclick = () => toggleBookPanel(false);
+document.getElementById("bookManageBtn").onclick = () => switchTab("book");
+document.getElementById("bookBackBtn").onclick = () => switchTab("home", { replaceHistory: true });
 document.getElementById("bookSaveBtn").onclick = handleBookSave;
 document.getElementById("bookCancelBtn").onclick = resetBookForm;
+bindBudgetEvents();
 document.getElementById("authOpenBtn").onclick = () => openAuthPanel("login");
 document.getElementById("syncBtn").onclick = syncBackendData;
 document.getElementById("authLogoutBtn").onclick = logoutAuth;
@@ -63,6 +172,21 @@ document.getElementById("importFile").onchange = (e) => {
   if (f) importBackup(f);
   e.target.value = "";  // 清掉，方便下次再选同一个文件
 };
+document.getElementById("externalImportBtn").onclick = () => {
+  document.getElementById("externalImportFile").click();
+};
+document.getElementById("externalImportFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  if (f) await previewExternalImportFile(f);
+  e.target.value = "";
+};
+document.getElementById("externalImportSource").onchange = () => {
+  const input = document.getElementById("externalImportBookName");
+  if (!externalImportState.fileName) return;
+  input.value = externalImportBookName(document.getElementById("externalImportSource").value, externalImportState.fileName);
+};
+document.getElementById("externalImportConfirmBtn").onclick = commitExternalImport;
+document.getElementById("externalImportCancelBtn").onclick = clearExternalImportPreview;
 document.getElementById("migrationPreviewBtn").onclick = () => {
   document.getElementById("migrationFile").click();
 };
@@ -78,8 +202,13 @@ function loadLocalLedgerState() {
   loadBooks();
   load();
   loadAccounts();
+  loadInvestmentPlans();
+  loadFundProjects();
+  loadBudgetData();
   loadCustomTypes();
   loadCustomCategories();
+  loadCustomCategoryIcons();
+  loadCategorySystem();
 }
 
 function initializeLocalLedger() {
@@ -91,12 +220,15 @@ function initializeLocalLedger() {
   renderCategoryChips();
   renderAccountSelects();
   fillCategoryFilter();
+  processDueInvestmentPlans();
   updateFormFields();
   render();
 }
 
 // HTTP 页面先进入登录入口，不读取或显示浏览器里的本地账本；登录成功后再读取服务端数据。
 bindNetworkStatusEvents();
+bindInvestmentPlanEvents();
+bindCategorySystemEvents();
 if (backendApi.baseUrl()) {
   // 先准备本机快照，网络不可达时可以立即切换到离线模式；认证成功后再用服务端快照替换。
   loadLocalLedgerState();

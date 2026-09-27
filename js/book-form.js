@@ -51,12 +51,18 @@ function applyLocalBookDelete(id) {
   dataState.books = dataState.books.filter(x => String(x.id) !== String(id));
   appStorage.remove(recordsKey(id));
   appStorage.remove(accountsKey(id));
+  appStorage.remove(budgetKey(id));
+  appStorage.remove(investmentPlansKey(id));
+  appStorage.remove(fundProjectsKey(id));
   saveBooks();
   if (String(dataState.currentBookId) === String(id) && dataState.books.length > 0) {
     dataState.currentBookId = dataState.books[0].id;
     appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(dataState.currentBookId));
     load();
     loadAccounts();
+    loadInvestmentPlans();
+    loadFundProjects();
+    loadBudgetData();
     resetForm();
     resetAccountForm();
     resetFilterState();
@@ -96,6 +102,9 @@ function switchBook(id) {
   appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(dataState.currentBookId));
   load();
   loadAccounts();
+  loadInvestmentPlans();
+  loadFundProjects();
+  loadBudgetData();
   // 清掉编辑中的状态和筛选，避免串到别的账本
   resetForm();
   resetAccountForm();
@@ -108,6 +117,7 @@ function switchBook(id) {
   renderBookSelect();
   renderAccountSelects();
   fillCategoryFilter();
+  processDueInvestmentPlans();
   render();
   if (dataState.backendBooksLoaded) {
     const localAccounts = dataState.accounts;
@@ -150,9 +160,9 @@ function renderBookList() {
         </div>
       </div>
       <div class="row-actions">
-        <button class="mini-btn" data-id="${b.id}" data-act="use">用</button>
-        <button class="mini-btn" data-id="${b.id}" data-act="edit">改</button>
-        <button class="mini-btn danger" data-id="${b.id}" data-act="del">删</button>
+        <button class="mini-btn row-action-btn" data-id="${b.id}" data-act="use" title="使用这个账本" aria-label="使用这个账本"><span class="ui-icon" data-icon="book" aria-hidden="true"></span><span class="action-label">使用</span></button>
+        <button class="mini-btn row-action-btn" data-id="${b.id}" data-act="edit" title="编辑账本" aria-label="编辑账本"><span class="ui-icon" data-icon="edit" aria-hidden="true"></span><span class="action-label">编辑</span></button>
+        <button class="mini-btn danger row-action-btn" data-id="${b.id}" data-act="del" title="删除账本" aria-label="删除账本"><span class="ui-icon" data-icon="delete" aria-hidden="true"></span><span class="action-label">删除</span></button>
       </div>
     `;
     box.appendChild(row);
@@ -165,6 +175,7 @@ function renderBookList() {
       else deleteBook(id);
     };
   });
+  if (typeof renderUiIcons === "function") renderUiIcons(box);
 }
 
 function resetBookForm() {
@@ -214,7 +225,7 @@ async function handleBookSave() {
       renderOverview();
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showBookMsg(error.message || "服务端拒绝了账本修改", true);
+        showBookMsg(userFacingError(error, "服务端拒绝了账本修改"), true);
       } else {
         restoreLocalStateFromStorage();
         const localBook = findLocalBookByFingerprint(originalFingerprint);
@@ -270,7 +281,7 @@ async function handleBookSave() {
       return;
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showBookMsg(error.message || "服务端拒绝创建账本", true);
+        showBookMsg(userFacingError(error, "服务端拒绝创建账本"), true);
         return;
       }
       restoreLocalStateFromStorage();
@@ -328,7 +339,7 @@ async function deleteBook(id) {
   const b = dataState.books.find(x => String(x.id) === String(id));
   if (!b) return;
   if (dataState.books.length <= 1) { showBookMsg("至少要保留一个账本"); return; }
-  if (!confirm("确定删除账本「" + b.name + "」吗？\n这个账本下的所有账目和账户都会被清空。")) return;
+  if (!await appConfirm("确定删除账本「" + b.name + "」吗？\n这个账本下的所有账目和账户都会被清空。")) return;
   const fingerprint = bookFingerprint(b);
   if (backendWritesEnabled() && typeof b.id === "string") {
     setBookDeleteBusy(true);
@@ -355,7 +366,7 @@ async function deleteBook(id) {
       render();
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showBookMsg(error.message || "服务端拒绝删除账本", true);
+        showBookMsg(userFacingError(error, "服务端拒绝删除账本"), true);
       } else {
         restoreLocalStateFromStorage();
         const localBook = findLocalBookByFingerprint(fingerprint);
@@ -387,15 +398,8 @@ async function deleteBook(id) {
   render();
 }
 
-// 打开 / 关闭账本管理面板（打开时盖住四个主要面板）
+// 打开 / 关闭设置里的账本管理页
 function toggleBookPanel(show) {
-  document.getElementById("panelBook").style.display = show ? "block" : "none";
-  document.getElementById("panelRecord").style.display = show ? "none" : (uiState.activeTab === "record" ? "block" : "none");
-  document.getElementById("panelAccount").style.display = show ? "none" : (uiState.activeTab === "account" ? "block" : "none");
-  document.getElementById("panelDetail").style.display = show ? "none" : (uiState.activeTab === "detail" ? "block" : "none");
-  document.getElementById("panelOverview").style.display = show ? "none" : (uiState.activeTab === "overview" ? "block" : "none");
-  if (show) {
-    document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-    renderBookList();
-  }
+  switchTab(show ? "book" : "home");
+  if (show) renderBookList();
 }

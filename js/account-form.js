@@ -105,7 +105,7 @@ async function handleAccountSave() {
       render();
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showAccMsg(error.message || "服务端拒绝了账户修改");
+        showAccMsg(userFacingError(error, "服务端拒绝了账户修改"));
       } else {
         restoreLocalStateFromStorage();
         const localAccount = findLocalAccountByFingerprint(originalFingerprint);
@@ -146,7 +146,7 @@ async function handleAccountSave() {
       return;
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showAccMsg(error.message || "服务端拒绝创建账户");
+        showAccMsg(userFacingError(error, "服务端拒绝创建账户"));
         return;
       }
       restoreLocalStateFromStorage();
@@ -174,15 +174,48 @@ async function handleAccountSave() {
   render();
 }
 
-function startEditAccount(id) {
+function applyAccountPrincipal(id, initialCents) {
+  const account = dataState.accounts.find(item => String(item.id) === String(id));
+  if (!account || account.fundOnly) return false;
+  const cents = Math.max(0, Math.round(Number(initialCents) || 0));
+  account.initialCents = cents;
+  account.initial = cents / 100;
+  saveAccounts();
+  if (typeof markLocalChangePending === "function") {
+    markLocalChangePending("account_balance_edit");
+  }
+  return true;
+}
+
+function openAccountBalanceEditor(id) {
   const a = dataState.accounts.find(x => String(x.id) === String(id));
-  if (!a) return;
-  uiState.editingAccountId = id;
-  document.getElementById("accName").value = a.name;
-  document.getElementById("accKind").value = a.kind;
-  document.getElementById("accInitial").value = initialOf(a);
-  document.getElementById("accSaveBtn").textContent = "保存修改";
-  document.getElementById("accCancelBtn").style.display = "block";
+  if (!a || a.fundOnly) return;
+  uiState.editingAccountId = null;
+  uiState.editingRecordId = null;
+  uiState.balanceTargetAccountId = a.id;
+  uiState.balanceTargetRecordId = null;
+  if (typeof selectRecordType === "function") selectRecordType("余额");
+  const current = computeBalances()[a.id] || 0;
+  const accountSel = document.getElementById("accountSel");
+  const amount = document.getElementById("amount");
+  const principal = document.getElementById("balancePrincipal");
+  const date = document.getElementById("date");
+  if (accountSel) accountSel.value = String(a.id);
+  if (typeof syncAccountPickerValue === "function") syncAccountPickerValue("accountSel");
+  if (amount) amount.value = current.toFixed(2);
+  if (principal) principal.value = initialOf(a).toFixed(2);
+  if (date) date.value = todayStr();
+  if (typeof updateFormFields === "function") updateFormFields();
+  if (typeof renderTypeChips === "function") renderTypeChips();
+  if (typeof renderCategoryChips === "function") renderCategoryChips();
+  if (typeof switchTab === "function") switchTab("record");
+  const amountInput = document.getElementById("amount");
+  if (amountInput && typeof amountInput.focus === "function") amountInput.focus();
+}
+
+// 兼容旧入口：账户行的编辑现在统一进入余额窗口。
+function startEditAccount(id) {
+  openAccountBalanceEditor(id);
 }
 
 async function deleteAccount(id) {
@@ -196,7 +229,13 @@ async function deleteAccount(id) {
   }
   const a = dataState.accounts.find(x => String(x.id) === String(id));
   if (!a) return;
-  if (!confirm("确定删除账户「" + a.name + "」吗？\n（用它记过的账会显示为“未指定”）")) return;
+  if (a.fundOnly) return;
+  if ((dataState.fundProjects || []).some(project =>
+    project.status === "open" && String(project.sourceAccountId) === String(id))) {
+    showAccMsg("这个账户仍被基金计划使用，请先处理基金计划");
+    return;
+  }
+  if (!await appConfirm("确定删除账户「" + a.name + "」吗？\n（用它记过的账会显示为“未指定”）")) return;
   const fingerprint = accountFingerprint(a);
   if (backendWritesEnabled() && typeof a.id === "string") {
     setAccountDeleteBusy(true);
@@ -211,7 +250,7 @@ async function deleteAccount(id) {
       render();
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        showAccMsg(error.message || "服务端拒绝删除账户");
+        showAccMsg(userFacingError(error, "服务端拒绝删除账户"));
       } else {
         restoreLocalStateFromStorage();
         const localAccount = findLocalAccountByFingerprint(fingerprint);

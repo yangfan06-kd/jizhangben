@@ -10,16 +10,24 @@ const filterState = {
 };
 
 const uiState = {
-  activeTab: "record",
+  activeTab: "home",
   editingRecordId: null,
   editingAccountId: null,
   editingBookId: null,
   selectedType: null,
   selectedCategory: null,
   selectedDepositDir: null,
+  selectedLoanMode: null,
+  selectedPayMode: null,
+  selectedTransferMode: null,
+  balanceTargetAccountId: null,
+  balanceTargetRecordId: null,
   chartType: "bar",
   chartKind: "expense",
+  chartExpanded: false,
   detailExpanded: false,
+  detailPeriod: "month",
+  detailFiltersExpanded: false,
   typesExpanded: false,
   categoriesExpanded: false,
   customTypeSideDraft: "neutral",
@@ -44,6 +52,8 @@ const dataState = {
   accounts: [],
   customTypes: [],
   customCategories: [],
+  customCategoryIcons: {},
+  categorySystem: null,
   // 后端选项的名称到 UUID 映射，记录写入时使用；页面仍继续用名称显示。
   backendCategoryIds: {},
   backendTypeIds: {},
@@ -51,7 +61,10 @@ const dataState = {
   backendBooksLoaded: false,
   backendOptionsLoaded: false,
   backendRecordsLoaded: false,
-  backendOverview: null
+  backendOverview: null,
+  budgetData: null,
+  investmentPlans: [],
+  fundProjects: []
 };
 
 function resetFilterState() {

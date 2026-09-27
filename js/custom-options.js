@@ -6,16 +6,12 @@ function renderTypeChips() {
   if (!box) return;
   box.innerHTML = "";
   const list = allTypes();
-  const collapsed = list.slice(0, COLLAPSE_COUNT);
-  let visible = uiState.typesExpanded ? list : collapsed;
-  // 选中的那项即使被折叠，也要露出来，方便看清当前选的是什么
-  if (!uiState.typesExpanded && uiState.selectedType && list.includes(uiState.selectedType) && !visible.includes(uiState.selectedType)) {
-    visible = visible.concat([uiState.selectedType]);
-  }
-  visible.forEach(t => {
+  // 类型保持一行横向滑动；自定义类型自然排在内置类型后面，末尾再放新增入口。
+  list.forEach(t => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "chip";
+    b.setAttribute("aria-pressed", t === uiState.selectedType ? "true" : "false");
     const side = typeSide(t);
     if (side === "income") b.classList.add("chip-income");
     if (side === "expense") b.classList.add("chip-expense");
@@ -24,26 +20,28 @@ function renderTypeChips() {
     if (isCustomType(t)) {
       const x = document.createElement("span");
       x.className = "chip-del";
+      x.setAttribute("role", "button");
+      x.setAttribute("tabindex", "0");
+      x.setAttribute("aria-label", "删除这个自定义类型");
       x.textContent = "×";
       x.title = "删除这个自定义类型";
       x.onclick = (e) => { e.stopPropagation(); removeCustom("type", t); };
+      x.onkeydown = (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          removeCustom("type", t);
+        }
+      };
       b.appendChild(x);
     }
-    b.onclick = () => { uiState.selectedType = t; renderTypeChips(); updateFormFields(); };
+    b.onclick = () => chooseRecordType(t);
     box.appendChild(b);
   });
-  if (list.length > COLLAPSE_COUNT) {
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "chip chip-toggle";
-    toggle.textContent = uiState.typesExpanded ? "▴ 收起" : "▾ 展开";
-    toggle.onclick = () => { uiState.typesExpanded = !uiState.typesExpanded; renderTypeChips(); };
-    box.appendChild(toggle);
-  }
   const add = document.createElement("button");
   add.type = "button";
   add.className = "chip chip-add";
-  add.textContent = "＋自定义";
+  add.textContent = "＋ 自定义";
   add.onclick = () => renderCustomBox("type");
   box.appendChild(add);
 }
@@ -52,43 +50,176 @@ function renderCategoryChips() {
   const box = document.getElementById("categoryChips");
   if (!box) return;
   box.innerHTML = "";
-  const list = allCategories();
-  const collapsed = list.slice(0, COLLAPSE_COUNT);
-  let visible = uiState.categoriesExpanded ? list : collapsed;
-  if (!uiState.categoriesExpanded && uiState.selectedCategory && list.includes(uiState.selectedCategory) && !visible.includes(uiState.selectedCategory)) {
-    visible = visible.concat([uiState.selectedCategory]);
-  }
-  visible.forEach(c => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    if (c === uiState.selectedCategory) b.classList.add("selected");
-    b.textContent = c;
-    if (isCustomCategory(c)) {
-      const x = document.createElement("span");
-      x.className = "chip-del";
-      x.textContent = "×";
-      x.title = "删除这个自定义类别";
-      x.onclick = (e) => { e.stopPropagation(); removeCustom("category", c); };
-      b.appendChild(x);
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "category-picker-trigger";
+  trigger.setAttribute("aria-haspopup", "dialog");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.onclick = openCategoryPicker;
+  if (uiState.selectedCategory) {
+    const iconMarkup = typeof categoryIconMarkup === "function" ? categoryIconMarkup(uiState.selectedCategory) : "";
+    if (iconMarkup) {
+      const icon = document.createElement("span");
+      icon.className = "category-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = iconMarkup;
+      trigger.appendChild(icon);
     }
-    b.onclick = () => { uiState.selectedCategory = c; renderCategoryChips(); };
-    box.appendChild(b);
-  });
-  if (list.length > COLLAPSE_COUNT) {
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "chip chip-toggle";
-    toggle.textContent = uiState.categoriesExpanded ? "▴ 收起" : "▾ 展开";
-    toggle.onclick = () => { uiState.categoriesExpanded = !uiState.categoriesExpanded; renderCategoryChips(); };
-    box.appendChild(toggle);
+    const label = document.createElement("span");
+    label.className = "category-picker-current";
+    label.textContent = uiState.selectedCategory;
+    trigger.appendChild(label);
+  } else {
+    const label = document.createElement("span");
+    label.className = "category-picker-placeholder";
+    label.textContent = "点击选择类别";
+    trigger.appendChild(label);
   }
-  const add = document.createElement("button");
-  add.type = "button";
-  add.className = "chip chip-add";
-  add.textContent = "＋自定义";
-  add.onclick = () => renderCustomBox("category");
-  box.appendChild(add);
+  const arrow = document.createElement("span");
+  arrow.className = "category-picker-arrow";
+  arrow.setAttribute("aria-hidden", "true");
+  arrow.textContent = "›";
+  trigger.appendChild(arrow);
+  box.appendChild(trigger);
+}
+
+function closeCategoryPicker() {
+  const dialog = document.getElementById("categoryPickerDialog");
+  if (!dialog) return;
+  dialog.hidden = true;
+  document.body.classList.remove("dialog-open");
+  const trigger = document.querySelector(".category-picker-trigger");
+  if (trigger) trigger.setAttribute("aria-expanded", "false");
+}
+
+function categoryGroupForName(name) {
+  const groups = dataState.categorySystem && Array.isArray(dataState.categorySystem.groups)
+    ? dataState.categorySystem.groups : CATEGORY_GROUPS;
+  return groups
+    .find(group => Array.isArray(group.items) && group.items.includes(name)) || null;
+}
+
+function recentCategoryNames(limit = 8) {
+  const available = new Set(allCategories());
+  const seen = new Set();
+  return dataState.records
+    .map((record, index) => ({ record, index }))
+    .filter(item => item.record && item.record.category && available.has(item.record.category))
+    .sort((a, b) => String(b.record.date || "").localeCompare(String(a.record.date || "")) || b.index - a.index)
+    .map(item => item.record.category)
+    .filter(category => {
+      if (seen.has(category)) return false;
+      seen.add(category);
+      return true;
+    })
+    .slice(0, limit);
+}
+
+function makeCategoryPickerOption(category, group) {
+  const option = document.createElement("button");
+  option.type = "button";
+  option.className = "category-picker-option";
+  option.setAttribute("role", "option");
+  option.setAttribute("aria-selected", category === uiState.selectedCategory ? "true" : "false");
+  if (category === uiState.selectedCategory) option.classList.add("selected");
+  const color = group && group.color ? group.color : "#6E8790";
+  const background = group && group.background ? group.background : "#EEF3F4";
+  option.style.setProperty("--category-color", color);
+  option.style.setProperty("--category-bg", background);
+  option.dataset.categoryName = category;
+  const iconMarkup = typeof categoryIconMarkup === "function"
+    ? categoryIconMarkup(category, group && group.icon)
+    : "";
+  if (iconMarkup) {
+    const icon = document.createElement("span");
+    icon.className = "category-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = iconMarkup;
+    option.appendChild(icon);
+  }
+  const label = document.createElement("span");
+  label.textContent = category;
+  option.appendChild(label);
+  option.onclick = () => {
+    uiState.selectedCategory = category;
+    closeCategoryPicker();
+    renderCategoryChips();
+  };
+  return option;
+}
+
+function appendCategoryPickerSection(box, title, items, group, options = {}) {
+  if (!Array.isArray(items) || (items.length === 0 && !options.emptyText)) return;
+  const section = document.createElement("section");
+  section.className = "category-picker-section" + (options.recent ? " recent" : "");
+  const head = document.createElement("div");
+  head.className = "category-picker-section-head";
+  const titleBox = document.createElement("div");
+  titleBox.className = "category-picker-section-title";
+  const iconMarkup = group && group.icon && typeof categoryIconMarkupByKey === "function"
+    ? categoryIconMarkupByKey(group.icon)
+    : "";
+  if (iconMarkup) {
+    const icon = document.createElement("span");
+    icon.className = "category-picker-section-icon";
+    icon.style.color = group.color || "#6E8790";
+    icon.innerHTML = iconMarkup;
+    icon.setAttribute("aria-hidden", "true");
+    titleBox.appendChild(icon);
+  }
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  titleBox.appendChild(heading);
+  head.appendChild(titleBox);
+  const hint = document.createElement("span");
+  hint.className = "category-picker-section-hint";
+  hint.textContent = options.recent ? "最近记过" : "常用小项";
+  head.appendChild(hint);
+  section.appendChild(head);
+  const grid = document.createElement("div");
+  grid.className = "category-picker-options" + (options.recent ? " recent" : "");
+  if (items.length > 0) {
+    items.forEach(category => grid.appendChild(makeCategoryPickerOption(category, categoryGroupForName(category) || group)));
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "category-picker-empty";
+    empty.textContent = options.emptyText;
+    grid.appendChild(empty);
+  }
+  section.appendChild(grid);
+  box.appendChild(section);
+}
+
+function renderCategoryPickerOptions() {
+  const box = document.getElementById("categoryPickerOptions");
+  if (!box) return;
+  box.innerHTML = "";
+  const available = new Set(allCategories());
+  appendCategoryPickerSection(box, "近期使用", recentCategoryNames(), null, { recent: true, emptyText: "还没有记录" });
+  const groups = dataState.categorySystem && Array.isArray(dataState.categorySystem.groups)
+    ? dataState.categorySystem.groups : CATEGORY_GROUPS;
+  groups.forEach(group => {
+    const items = (Array.isArray(group.items) ? group.items : []).filter(category => available.has(category));
+    appendCategoryPickerSection(box, group.name, items, group);
+  });
+  const grouped = new Set(groups
+    .flatMap(group => Array.isArray(group.items) ? group.items : []));
+  const customOnly = dataState.customCategories.filter(category => available.has(category) && !grouped.has(category));
+  appendCategoryPickerSection(box, "自定义类别", customOnly, null);
+}
+
+function openCategoryPicker() {
+  const dialog = document.getElementById("categoryPickerDialog");
+  if (!dialog) return;
+  renderCategoryPickerOptions();
+  dialog.hidden = false;
+  const panel = dialog.querySelector(".record-picker-dialog");
+  if (panel) panel.scrollTop = 0;
+  document.body.classList.add("dialog-open");
+  const trigger = document.querySelector(".category-picker-trigger");
+  if (trigger) trigger.setAttribute("aria-expanded", "true");
+  const selected = document.querySelector("#categoryPickerOptions .selected");
+  if (selected && typeof selected.focus === "function") selected.focus();
 }
 
 // 点「＋自定义」后，在下方显示一个输入行（类型多一行“怎么算”）
@@ -114,6 +245,9 @@ function renderCustomBox(kind) {
       <button class="chip custom-side-chip" data-side="expense">算支出</button>
       <button class="chip custom-side-chip selected" data-side="neutral">中性</button>
     </div>`;
+  } else {
+    uiState.customCategoryIconDraft = "other";
+    html += `<div class="custom-category-icon-field"><span class="custom-side-label">选择图标：</span><div id="customCategoryIconPicker" class="custom-category-icon-picker" aria-label="选择自定义类别图标"></div></div>`;
   }
   box.innerHTML = html;
   const input = document.getElementById("customInput");
@@ -121,6 +255,7 @@ function renderCustomBox(kind) {
   document.getElementById("customOk").onclick = () => addCustom(kind);
   document.getElementById("customCancel").onclick = () => { box.innerHTML = ""; };
   input.onkeydown = (e) => { if (e.key === "Enter") addCustom(kind); };
+  if (!isType) renderCustomCategoryIconPicker(document.getElementById("customCategoryIconPicker"));
   if (isType) {
     box.querySelectorAll(".custom-side-chip").forEach(chip => {
       chip.onclick = () => {
@@ -130,6 +265,25 @@ function renderCustomBox(kind) {
       };
     });
   }
+}
+
+function renderCustomCategoryIconPicker(box) {
+  if (!box) return;
+  box.innerHTML = "";
+  CATEGORY_ICON_OPTIONS.forEach(option => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "custom-category-icon-option" + (option.key === uiState.customCategoryIconDraft ? " selected" : "");
+    button.dataset.iconKey = option.key;
+    button.setAttribute("aria-pressed", option.key === uiState.customCategoryIconDraft ? "true" : "false");
+    button.title = option.name;
+    button.innerHTML = `<span class="category-icon" aria-hidden="true">${categoryIconMarkupByKey(option.key)}</span><span>${option.name}</span>`;
+    button.onclick = () => {
+      uiState.customCategoryIconDraft = option.key;
+      renderCustomCategoryIconPicker(box);
+    };
+    box.appendChild(button);
+  });
 }
 
 function customOptionsBackendEnabled() {
@@ -157,11 +311,14 @@ function finishCustomAdd(kind, name, backendItem) {
     const side = uiState.customTypeSideDraft;
     dataState.customTypes.push({ name: name, side: side });
     saveCustomTypes();
-    uiState.selectedType = name;
+    selectRecordType(name);
     if (backendItem && backendItem.id) dataState.backendTypeIds[name] = backendItem.id;
   } else {
     dataState.customCategories.push(name);
+    dataState.customCategoryIcons[name] = uiState.customCategoryIconDraft || "other";
     saveCustomCategories();
+    saveCustomCategoryIcons();
+    if (typeof syncCategorySystemWithCustomCategories === "function") syncCategorySystemWithCustomCategories();
     uiState.selectedCategory = name;
     if (backendItem && backendItem.id) dataState.backendCategoryIds[name] = backendItem.id;
   }
@@ -177,9 +334,15 @@ async function addCustom(kind) {
   const input = document.getElementById("customInput");
   const name = (input.value || "").trim();
   const isType = (kind === "type");
-  if (!name) { alert(isType ? "请先输入新类型名称" : "请先输入新类别名称"); return; }
+  if (!name) {
+    await appNotice(isType ? "请先输入新类型名称" : "请先输入新类别名称");
+    return;
+  }
   const list = isType ? allTypes() : allCategories();
-  if (list.includes(name)) { alert("「" + name + "」已经存在了"); return; }
+  if (list.includes(name)) {
+    await appNotice("「" + name + "」已经存在了");
+    return;
+  }
 
   const confirmButton = document.getElementById("customOk");
   if (confirmButton) confirmButton.disabled = true;
@@ -198,7 +361,7 @@ async function addCustom(kind) {
     }
   } catch (error) {
     if (error && error.code && error.code !== "backend_request_failed") {
-      alert(error.message || "服务端拒绝了这个自定义选项");
+      await appNotice(userFacingError(error, "服务端拒绝了这个自定义选项"));
       if (confirmButton) confirmButton.disabled = false;
       return;
     }
@@ -235,7 +398,7 @@ async function removeCustom(kind, name) {
       ? "\n已有 " + used + " 笔账用它，删除后这些账还在，但不再算收入/支出（变中性）。"
       : "\n已有 " + used + " 笔账用它，删除后这些账还在，只是以后不能再选它。";
   }
-  if (!confirm(msg)) return;
+  if (!await appConfirm(msg)) return;
 
   const backendEnabled = customOptionsBackendEnabled();
   const optionId = kind === "type"
@@ -248,7 +411,7 @@ async function removeCustom(kind, name) {
       else await backendApi.deleteCategory(optionId);
     } catch (error) {
       if (error && error.code && error.code !== "backend_request_failed") {
-        alert(error.message || "服务端拒绝删除这个自定义选项");
+        await appNotice(userFacingError(error, "服务端拒绝删除这个自定义选项"));
         return;
       }
       backendFallback = true;
@@ -260,7 +423,14 @@ async function removeCustom(kind, name) {
     if (uiState.selectedType === name) uiState.selectedType = null;
   } else {
     dataState.customCategories = dataState.customCategories.filter(c => c !== name);
+    delete dataState.customCategoryIcons[name];
+    if (dataState.categorySystem) {
+      dataState.categorySystem.groups.forEach(group => { group.items = group.items.filter(item => item !== name); });
+      if (!dataState.categorySystem.hidden.includes(name)) dataState.categorySystem.hidden.push(name);
+      saveCategorySystem();
+    }
     saveCustomCategories();
+    saveCustomCategoryIcons();
     if (uiState.selectedCategory === name) uiState.selectedCategory = null;
     if (filterState.category === name) {
       filterState.category = "";

@@ -3,8 +3,35 @@
 
 // 根据当前类型，显示/隐藏对应字段
 function updateFormFields() {
-  document.getElementById("toAccountField").style.display =
-    (uiState.selectedType === "转账") ? "block" : "none";
+  if (typeof updateTransferFields === "function") updateTransferFields();
+  const isBalance = uiState.selectedType === "余额";
+  const categoryField = document.querySelector("#panelRecord .record-category-field");
+  if (categoryField) categoryField.style.display = (isBalance || uiState.selectedType === "借贷" || uiState.selectedType === "代付" || uiState.selectedType === "报销" || uiState.selectedType === "退款") ? "none" : "";
+  const amountLabel = document.getElementById("recordAmountLabel");
+  if (amountLabel) amountLabel.textContent = isBalance ? "账户实际余额" : "金额";
+  const accountLabel = document.getElementById("recordAccountLabel");
+  if (accountLabel) accountLabel.textContent = isBalance ? "调整账户" : "账户";
+  const principalField = document.getElementById("balancePrincipalField");
+  const principalInput = document.getElementById("balancePrincipal");
+  const balanceHint = document.getElementById("balanceCurrentHint");
+  if (principalField) principalField.style.display = isBalance ? "block" : "none";
+  if (isBalance && principalInput) {
+    const selectedAccountId = document.getElementById("accountSel")?.value || uiState.balanceTargetAccountId;
+    const account = dataState.accounts.find(item => String(item.id) === String(selectedAccountId));
+    const current = account ? computeBalances()[account.id] : null;
+    if (balanceHint) balanceHint.textContent = account
+      ? "当前余额：¥" + Number(current || 0).toFixed(2) + "。保存后会新增一条余额校准记录。"
+      : "选择账户后显示当前余额。";
+    if (uiState.balanceTargetAccountId && !principalInput.value && account) {
+      principalInput.value = initialOf(account).toFixed(2);
+    }
+  } else if (balanceHint) {
+    balanceHint.textContent = "";
+  }
+  if (typeof updateLoanFields === "function") updateLoanFields();
+  if (typeof updatePayFields === "function") updatePayFields();
+  if (typeof updateReimbursementFields === "function") updateReimbursementFields();
+  if (typeof updateRefundFields === "function") updateRefundFields();
   const isDep = (uiState.selectedType === "押金");
   document.getElementById("depositDirField").style.display = isDep ? "block" : "none";
   document.getElementById("depositTargetField").style.display = isDep ? "block" : "none";

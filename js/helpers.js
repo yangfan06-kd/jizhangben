@@ -50,7 +50,10 @@ function allTypes() {
 }
 
 function allCategories() {
-  return CATEGORIES.concat(dataState.customCategories);
+  const groups = dataState.categorySystem && Array.isArray(dataState.categorySystem.groups)
+    ? dataState.categorySystem.groups : CATEGORY_GROUPS;
+  return groups.flatMap(group => Array.isArray(group.items) ? group.items : [])
+    .filter((name, index, list) => list.indexOf(name) === index);
 }
 
 // 查一个自定义类型的信息（兼容旧的纯字符串）
@@ -70,6 +73,7 @@ function typeSide(name) {
 
 // 这个类型要不要选账户（影响余额的都要）
 function needsAccount(type) {
+  if (type === "代付" && typeof uiState !== "undefined" && uiState.selectedPayMode === "转为支出") return false;
   if (FLOW_TYPES.includes(type)) return true;
   const ct = customTypeInfo(type);
   return !!(ct && (ct.side === "income" || ct.side === "expense"));
@@ -111,4 +115,33 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
   ));
+}
+
+// 把内部错误代码和英文网络异常转换成普通用户能理解的中文。
+// 后端已经返回中文业务说明时保留原文，避免丢失具体原因。
+function userFacingError(error, fallback = "操作失败，请稍后重试") {
+  const rawMessage = error && error.message != null ? String(error.message) : "";
+  if (/[㐀-鿿]/.test(rawMessage)) return rawMessage;
+
+  const code = error && error.code ? String(error.code) : rawMessage;
+  const messages = {
+    backend_disabled: "当前处于离线模式，暂不能进行联网操作",
+    backend_request_failed: "服务暂时不可用，请稍后重试",
+    invalid_json_response: "服务返回的数据无法读取，请稍后重试",
+    authentication_required: "登录状态已失效，请重新登录",
+    book_not_found: "当前账本不存在，请重新选择账本",
+    account_not_found: "当前账户不存在，请重新选择账户",
+    record_not_found: "这笔账已经不存在，请刷新后重试",
+    deposit_link_not_found: "找不到对应的原押金，请重新选择",
+    backup_invalid: "备份文件格式无效，请重新选择",
+    record_response_invalid: "保存结果无法确认，请刷新后检查流水",
+    auth_response_invalid: "登录结果无法确认，请稍后重试",
+    custom_option_response_invalid: "自定义选项保存结果无法确认，请稍后重试",
+    options_response_invalid: "记账选项暂时无法读取，请稍后重试"
+  };
+  if (messages[code]) return messages[code];
+  if (/failed to fetch|networkerror|network request|fetch failed/i.test(rawMessage)) {
+    return "网络暂时不可用，请检查连接后重试";
+  }
+  return fallback;
 }

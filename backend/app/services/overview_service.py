@@ -59,6 +59,27 @@ def _deposit_settlement_expense_income(
     return 0, 0
 
 
+def _deposit_net_worth_adjustment_cents(records: list[sqlite3.Row]) -> int:
+    returns_by_original: dict[str, list[sqlite3.Row]] = {}
+    for record in records:
+        if record["behavior"] != "deposit" or not record["deposit_link_id"]:
+            continue
+        returns_by_original.setdefault(str(record["deposit_link_id"]), []).append(record)
+
+    adjustment = 0
+    for original in records:
+        direction = original["deposit_direction"]
+        if original["behavior"] != "deposit" or direction not in {"pay", "receive"}:
+            continue
+        linked_returns = returns_by_original.get(str(original["id"]), [])
+        if any(bool(record["deposit_final"]) for record in linked_returns):
+            continue
+        returned_cents = sum(int(record["amount_cents"]) for record in linked_returns)
+        outstanding_cents = max(0, int(original["amount_cents"]) - returned_cents)
+        adjustment += outstanding_cents if direction == "pay" else -outstanding_cents
+    return adjustment
+
+
 def calculate_overview(
     database_path: str | Path,
     user_id: str,
@@ -167,7 +188,7 @@ def calculate_overview(
             if account["kind"] == "asset"
             else -balances[str(account["id"])]
             for account in book_accounts
-        )
+        ) + _deposit_net_worth_adjustment_cents(book_records)
         account_items = [
             {
                 "id": str(account["id"]),

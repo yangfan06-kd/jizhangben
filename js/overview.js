@@ -35,9 +35,7 @@ function renderOverview() {
   dataState.books.forEach(b => {
     const recs = readBookRecords(b.id);
     const accs = readBookAccounts(b.id);
-    const bal = computeBalancesFor(accs, recs);
-    let net = 0;
-    accs.forEach(a => { net += (a.kind === "负债") ? -bal[a.id] : bal[a.id]; });
+    const net = computeNetWorthFor(accs, recs);
     totalNet += net;
     const month = recs.filter(r => isThisMonth(r.date));
     const income = month.reduce((s, r) => s + incomeEffect(r), 0);

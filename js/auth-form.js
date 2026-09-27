@@ -22,6 +22,9 @@ function clearLedgerStateForAuthGate() {
   dataState.backendOptionsLoaded = false;
   dataState.backendRecordsLoaded = false;
   dataState.backendOverview = null;
+  dataState.budgetData = null;
+  dataState.investmentPlans = [];
+  dataState.fundProjects = [];
   if (typeof document !== "undefined" && typeof resetForm === "function") resetForm();
   if (typeof document !== "undefined" && typeof resetAccountForm === "function") resetAccountForm();
   if (typeof document !== "undefined" && typeof resetBookForm === "function") resetBookForm();
@@ -38,6 +41,7 @@ function renderAuthGate() {
   const app = typeof document.querySelector === "function" ? document.querySelector(".app") : null;
   const bookBar = typeof document.querySelector === "function" ? document.querySelector(".book-bar") : null;
   const authBar = typeof document.querySelector === "function" ? document.querySelector(".auth-bar") : null;
+  const migrationPreview = document.getElementById("migrationPreviewBtn");
 
   if (ledger) ledger.hidden = gateActive;
   if (panel) {
@@ -48,7 +52,12 @@ function renderAuthGate() {
   if (hint) hint.hidden = !gateActive;
   if (app) app.classList.toggle("auth-gate", gateActive);
   if (bookBar) bookBar.hidden = gateActive;
-  if (authBar) authBar.hidden = gateActive;
+  // 纯离线构建没有可用的服务端，隐藏无意义的登录/同步入口；
+  // 联网构建即使暂时断网，也要保留“联网登录”入口供恢复后使用。
+  if (authBar) authBar.hidden = gateActive || !isBackendAuthGateEnabled();
+  // 离线版不需要把本地备份迁移到服务端，避免给家人留下多余入口；
+  // 联网且已通过登录后再显示迁移预览。
+  if (migrationPreview) migrationPreview.hidden = gateActive || !isBackendAuthGateEnabled();
 }
 
 function showAuthMsg(text, isError = true) {
@@ -276,7 +285,7 @@ async function submitAuth() {
     dataState.authUser = null;
     dataState.authStatus = "guest";
     renderAuthStatus();
-    showAuthMsg(error && error.message ? error.message : "登录失败，请稍后重试");
+    showAuthMsg(userFacingError(error, "登录失败，请稍后重试"));
     setAuthBusy(false);
     return;
   }

@@ -195,6 +195,27 @@ async def test_import_replaces_data_and_remaps_deposit_links(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_backup_preview_counts_unsettled_deposits_as_receivable_or_payable(tmp_path):
+    application = create_app(tmp_path / "deposit-net-worth-preview.db")
+    paid_payload = import_payload()
+    paid_payload["records"][0]["deposit_final"] = False
+
+    async with application.router.lifespan_context(application):
+        paid_preview = await request(application, "POST", "/api/backups/preview", json=paid_payload)
+        received_payload = import_payload()
+        received_payload["accounts"][0]["initial_cents"] = 0
+        received_payload["records"][0]["deposit_direction"] = "return_to_other"
+        received_payload["records"][1]["deposit_direction"] = "receive"
+        received_payload["records"][0]["deposit_final"] = False
+        received_preview = await request(application, "POST", "/api/backups/preview", json=received_payload)
+
+    assert paid_preview.status_code == 200
+    assert paid_preview.json()["totals"]["net_worth_cents"] == 100000
+    assert received_preview.status_code == 200
+    assert received_preview.json()["totals"]["net_worth_cents"] == 0
+
+
+@pytest.mark.anyio
 async def test_invalid_import_is_rejected_before_replacing_current_data(tmp_path):
     database_path = tmp_path / "invalid-import.db"
     application = create_app(database_path)

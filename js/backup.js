@@ -87,7 +87,7 @@ async function previewMigrationFile(file) {
     if (error && error.message === "backend_disabled") {
       showBackupMsg("迁移预览需要通过 HTTP 页面访问，直接打开文件时暂不可用。", true);
     } else if (error && error.code === "backup_invalid") {
-      showBackupMsg(error.message || "服务端拒绝了这份备份，请先修复数据。", true);
+      showBackupMsg(userFacingError(error, "服务端拒绝了这份备份，请先修复数据。"), true);
     } else {
       showBackupMsg("预览失败，请确认后端已启动并重试。", true);
     }
@@ -96,7 +96,7 @@ async function previewMigrationFile(file) {
 
 async function confirmMigrationImport() {
   if (!migrationPreviewState) return;
-  if (!confirm("确认把这份备份导入服务端吗？导入会替换当前服务端账本，浏览器本地备份仍会保留。")) return;
+  if (!await appConfirm("确认把这份备份导入服务端吗？导入会替换当前服务端账本，浏览器本地备份仍会保留。")) return;
 
   const confirmButton = document.getElementById("migrationConfirmBtn");
   if (confirmButton) confirmButton.disabled = true;
@@ -112,7 +112,7 @@ async function confirmMigrationImport() {
     }
   } catch (error) {
     if (confirmButton) confirmButton.disabled = false;
-    showBackupMsg(error && error.message ? error.message : "导入失败，原数据未被替换。", true);
+    showBackupMsg(userFacingError(error, "导入失败，原数据未被替换。"), true);
   }
 }
 
@@ -127,11 +127,20 @@ function exportBackup() {
     exportedAt: new Date().toISOString(),
     storage: storage
   };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const fileName = "记账本备份_" + todayStr() + ".json";
+  const content = JSON.stringify(data, null, 2);
+  if (window.JizhangbenNative && typeof window.JizhangbenNative.saveBackup === "function") {
+    const savedPath = window.JizhangbenNative.saveBackup(fileName, content);
+    if (savedPath) {
+      showBackupMsg("已保存到手机的下载目录");
+      return;
+    }
+  }
+  const blob = new Blob([content], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "记账本备份_" + todayStr() + ".json";
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -215,7 +224,7 @@ async function maybeOfferLocalMigration() {
     const income = (Number(totals.income_cents || 0) / 100).toFixed(2);
     const expense = (Number(totals.expense_cents || 0) / 100).toFixed(2);
     const message = `检测到本机有 ${Number(counts.books || 0)} 个账本、${Number(counts.records || 0)} 笔账目和 ${Number(counts.accounts || 0)} 个账户。\n收入 ¥${income}，支出 ¥${expense}。\n当前账号还没有账本，是否把本机数据迁移到当前账号？`;
-    if (typeof confirm !== "function" || !confirm(message)) {
+    if (!(await appConfirm(message))) {
       showLocalMigrationFallback();
       return "local";
     }
@@ -279,6 +288,70 @@ function isValidCustomTypeList(value) {
   );
 }
 
+function isValidCustomCategoryIconMap(value) {
+  return isBackupObject(value) && Object.entries(value).every(([name, iconKey]) =>
+    typeof name === "string" && name.trim() !== "" &&
+    typeof iconKey === "string" && iconKey.trim() !== ""
+  );
+}
+
+function isValidBudgetData(value) {
+  if (!isBackupObject(value) || (value.version !== undefined && value.version !== 1)) return false;
+  if (!isBackupObject(value.periods)) return false;
+  return Object.entries(value.periods).every(([month, period]) => {
+    if (!/^\d{4}-\d{2}$/.test(month) || !isBackupObject(period)) return false;
+    const totalValid = period.totalCents === null || period.totalCents === undefined ||
+      (Number.isInteger(Number(period.totalCents)) && Number(period.totalCents) >= 0);
+    if (!totalValid || !isBackupObject(period.categories || {})) return false;
+    return Object.entries(period.categories || {}).every(([name, cents]) =>
+      typeof name === "string" && name.trim() !== "" && Number.isInteger(Number(cents)) && Number(cents) > 0
+    );
+  });
+}
+
+function isValidInvestmentPlanList(value) {
+  return Array.isArray(value) && value.every(plan =>
+    isBackupObject(plan) &&
+    hasBackupId(plan.id) &&
+    typeof plan.name === "string" && plan.name.trim() !== "" &&
+    Number.isInteger(Number(plan.amountCents)) && Number(plan.amountCents) > 0 &&
+    ["daily", "weekly", "monthly"].includes(plan.frequency) &&
+    typeof plan.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(plan.startDate) &&
+    (!plan.endDate || (typeof plan.endDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(plan.endDate))) &&
+    hasBackupId(plan.sourceAccountId) && hasBackupId(plan.targetAccountId) &&
+    ["automatic", "manual"].includes(plan.confirmMode) &&
+    ["active", "paused", "ended"].includes(plan.status) &&
+    (plan.frequency === "daily" || (Number.isInteger(Number(plan.day)) && Number(plan.day) >= (plan.frequency === "weekly" ? 0 : 1) && Number(plan.day) <= (plan.frequency === "weekly" ? 6 : 31))) &&
+    Array.isArray(plan.processedDates) && plan.processedDates.every(date => typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) &&
+    Array.isArray(plan.pendingDates) && plan.pendingDates.every(date => typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date))
+  );
+}
+
+function isValidFundProjectList(value) {
+  return Array.isArray(value) && value.every(project =>
+    isBackupObject(project) && hasBackupId(project.id) &&
+    typeof project.fundName === "string" && project.fundName.trim() !== "" &&
+    typeof project.platform === "string" && project.platform.trim() !== "" &&
+    ["recurring", "one-time"].includes(project.mode) &&
+    hasBackupId(project.fundAccountId) && hasBackupId(project.sourceAccountId) &&
+    Number.isInteger(Number(project.amountCents)) && Number(project.amountCents) > 0 &&
+    (project.originalCostCents === undefined ||
+      (Number.isSafeInteger(project.originalCostCents) && project.originalCostCents >= 0)) &&
+    typeof project.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(project.startDate) &&
+    (!project.endDate || /^\d{4}-\d{2}-\d{2}$/.test(project.endDate)) &&
+    ["open", "closed"].includes(project.status) &&
+    (project.mode !== "recurring" ||
+      (["daily", "weekly", "monthly"].includes(project.frequency) &&
+        (project.frequency !== "weekly" ||
+          (Array.isArray(project.weekdays) && project.weekdays.length > 0 && project.weekdays.every(day => Number.isInteger(day) && day >= 1 && day <= 5))) &&
+        (project.frequency !== "monthly" ||
+          (Array.isArray(project.monthDays)
+            ? (project.monthDays.length > 0 && new Set(project.monthDays).size === project.monthDays.length &&
+              project.monthDays.every(day => Number.isInteger(day) && day >= 1 && day <= 31))
+            : (Number.isInteger(project.monthDay) && project.monthDay >= 1 && project.monthDay <= 31)))))
+  );
+}
+
 function validateBackupValue(key, value) {
   if (key === BOOKS_KEY) return isValidBookList(value);
   if (key === CURRENT_BOOK_KEY) return hasBackupId(value);
@@ -291,6 +364,11 @@ function validateBackupValue(key, value) {
       typeof category === "string" && category.trim() !== ""
     );
   }
+  if (key === CUSTOM_CATEGORY_ICONS_KEY) return isValidCustomCategoryIconMap(value);
+  if (key === CATEGORY_SYSTEM_KEY) return isValidCategorySystem(value);
+  if (key.indexOf(BUDGETS_KEY_PREFIX) === 0) return isValidBudgetData(value);
+  if (key.indexOf(INVESTMENT_PLANS_KEY_PREFIX) === 0) return isValidInvestmentPlanList(value);
+  if (key.indexOf(FUND_PROJECTS_KEY_PREFIX) === 0) return isValidFundProjectList(value);
   if (key === STORAGE_KEY || key.indexOf("jizhangben_records_") === 0) {
     return isValidRecordList(value);
   }
@@ -337,9 +415,9 @@ function replaceBackupStorage(imported) {
 }
 
 // 导入备份，写入失败时恢复导入前的数据
-function importBackup(file) {
+async function importBackup(file) {
   if (!file) return;
-  if (!confirm("导入会覆盖当前所有账本和账目，确定继续吗？")) return;
+  if (!(await appConfirm("导入会覆盖当前所有账本和账目，确定继续吗？"))) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
@@ -361,8 +439,13 @@ function reloadData() {
   loadBooks();
   load();
   loadAccounts();
+  loadInvestmentPlans();
+  loadFundProjects();
+  loadBudgetData();
   loadCustomTypes();
   loadCustomCategories();
+  loadCustomCategoryIcons();
+  loadCategorySystem();
   resetForm();
   resetAccountForm();
   resetBookForm();
