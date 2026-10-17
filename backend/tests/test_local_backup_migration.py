@@ -167,7 +167,11 @@ async def test_migration_payload_imports_and_reconciles_counts_and_totals(tmp_pa
         book_id = books.json()["items"][0]["id"]
         accounts = await request(application, "GET", f"/api/books/{book_id}/accounts")
         records = await request(application, "GET", f"/api/books/{book_id}/records")
-        overview = await request(application, "GET", "/api/overview")
+        # 备份样本固定在九月；显式期间使跨月运行仍验证同一组数据。
+        overview = await request(
+            application, "GET", "/api/overview",
+            params={"from": "2026-09-01", "to": "2026-09-30"},
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -224,7 +228,9 @@ async def test_authenticated_user_migration_round_trip_preserves_reconciliation(
             books = await client.get("/api/books")
             book_id = books.json()["items"][0]["id"]
             records = await client.get(f"/api/books/{book_id}/records")
-            overview = await client.get("/api/overview")
+            overview = await client.get(
+                "/api/overview", params={"from": "2026-09-01", "to": "2026-09-30"}
+            )
             logged_out = await client.post("/api/auth/logout")
             after_logout = await client.get("/api/books")
 

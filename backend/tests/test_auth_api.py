@@ -215,7 +215,10 @@ async def test_two_authenticated_clients_share_data_but_other_user_cannot_read_i
             desktop_books = await desktop.get("/api/books")
             desktop_accounts = await desktop.get(f"/api/books/{book_id}/accounts")
             desktop_records = await desktop.get(f"/api/books/{book_id}/records")
-            desktop_overview = await desktop.get("/api/overview")
+            # 汇总固定日期的样本，不能依赖运行测试时的当前月份。
+            desktop_overview = await desktop.get(
+                "/api/overview", params={"from": "2026-09-01", "to": "2026-09-30"}
+            )
 
             other_credentials = {
                 "email": "cross-device-other@example.com",
