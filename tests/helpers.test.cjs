@@ -29,8 +29,8 @@ test("category picker groups expose common subcategories with colored local icon
   const runtime = createRuntime();
   assert.equal(runtime.run('CATEGORY_GROUPS.length'), 9);
   assert.equal(runtime.run('CATEGORY_GROUPS[0].name'), "食品酒水");
-  assert.equal(runtime.run('allCategories().includes("早餐")'), true);
-  assert.equal(runtime.run('allCategories().includes("宿舍")'), true);
+  assert.equal(runtime.run('CATEGORY_GROUPS.some(group => group.items.includes("早餐"))'), true);
+  assert.equal(runtime.run('CATEGORY_GROUPS.some(group => group.items.includes("宿舍"))'), true);
   assert.match(runtime.run('categoryIconMarkup("约会")'), /<svg/);
   assert.match(runtime.run('categoryIconMarkup("保险")'), /<svg/);
   assert.match(runtime.run('categoryIconMarkup("公摊")'), /<svg/);
@@ -42,12 +42,19 @@ test("category picker groups expose common subcategories with colored local icon
 
 test("custom category icon selections use the local SVG directory", () => {
   const runtime = createRuntime();
-  assert.equal(runtime.run('JSON.stringify(CATEGORY_ICON_OPTIONS.map(option => option.key))'), JSON.stringify([
-    "dining", "transport", "shopping", "entertainment", "home", "health", "education",
-    "sport", "travel", "pet", "digital", "gift", "love", "insurance", "dorm", "other"
-  ]));
+  const oldKeys = ["dining", "transport", "shopping", "entertainment", "home", "health", "education",
+    "sport", "travel", "pet", "digital", "gift", "love", "insurance", "dorm", "other"];
+  assert.equal(runtime.run(`(${JSON.stringify(oldKeys)}).every(key => CATEGORY_ICON_OPTIONS.some(option => option.key === key))`), true);
+  assert.equal(runtime.run('CATEGORY_ICON_OPTIONS.length'), 16);
+  assert.equal(runtime.run('CATEGORY_ICON_TABLER_OPTIONS.length'), 88);
+  assert.equal(runtime.run('CATEGORY_ICON_TABLER_OPTIONS.every(option => option.key.startsWith("tabler:") && /<svg/.test(categoryIconMarkupByKey(option.key)))'), true);
+  assert.equal(runtime.run('new Set(CATEGORY_ICON_TABLER_OPTIONS.map(option => option.key)).size'), 88);
+  assert.equal(runtime.run('categoryIconMarkupByKey("dining") === CATEGORY_ICON_MARKUP.餐饮'), true);
+  assert.match(runtime.run('categoryIconMarkupByKey("tabler:dining")'), /<svg/);
+  assert.match(runtime.run('categoryIconMarkupByKey("breakfast")'), /<svg/);
   assert.match(runtime.run('categoryIconMarkupByKey("pet")'), /<svg/);
   assert.match(runtime.run('(() => { dataState.customCategoryIcons = { "宠物": "pet" }; return categoryIconMarkup("宠物"); })()'), /<svg/);
+  assert.equal(runtime.run('(() => { dataState.customCategoryIcons = { "餐饮": "tabler:coffee" }; return categoryIconMarkup("餐饮") === categoryIconMarkupByKey("tabler:coffee"); })()'), true);
   assert.equal(runtime.run('categoryIconMarkupByKey("unknown")'), "");
 });
 

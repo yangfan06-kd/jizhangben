@@ -18,9 +18,16 @@ deploy/.env
 # Frontend tooling
 node_modules/
 .playwright-cli/
+output/
+.agents/
+.impeccable/
 
 # Capacitor generated web output
 mobile/www/
 
 # Android APKs are included in source control selectively
 releases/*.apk
+
+# Local signing material is never published
+*.jks
+*.keystore

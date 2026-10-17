@@ -37,6 +37,15 @@ function renderTypeChips() {
     }
     b.onclick = () => chooseRecordType(t);
     box.appendChild(b);
+    if (t === TYPES[TYPES.length - 1]) {
+      const social = document.createElement("button");
+      social.type = "button";
+      social.className = "chip";
+      social.textContent = "退休金";
+      social.setAttribute("aria-label", "退休金固收设置");
+      social.onclick = () => switchTab("fixedIncome");
+      box.appendChild(social);
+    }
   });
   const add = document.createElement("button");
   add.type = "button";
@@ -94,17 +103,23 @@ function closeCategoryPicker() {
 
 function categoryGroupForName(name) {
   const groups = dataState.categorySystem && Array.isArray(dataState.categorySystem.groups)
-    ? dataState.categorySystem.groups : CATEGORY_GROUPS;
+    ? dataState.categorySystem.groups : [];
   return groups
     .find(group => Array.isArray(group.items) && group.items.includes(name)) || null;
 }
 
-function recentCategoryNames(limit = 8) {
-  const available = new Set(allCategories());
+function categoryPickerSide() {
+  const side = typeSide(uiState.selectedType);
+  return side === "income" || side === "expense" ? side : "all";
+}
+
+function recentCategoryNames(limit = 8, side = categoryPickerSide()) {
+  const available = new Set(allCategories(side === "all" ? "" : side));
   const seen = new Set();
   return dataState.records
     .map((record, index) => ({ record, index }))
-    .filter(item => item.record && item.record.category && available.has(item.record.category))
+    .filter(item => item.record && item.record.category && available.has(item.record.category) &&
+      (side === "all" || typeSide(item.record.type) === side))
     .sort((a, b) => String(b.record.date || "").localeCompare(String(a.record.date || "")) || b.index - a.index)
     .map(item => item.record.category)
     .filter(category => {
@@ -194,15 +209,33 @@ function renderCategoryPickerOptions() {
   const box = document.getElementById("categoryPickerOptions");
   if (!box) return;
   box.innerHTML = "";
-  const available = new Set(allCategories());
-  appendCategoryPickerSection(box, "近期使用", recentCategoryNames(), null, { recent: true, emptyText: "还没有记录" });
+  const side = categoryPickerSide();
+  const sideLabel = side === "income" ? "收入" : side === "expense" ? "支出" : "全部";
+  const available = new Set(allCategories(side === "all" ? "" : side));
+  const title = document.getElementById("categoryPickerTitle");
+  const hint = document.querySelector(".record-picker-hint");
+  const manage = document.getElementById("categoryPickerManageBtn");
+  if (title) title.textContent = "选择" + sideLabel + "类别";
+  if (hint) hint.textContent = "收入和支出分别管理类别；历史流水不会因调整类别而删除。";
+  if (manage) {
+    const label = manage.querySelector("strong");
+    const detail = manage.querySelector("small");
+    if (label) label.textContent = "管理" + sideLabel + "类别";
+    if (detail) detail.textContent = "自行创建大类、小类并设置图标和顺序";
+  }
+  appendCategoryPickerSection(box, "近期使用", recentCategoryNames(8, side), null, {
+    recent: true,
+    emptyText: available.size ? "还没有记录" : "还没有类别，请先创建大类和小类"
+  });
   const groups = dataState.categorySystem && Array.isArray(dataState.categorySystem.groups)
-    ? dataState.categorySystem.groups : CATEGORY_GROUPS;
+    ? dataState.categorySystem.groups : [];
   groups.forEach(group => {
+    if (side !== "all" && group.side !== side) return;
     const items = (Array.isArray(group.items) ? group.items : []).filter(category => available.has(category));
     appendCategoryPickerSection(box, group.name, items, group);
   });
   const grouped = new Set(groups
+    .filter(group => side === "all" || group.side === side)
     .flatMap(group => Array.isArray(group.items) ? group.items : []));
   const customOnly = dataState.customCategories.filter(category => available.has(category) && !grouped.has(category));
   appendCategoryPickerSection(box, "自定义类别", customOnly, null);
@@ -247,7 +280,7 @@ function renderCustomBox(kind) {
     </div>`;
   } else {
     uiState.customCategoryIconDraft = "other";
-    html += `<div class="custom-category-icon-field"><span class="custom-side-label">选择图标：</span><div id="customCategoryIconPicker" class="custom-category-icon-picker" aria-label="选择自定义类别图标"></div></div>`;
+    html += `<div class="custom-category-icon-field"><span class="custom-side-label">选择图标：</span><div id="customCategoryIconPicker" class="category-system-icon-choices" aria-label="选择自定义类别图标"></div></div>`;
   }
   box.innerHTML = html;
   const input = document.getElementById("customInput");
@@ -269,20 +302,9 @@ function renderCustomBox(kind) {
 
 function renderCustomCategoryIconPicker(box) {
   if (!box) return;
-  box.innerHTML = "";
-  CATEGORY_ICON_OPTIONS.forEach(option => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "custom-category-icon-option" + (option.key === uiState.customCategoryIconDraft ? " selected" : "");
-    button.dataset.iconKey = option.key;
-    button.setAttribute("aria-pressed", option.key === uiState.customCategoryIconDraft ? "true" : "false");
-    button.title = option.name;
-    button.innerHTML = `<span class="category-icon" aria-hidden="true">${categoryIconMarkupByKey(option.key)}</span><span>${option.name}</span>`;
-    button.onclick = () => {
-      uiState.customCategoryIconDraft = option.key;
-      renderCustomCategoryIconPicker(box);
-    };
-    box.appendChild(button);
+  renderCategoryIconChoices(box, uiState.customCategoryIconDraft, key => {
+    uiState.customCategoryIconDraft = key;
+    renderCustomCategoryIconPicker(box);
   });
 }
 

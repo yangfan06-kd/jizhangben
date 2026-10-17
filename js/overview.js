@@ -19,8 +19,14 @@ function readBookAccounts(id) {
 }
 
 function renderOverview() {
+  return withRecordCalculationIndex(dataState.records, renderOverviewContents);
+}
+
+function renderOverviewContents() {
   const box = document.getElementById("overviewList");
   const totalBox = document.getElementById("overviewTotal");
+  const title = document.getElementById("overviewBooksTitle");
+  if (title) title.textContent = dataState.backendOverview ? "各账本概览" : "各账本本月概览";
   box.innerHTML = "";
   if (dataState.books.length === 0) {
     box.innerHTML = '<div class="empty small">还没有账本</div>';
@@ -52,7 +58,7 @@ function renderOverview() {
         </div>
         <div class="acc-init">本月 <span class="ov-income">${income < 0 ? "−¥" : "+¥"}${Math.abs(income).toFixed(2)}</span> · <span class="ov-expense">${expense < 0 ? "+¥" : "−¥"}${Math.abs(expense).toFixed(2)}</span></div>
       </div>
-      <div class="acc-balance ${net < 0 ? "neg" : ""}">${net < 0 ? "−¥" : "¥"}${Math.abs(net).toFixed(2)}</div>
+      <div class="acc-balance ${net < 0 ? "neg" : ""}"><span class="private-money">${net < 0 ? "−¥" : "¥"}${Math.abs(net).toFixed(2)}</span></div>
     `;
     box.appendChild(row);
   });
@@ -79,7 +85,7 @@ function renderBackendOverview(box, totalBox) {
         </div>
         <div class="acc-init">本期 <span class="ov-income">${income < 0 ? "−¥" : "+¥"}${Math.abs(income).toFixed(2)}</span> · <span class="ov-expense">${expense < 0 ? "+¥" : "−¥"}${Math.abs(expense).toFixed(2)}</span></div>
       </div>
-      <div class="acc-balance ${net < 0 ? "neg" : ""}">${net < 0 ? "−¥" : "¥"}${Math.abs(net).toFixed(2)}</div>
+      <div class="acc-balance ${net < 0 ? "neg" : ""}"><span class="private-money">${net < 0 ? "−¥" : "¥"}${Math.abs(net).toFixed(2)}</span></div>
     `;
     box.appendChild(row);
   });

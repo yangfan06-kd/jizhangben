@@ -5,5 +5,14 @@
   "server": {
     "androidScheme": "http",
     "cleartext": true
+  },
+  "plugins": {
+    "WebViewCrash": {
+      "restartOnCrash": true,
+      "restartIntervalMs": 0
+    },
+    "SystemBars": {
+      "insetsHandling": "css"
+    }
   }
 }

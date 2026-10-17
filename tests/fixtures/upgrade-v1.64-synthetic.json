@@ -1,0 +1,17 @@
+{
+  "format": "jizhangben-backup",
+  "version": 3,
+  "storage": {
+    "jizhangben_schema_version": "2",
+    "jizhangben_books": "[{\"id\":1,\"name\":\"测试账本甲\",\"category\":\"个人\"},{\"id\":2,\"name\":\"测试账本乙\",\"category\":\"家庭\"}]",
+    "jizhangben_current_book": "1",
+    "jizhangben_records_1": "[{\"id\":1,\"type\":\"支出\",\"category\":\"测试自定义小类\",\"amount\":12.34,\"amountCents\":1234,\"account\":1,\"date\":\"2026-09-01\",\"note\":\"隔离测试\"}]",
+    "jizhangben_records_2": "[{\"id\":2,\"type\":\"收入\",\"category\":\"测试奖励\",\"amount\":50,\"amountCents\":5000,\"account\":2,\"date\":\"2026-09-02\"}]",
+    "jizhangben_accounts_1": "[{\"id\":1,\"name\":\"测试账户甲\",\"kind\":\"资金\",\"initial\":100,\"initialCents\":10000}]",
+    "jizhangben_accounts_2": "[{\"id\":2,\"name\":\"测试账户乙\",\"kind\":\"资金\",\"initial\":200,\"initialCents\":20000}]",
+    "jizhangben_custom_types": "[{\"name\":\"测试奖金\",\"side\":\"income\"},{\"name\":\"测试生活费\",\"side\":\"expense\"}]",
+    "jizhangben_custom_categories": "[\"测试自定义小类\",\"测试奖励\",\"测试隐藏小类\"]",
+    "jizhangben_custom_category_icons": "{\"测试自定义小类\":\"dining\",\"测试奖励\":\"other\",\"测试隐藏小类\":\"travel\"}",
+    "jizhangben_category_system": "{\"groups\":[{\"key\":\"other\",\"name\":\"其他杂项\",\"icon\":\"other\",\"color\":\"#6E8790\",\"background\":\"#EEF3F4\",\"items\":[\"其他\",\"日用\",\"宠物\",\"人情\",\"家居\",\"杂项\"],\"side\":\"expense\"},{\"key\":\"dorm\",\"name\":\"宿舍公摊\",\"icon\":\"dorm\",\"color\":\"#C18A45\",\"background\":\"#FCF4E7\",\"items\":[\"居住\",\"房租\",\"水电\",\"宿舍\",\"公摊\",\"物业\"],\"side\":\"expense\"},{\"key\":\"medical\",\"name\":\"医疗保险\",\"icon\":\"health\",\"color\":\"#D36D65\",\"background\":\"#FCEDEB\",\"items\":[\"医疗\",\"看病\",\"药品\",\"保险\",\"体检\"],\"side\":\"expense\"},{\"key\":\"love\",\"name\":\"恋爱基金\",\"icon\":\"love\",\"color\":\"#E46B7E\",\"background\":\"#FDECEF\",\"items\":[\"恋爱\",\"约会\",\"礼物\",\"纪念日\",\"红包\"],\"side\":\"expense\"},{\"key\":\"clothing\",\"name\":\"衣服服饰\",\"icon\":\"shopping\",\"color\":\"#D56B94\",\"background\":\"#FCECF3\",\"items\":[\"购物\",\"衣服\",\"鞋包\",\"美容\",\"配饰\",\"理发\"],\"side\":\"expense\"},{\"key\":\"transport\",\"name\":\"交通通讯\",\"icon\":\"transport\",\"color\":\"#3C9A94\",\"background\":\"#E8F7F5\",\"items\":[\"交通\",\"公交\",\"地铁\",\"打车\",\"火车\",\"飞机\",\"通讯\"],\"side\":\"expense\"},{\"key\":\"study\",\"name\":\"学习进修\",\"icon\":\"education\",\"color\":\"#4D91C7\",\"background\":\"#EAF4FB\",\"items\":[\"教育\",\"学习\",\"书籍\",\"课程\",\"考试\",\"培训\"],\"side\":\"expense\"},{\"key\":\"fun\",\"name\":\"休闲娱乐\",\"icon\":\"entertainment\",\"color\":\"#9A6AD6\",\"background\":\"#F3EDFC\",\"items\":[\"娱乐\",\"游戏\",\"电影\",\"聚会\",\"旅游\",\"运动\"],\"side\":\"expense\"},{\"key\":\"food\",\"name\":\"食品测试改名\",\"icon\":\"dining\",\"color\":\"#E57C58\",\"background\":\"#FFF0EA\",\"items\":[\"饮料\",\"零食\",\"水果\",\"晚餐\",\"午餐\",\"早餐\",\"买菜\",\"测试自定义小类\"],\"side\":\"expense\"},{\"key\":\"family-income-test\",\"name\":\"测试收入组\",\"icon\":\"other\",\"color\":\"#6E8790\",\"background\":\"#EEF3F4\",\"items\":[\"测试奖励\"],\"side\":\"income\"}],\"hidden\":[\"餐饮\",\"测试隐藏小类\"]}"
+  }
+}

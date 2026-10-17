@@ -1,6 +1,36 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRuntime } = require("./runtime.cjs");
+const fs = require("node:fs");
+const path = require("node:path");
+
+// 合成样本按归档 APK 的旧类别结构生成，不含用户实际数据。
+for (const version of ["1.60", "1.64"]) {
+  test(`v${version} upgrade and backup round trip preserve old records and category settings`, () => {
+    const backup = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", `upgrade-v${version}-synthetic.json`), "utf8"));
+    const runtime = createRuntime();
+    runtime.run(`replaceBackupStorage(extractBackupStorage(${JSON.stringify(backup)}))`);
+    const startupReads = "loadBooks(); load(); loadAccounts(); loadInvestmentPlans(); loadFundProjects(); loadFixedIncomePlan(); loadBudgetData(); loadCustomTypes(); loadCustomCategories(); loadCustomCategoryIcons(); loadCategorySystem();";
+    runtime.run(startupReads);
+    const loaded = runtime.localStorage.toObject();
+    for (const [key, raw] of Object.entries(backup.storage)) {
+      if (key !== "jizhangben_category_system") assert.equal(loaded[key], raw, key);
+    }
+    const before = JSON.parse(backup.storage.jizhangben_category_system);
+    const after = JSON.parse(loaded.jizhangben_category_system);
+    const withoutSide = group => { const value = { ...group }; delete value.side; return value; };
+    assert.deepEqual(after.groups.map(withoutSide), before.groups.map(withoutSide));
+    assert.deepEqual(after.hidden, before.hidden);
+    before.groups.forEach((group, index) => {
+      if (group.side) assert.equal(after.groups[index].side, group.side);
+    });
+    runtime.run(startupReads);
+    assert.deepEqual(runtime.localStorage.toObject(), loaded);
+    runtime.run(`window.JizhangbenNative = { saveBackup(name, content) { window.exportedBackup = content; return '下载/' + name; } }; showBackupMsg = () => {}; exportBackup();`);
+    const exported = JSON.parse(JSON.stringify(runtime.run("extractBackupStorage(JSON.parse(window.exportedBackup))")));
+    assert.deepEqual(exported, loaded);
+  });
+}
 
 test("runMigrations upgrades legacy single-book data through schema v2", () => {
   const runtime = createRuntime({

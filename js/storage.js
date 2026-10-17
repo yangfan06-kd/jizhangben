@@ -83,6 +83,7 @@ function isValidCategorySystem(value) {
       typeof group.key !== "string" || !group.key || group.key.length > 80 || ids.has(group.key) ||
       typeof group.name !== "string" || !group.name.trim() || group.name.length > 30 || groupNames.has(group.name) ||
       typeof group.icon !== "string" || group.icon.length > 40 ||
+      (group.side !== undefined && group.side !== "income" && group.side !== "expense") ||
       typeof group.color !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(group.color) ||
       typeof group.background !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(group.background) ||
       !Array.isArray(group.items) || group.items.length > 300) return false;
@@ -98,27 +99,95 @@ function isValidCategorySystem(value) {
 }
 
 function defaultCategorySystem() {
-  const groups = CATEGORY_GROUPS.map(group => ({ ...group, items: group.items.slice() }));
-  const assigned = new Set(groups.flatMap(group => group.items));
-  const legacy = dataState.customCategories.filter(name => typeof name === "string" && name.trim() && !assigned.has(name));
-  if (legacy.length) groups.push({
-    key: "legacy-custom", name: "自定义类别", icon: "other", color: "#6E8790", background: "#EEF3F4", items: [...new Set(legacy)]
-  });
+  const groups = CATEGORY_GROUPS.map(group => ({ ...group, side: "expense", items: group.items.slice() }));
+  const legacy = [...new Set(dataState.customCategories.filter(name =>
+    typeof name === "string" && name.trim() && !categorySystemBuiltInNames().has(name)))];
+  appendLegacyCategoryGroups(groups, legacy);
   return { groups, hidden: [] };
+}
+
+function categorySystemBuiltInNames() {
+  return new Set(CATEGORY_GROUPS.flatMap(group => group.items));
+}
+
+function inferLegacyCategorySide(name) {
+  const records = Array.isArray(dataState.records) ? dataState.records.slice() : [];
+  const seenSides = new Set();
+  const addRecords = list => {
+    if (!Array.isArray(list)) return;
+    list.forEach(record => {
+      if (!record || record.category !== name || typeof typeSide !== "function") return;
+      const side = typeSide(record.type);
+      if (side === "income" || side === "expense") seenSides.add(side);
+    });
+  };
+  addRecords(records);
+  (Array.isArray(dataState.books) ? dataState.books : []).forEach(book => {
+    if (!book || String(book.id) === String(dataState.currentBookId)) return;
+    try {
+      const raw = appStorage.get(recordsKey(book.id));
+      if (raw) addRecords(JSON.parse(raw));
+    } catch (error) { /* 单个旧账本损坏时继续使用其他账本的类别记录 */ }
+  });
+  return seenSides.size === 1 && seenSides.has("income") ? "income" : "expense";
+}
+
+function appendLegacyCategoryGroups(groups, names) {
+  const bySide = { income: [], expense: [] };
+  [...new Set(names)].forEach(name => bySide[inferLegacyCategorySide(name)].push(name));
+  ["expense", "income"].forEach(side => {
+    if (!bySide[side].length) return;
+    groups.push({
+      key: "legacy-custom-" + side,
+      name: side === "income" ? "原收入自定义类别" : "原支出自定义类别",
+      side, icon: "other", color: "#6E8790", background: "#EEF3F4", items: bySide[side]
+    });
+  });
+}
+
+// 保留旧版大类的名称、顺序、小类、图标和隐藏状态；只补充收入/支出方向。
+// 此处不能用模板重建已有配置，否则用户自行删除和调整的类别会再次出现。
+function normalizeCategorySystem(value) {
+  if (!isValidCategorySystem(value)) return defaultCategorySystem();
+  const groups = value.groups.map(group => {
+    let side = group.side;
+    if (side !== "income" && side !== "expense") {
+      if (CATEGORY_GROUPS.some(item => item.key === group.key)) side = "expense";
+      // 早期类别共用收支；用户明确命名的收入大类优先保留其含义。
+      // 小类「其他」曾用于支出也不能把整个收入大类改成支出；旧流水不参与改写。
+      else if (group.name.trim() === "收入") side = "income";
+      else {
+        const inferred = group.items.map(inferLegacyCategorySide);
+        side = inferred.length && inferred.every(item => item === "income") ? "income" : "expense";
+      }
+    }
+    return { ...group, side, items: group.items.slice() };
+  });
+  return { groups, hidden: value.hidden.slice() };
 }
 
 function syncCategorySystemWithCustomCategories() {
   const system = dataState.categorySystem;
   if (!system) return;
   const known = new Set(system.groups.flatMap(group => group.items).concat(system.hidden));
-  const incoming = dataState.customCategories.filter(name => typeof name === "string" && name.trim() && !known.has(name));
+  const builtInNames = categorySystemBuiltInNames();
+  const incoming = dataState.customCategories.filter(name => typeof name === "string" && name.trim() && !known.has(name) && !builtInNames.has(name));
   if (!incoming.length) return;
-  let group = system.groups.find(item => item.key === "legacy-custom" || item.name === "自定义类别");
-  if (!group) {
-    group = { key: "legacy-custom", name: "自定义类别", icon: "other", color: "#6E8790", background: "#EEF3F4", items: [] };
-    system.groups.push(group);
-  }
-  group.items.push(...new Set(incoming));
+  const bySide = { income: [], expense: [] };
+  [...new Set(incoming)].forEach(name => bySide[inferLegacyCategorySide(name)].push(name));
+  ["expense", "income"].forEach(side => {
+    if (!bySide[side].length) return;
+    let group = system.groups.find(item => item.side === side && item.key.startsWith("legacy-custom-"));
+    if (!group) {
+      group = {
+        key: "legacy-custom-" + side, name: side === "income" ? "原收入自定义类别" : "原支出自定义类别",
+        side, icon: "other", color: "#6E8790", background: "#EEF3F4", items: []
+      };
+      system.groups.push(group);
+    }
+    group.items.push(...bySide[side]);
+  });
+  dataState.categorySystem = normalizeCategorySystem(system);
   saveCategorySystem();
 }
 
@@ -126,8 +195,9 @@ function loadCategorySystem() {
   try {
     const raw = appStorage.get(CATEGORY_SYSTEM_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    dataState.categorySystem = isValidCategorySystem(parsed) ? parsed : defaultCategorySystem();
-    if (!raw) saveCategorySystem();
+    const normalized = normalizeCategorySystem(parsed);
+    dataState.categorySystem = normalized;
+    if (!raw || JSON.stringify(parsed) !== JSON.stringify(normalized)) saveCategorySystem();
   } catch (error) {
     dataState.categorySystem = defaultCategorySystem();
   }
@@ -183,4 +253,19 @@ function loadFundProjects() {
 
 function saveFundProjects() {
   appStorage.set(fundProjectsKey(dataState.currentBookId), JSON.stringify(dataState.fundProjects || []));
+}
+
+function loadFixedIncomePlan() {
+  try {
+    const value = JSON.parse(appStorage.get(fixedIncomeKey(dataState.currentBookId)) || "null");
+    dataState.fixedIncomePlan = value && typeof value === "object" ? value : null;
+  } catch (error) {
+    dataState.fixedIncomePlan = null;
+  }
+}
+
+function saveFixedIncomePlan() {
+  if (dataState.currentBookId == null) return;
+  if (dataState.fixedIncomePlan) appStorage.set(fixedIncomeKey(dataState.currentBookId), JSON.stringify(dataState.fixedIncomePlan));
+  else appStorage.remove(fixedIncomeKey(dataState.currentBookId));
 }

@@ -29,6 +29,50 @@ function validBackup() {
   };
 }
 
+test("native backup export confirms success only after the save bridge succeeds", () => {
+  const backup = validBackup();
+  const runtime = createRuntime(backup.storage);
+  const before = runtime.localStorage.toObject();
+  runtime.run(`
+    showBackupMsg = (message, warn) => { window.backupResult = { message, warn: Boolean(warn) }; };
+    window.JizhangbenNative = { saveBackup(name, content) { window.exportedContent = content; return '下载/' + name; } };
+    exportBackup();
+  `);
+  const exported = JSON.parse(JSON.stringify(runtime.run("extractBackupStorage(JSON.parse(window.exportedContent))")));
+  assert.deepEqual(exported, backup.storage);
+  assert.deepEqual(runtime.localStorage.toObject(), before);
+  assert.equal(runtime.run("window.backupResult.warn"), false);
+  assert.match(runtime.run("window.backupResult.message"), /已保存到手机的下载目录/);
+});
+
+test("native backup write failure is reported without claiming a WebView download succeeded", () => {
+  for (const saveBody of ["return '';", "throw new Error('storage full');"]) {
+    const runtime = createRuntime(validBackup().storage);
+    const before = runtime.localStorage.toObject();
+    runtime.run(`
+      showBackupMsg = (message, warn) => { window.backupResult = { message, warn }; };
+      window.JizhangbenNative = { saveBackup() { ${saveBody} } };
+      exportBackup();
+    `);
+    assert.equal(runtime.run("window.backupResult.warn"), true);
+    assert.match(runtime.run("window.backupResult.message"), /备份保存失败/);
+    assert.deepEqual(runtime.localStorage.toObject(), before);
+  }
+});
+
+test("an unavailable native backup bridge reports an error and preserves stored data", () => {
+  const runtime = createRuntime(validBackup().storage);
+  const before = runtime.localStorage.toObject();
+  runtime.run(`
+    showBackupMsg = (message, warn) => { window.backupResult = { message, warn }; };
+    window.Capacitor = { isNativePlatform: () => true };
+    exportBackup();
+  `);
+  assert.equal(runtime.run("window.backupResult.warn"), true);
+  assert.match(runtime.run("window.backupResult.message"), /手机备份服务未就绪/);
+  assert.deepEqual(runtime.localStorage.toObject(), before);
+});
+
 test("extractBackupStorage accepts a complete current backup", () => {
   const runtime = createRuntime();
   const backup = validBackup();

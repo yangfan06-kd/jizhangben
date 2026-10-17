@@ -6,15 +6,17 @@ function updateFormFields() {
   if (typeof updateTransferFields === "function") updateTransferFields();
   const isBalance = uiState.selectedType === "余额";
   const categoryField = document.querySelector("#panelRecord .record-category-field");
-  if (categoryField) categoryField.style.display = (isBalance || uiState.selectedType === "借贷" || uiState.selectedType === "代付" || uiState.selectedType === "报销" || uiState.selectedType === "退款") ? "none" : "";
+  if (categoryField) categoryField.style.display = (isBalance || ["转账", "借贷", "代付", "报销", "退款"].includes(uiState.selectedType)) ? "none" : "";
   const amountLabel = document.getElementById("recordAmountLabel");
   if (amountLabel) amountLabel.textContent = isBalance ? "账户实际余额" : "金额";
   const accountLabel = document.getElementById("recordAccountLabel");
   if (accountLabel) accountLabel.textContent = isBalance ? "调整账户" : "账户";
   const principalField = document.getElementById("balancePrincipalField");
+  const accountNameField = document.getElementById("balanceAccountNameField");
   const principalInput = document.getElementById("balancePrincipal");
   const balanceHint = document.getElementById("balanceCurrentHint");
   if (principalField) principalField.style.display = isBalance ? "block" : "none";
+  if (accountNameField) accountNameField.style.display = isBalance && !!uiState.balanceTargetAccountId ? "block" : "none";
   if (isBalance && principalInput) {
     const selectedAccountId = document.getElementById("accountSel")?.value || uiState.balanceTargetAccountId;
     const account = dataState.accounts.find(item => String(item.id) === String(selectedAccountId));
@@ -71,27 +73,58 @@ function depositCounterpartDir(dir) {
 function linkedDepositOptions() {
   const counterpart = depositCounterpartDir(uiState.selectedDepositDir);
   if (!counterpart) return [];
-  return dataState.records.filter(r => r.type === "押金" && r.depositDir === counterpart);
+  const editing = dataState.records.find(record => String(record.id) === String(uiState.editingRecordId));
+  return dataState.records.filter(record => {
+    if (record.type !== "押金" || record.depositDir !== counterpart) return false;
+    const finalizedByOtherRecord = dataState.records.some(returnRecord =>
+      returnRecord.type === "押金" && returnRecord.depositFinal &&
+      String(returnRecord.depositLinkId) === String(record.id) &&
+      String(returnRecord.id) !== String(uiState.editingRecordId));
+    // 编辑最终结算时仍显示原押金，避免保存编辑后无法重新关联。
+    return !finalizedByOtherRecord || (editing && editing.depositFinal &&
+      String(editing.depositLinkId) === String(record.id));
+  });
 }
 
 function renderDepositLinkOptions() {
   const sel = document.getElementById("depositLinkSel");
-  if (!sel) return;
+  const button = document.getElementById("depositLinkPickerBtn");
+  const menu = document.getElementById("depositLinkPickerMenu");
+  if (!sel || !button || !menu) return;
   const cur = sel.value;
   sel.innerHTML = '<option value="">请选择对应的原押金</option>';
-  linkedDepositOptions().forEach(r => {
+  const options = linkedDepositOptions();
+  options.forEach(r => {
     const op = document.createElement("option");
     op.value = String(r.id);
     op.textContent = formatDate(r.date) + " · " + (r.depositTarget || "未填写对象") + " · ¥" + amountOf(r).toFixed(2);
     sel.appendChild(op);
   });
   if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
+  const selected = options.find(record => String(record.id) === sel.value);
+  button.innerHTML = `${esc(selected ? formatDate(selected.date) + " · " + (selected.depositTarget || "未填写对象") + " · ¥" + amountOf(selected).toFixed(2) : "请选择对应的原押金")}<span aria-hidden="true">⌄</span>`;
+  button.classList.toggle("has-value", Boolean(selected));
+  menu.innerHTML = options.length ? options.map(record => {
+    const selectedOption = String(record.id) === sel.value;
+    const date = esc(formatDate(record.date));
+    const target = esc(record.depositTarget || "未填写对象");
+    const amount = amountOf(record).toFixed(2);
+    return `<button class="compact-picker-option special-expense-option${selectedOption ? " selected" : ""}" type="button" role="option" data-deposit-id="${esc(record.id)}" aria-selected="${selectedOption ? "true" : "false"}"><span class="special-expense-option-main"><span class="special-expense-option-title">${target}</span><span class="special-expense-option-meta">${date}</span></span><span class="special-expense-option-amount">¥${amount}</span></button>`;
+  }).join("") : '<div class="compact-picker-empty">没有可选择的原押金</div>';
+  menu.querySelectorAll("[data-deposit-id]").forEach(option => {
+    option.onclick = () => {
+      sel.value = option.dataset.depositId;
+      renderDepositLinkOptions();
+      updateDepositSettlementHint();
+      if (typeof closeCompactPickers === "function") closeCompactPickers();
+    };
+  });
 }
 
 function updateDepositSettlementHint() {
   const hint = document.getElementById("depositSettlementHint");
   if (!hint) return;
-  const linkId = document.getElementById("depositLinkSel").value;
+  const linkId = document.getElementById("depositLinkSel")?.value;
   const original = dataState.records.find(r => String(r.id) === String(linkId));
   if (!original) {
     hint.textContent = "勾选最终结算后，系统会把未退回的差额计入收入或支出。";

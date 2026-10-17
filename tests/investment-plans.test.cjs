@@ -380,3 +380,158 @@ test("failed fund storage write rolls back project and ledger together", () => {
   assert.equal(runtime.run("dataState.fundProjects[0].status"), "open");
   assert.equal(JSON.parse(runtime.localStorage.getItem("jizhangben_records_1")).length, 0);
 });
+
+function correctionRuntime(mode = "one-time", closed = false, window = {}) {
+  const runtime = createRuntime({}, { window });
+  runtime.run(`
+    todayStr = () => "2026-10-17";
+    renderInvestmentPlans = () => {}; render = () => {};
+    dataState.offlineMode = true; dataState.currentBookId = 1;
+    dataState.accounts = [
+      {id:1,name:"微信",kind:"资金",initialCents:100000},
+      {id:2,name:"银行卡",kind:"资金",initialCents:50000},
+      {id:3,name:"基金",kind:"资金",initialCents:2000,fundOnly:true,fundProjectId:"9"}
+    ];
+    dataState.records = [];
+    dataState.fundProjects = [{id:9,mode:${JSON.stringify(mode)},fundName:"宽基",platform:"支付宝",
+      sourceAccountId:1,fundAccountId:3,originalCostCents:2000,amountCents:10000,
+      frequency:"monthly",monthDays:[8],startDate:"2026-10-01",endDate:"",
+      status:"open",scheduleStatus:"active",processedDates:[]}];
+    makeFundTransfer(dataState.fundProjects[0],"2026-10-08",10000,"contribution",1,3,true,"2026-10#8");
+    dataState.records.at(-1).id=1;
+    makeFundTransfer(dataState.fundProjects[0],"2026-10-09",3000,"withdrawal",3,1);
+    dataState.records.at(-1).id=2;
+    dataState.records.push({id:10,type:"支出",category:"自定义保留",account:1,date:"2026-10-10",amountCents:1234,amount:12.34});
+    saveAccounts();save();saveFundProjects();
+  `);
+  if (closed) runtime.run(`
+    makeFundTransfer(dataState.fundProjects[0],"2026-10-10",7000,"withdrawal",3,1);
+    makeFundSettlement(dataState.fundProjects[0],"2026-10-10",-2000);
+    dataState.fundProjects[0].status="closed";dataState.fundProjects[0].closedDate="2026-10-10";
+    save();saveFundProjects();
+  `);
+  return runtime;
+}
+
+test("fund correction updates one transfer, principal and both account ledgers without rewriting unrelated data", () => {
+  const runtime = correctionRuntime();
+  const other = runtime.run('JSON.stringify(dataState.records.find(r=>r.id===10))');
+  runtime.run('correctFundRecord(9,1,{bookId:1,amountCents:15000,date:"2026-10-07",accountId:"2"})');
+  assert.equal(runtime.run("fundTotals(dataState.fundProjects[0]).investedCents"), 17000);
+  assert.equal(runtime.run("dataState.fundProjects[0].originalCostCents"), 2000);
+  assert.equal(runtime.run("dataState.records[0].id"), 1);
+  assert.equal(runtime.run("dataState.records[0].fundScheduleKey"), "2026-10#8");
+  assert.equal(runtime.run("computeBalances()[1]"), 1017.66);
+  assert.equal(runtime.run("computeBalances()[2]"), 350);
+  assert.equal(runtime.run("computeBalances()[3]"), 140);
+  assert.equal(runtime.run('JSON.stringify(dataState.records.find(r=>r.id===10))'), other);
+  assert.equal(runtime.run("incomeEffect(dataState.records[0])+expenseEffect(dataState.records[0])"), 0);
+  assert.equal(runtime.run("dataState.fundProjects[0].corrections.length"), 1);
+});
+
+test("voiding a mistaken recurring contribution retains occurrence key and optionally pauses future posting", () => {
+  const runtime = correctionRuntime("recurring");
+  runtime.run('correctFundRecord(9,1,{bookId:1,void:true});processDueInvestmentPlans(true)');
+  assert.equal(runtime.run('dataState.records.filter(r=>r.fundAction==="contribution").length'), 0);
+  assert.equal(runtime.run('dataState.fundProjects[0].processedDates.includes("2026-10#8")'), true);
+  assert.equal(runtime.run('dataState.fundProjects[0].scheduleStatus'), "active");
+  assert.equal(runtime.run('fundTotals(dataState.fundProjects[0]).investedCents'), 2000);
+  const paused = correctionRuntime("recurring");
+  paused.run('correctFundRecord(9,1,{bookId:1,amountCents:9000,date:"2026-10-08",accountId:1,pauseSchedule:true})');
+  assert.equal(paused.run('dataState.fundProjects[0].scheduleStatus'), "paused");
+});
+
+test("closed fund correction recalculates loss, zero and profit with matching settlement and zero fund balance", () => {
+  const runtime = correctionRuntime("one-time", true);
+  const settlementId = runtime.run('dataState.records.find(r=>r.fundAction==="settlement").id');
+  runtime.run('correctFundRecord(9,1,{bookId:1,amountCents:6000,date:"2026-10-08",accountId:1})');
+  assert.equal(runtime.run('dataState.records.find(r=>r.fundAction==="settlement").id'), settlementId);
+  assert.equal(runtime.run('dataState.records.find(r=>r.fundAction==="settlement").fundResult'), "income");
+  assert.equal(runtime.run('incomeEffect(dataState.records.find(r=>r.fundAction==="settlement"))'), 20);
+  assert.equal(runtime.run('computeBalances()[3]'), 0);
+  runtime.run('correctFundRecord(9,1,{bookId:1,amountCents:8000,date:"2026-10-08",accountId:1})');
+  assert.equal(runtime.run('dataState.records.filter(r=>r.fundAction==="settlement").length'), 0);
+  assert.equal(runtime.run('computeBalances()[3]'), 0);
+  runtime.run('correctFundRecord(9,1,{bookId:1,amountCents:12000,date:"2026-10-08",accountId:1})');
+  assert.equal(runtime.run('expenseEffect(dataState.records.find(r=>r.fundAction==="settlement"))'), 40);
+  assert.equal(runtime.run('computeBalances()[3]'), 0);
+  runtime.run('correctFundRecord(9,2,{bookId:1,amountCents:4000,date:"2026-10-09",accountId:2})');
+  assert.equal(runtime.run('fundTotals(dataState.fundProjects[0]).withdrawnCents'), 11000);
+  assert.equal(runtime.run('expenseEffect(dataState.records.find(r=>r.fundAction==="settlement"))'), 30);
+  assert.equal(runtime.run('computeBalances()[3]'), 0);
+});
+
+test("invalid, stale, cross-book and ambiguous fund corrections do not mutate records or settings", () => {
+  const runtime = correctionRuntime();
+  const before = runtime.run('JSON.stringify([dataState.records,dataState.accounts,dataState.fundProjects])');
+  for (const changes of [
+    '{bookId:2,void:true}', '{bookId:1,amountCents:0,date:"2026-10-08",accountId:1}',
+    '{bookId:1,amountCents:100,date:"2026-02-30",accountId:1}',
+    '{bookId:1,amountCents:100,date:"2026-10-18",accountId:1}',
+    '{bookId:1,amountCents:100,date:"2026-10-08",accountId:3}'
+  ]) assert.throws(()=>runtime.run(`correctFundRecord(9,1,${changes})`));
+  assert.throws(()=>runtime.run('correctFundRecord(9,1,{bookId:1,void:true},"stale")'));
+  assert.equal(runtime.run('JSON.stringify([dataState.records,dataState.accounts,dataState.fundProjects])'), before);
+  const closed = correctionRuntime("one-time", true);
+  assert.throws(()=>closed.run('correctFundRecord(9,1,{bookId:1,amountCents:100,date:"2026-10-11",accountId:1})'));
+  assert.throws(()=>closed.run('correctFundRecord(9,2,{bookId:1,void:true})'), /暂不能撤销/);
+  runtime.run('dataState.records.push({...dataState.records[0]})');
+  assert.throws(()=>runtime.run('correctFundRecord(9,1,{bookId:1,void:true})'), /重复编号/);
+});
+
+test("failed fund correction restores stored records, occurrence keys and audit history", () => {
+  const runtime = correctionRuntime("recurring");
+  const before = runtime.run('JSON.stringify([dataState.records,dataState.fundProjects])');
+  runtime.run(`
+    const realSet = appStorage.set; let once=false;
+    appStorage.set=function(key,value){if(key===fundProjectsKey(1)&&!once){once=true;throw new Error("空间不足");}return realSet.call(this,key,value);};
+  `);
+  assert.throws(()=>runtime.run('correctFundRecord(9,1,{bookId:1,void:true,pauseSchedule:true})'), /空间不足/);
+  assert.equal(runtime.run('JSON.stringify([dataState.records,dataState.fundProjects])'), before);
+  assert.equal(JSON.parse(runtime.localStorage.getItem("jizhangben_records_1"))[0].id, 1);
+});
+
+test("native fund correction commits ledger and plan together, and a failed native transaction changes neither", () => {
+  const disk = {}, batches = [];
+  const bridge = { fail: false, readEntries: () => JSON.stringify(disk), writeEntries(raw) {
+    if (this.fail) return false;
+    batches.push(JSON.parse(raw));Object.assign(disk, batches.at(-1));return true;
+  } };
+  const runtime = correctionRuntime("recurring", false, { JizhangbenStorage: bridge });
+  batches.length = 0;
+  runtime.run('correctFundRecord(9,1,{bookId:1,amountCents:7500,date:"2026-10-08",accountId:1})');
+  assert.equal(batches.length, 1);
+  assert.deepEqual(Object.keys(batches[0]).sort(), ['jizhangben_fund_projects_1', 'jizhangben_records_1']);
+  const before = JSON.stringify(disk);
+  const beforeMemory = runtime.run('JSON.stringify([dataState.records,dataState.fundProjects])');
+  bridge.fail = true;
+  assert.throws(()=>runtime.run('correctFundRecord(9,1,{bookId:1,void:true,pauseSchedule:true})'), /未能保存/);
+  assert.equal(JSON.stringify(disk), before);
+  assert.equal(runtime.run('JSON.stringify([dataState.records,dataState.fundProjects])'), beforeMemory);
+});
+
+test("fund corrections and voided schedule markers survive validated backup round-trip", () => {
+  const runtime = correctionRuntime("recurring");
+  runtime.run(`
+    appStorage.set(BOOKS_KEY,JSON.stringify([{id:1,name:"隔离基金账本",category:"个人"}]));
+    appStorage.set(CURRENT_BOOK_KEY,"1");
+    appStorage.set(STORAGE_SCHEMA_KEY,String(STORAGE_SCHEMA_VERSION));
+    correctFundRecord(9,1,{bookId:1,void:true});
+    dataState.backupForCorrection = extractBackupStorage({format:"jizhangben-backup",version:3,storage:appStorage.entries("jizhangben_")});
+  `);
+  const backup=runtime.run('JSON.stringify(dataState.backupForCorrection)');
+  const restored=createRuntime();
+  restored.run(`replaceBackupStorage(${backup});loadBooks();load();loadAccounts();loadFundProjects();`);
+  assert.equal(restored.run('dataState.fundProjects[0].corrections[0].action'),"void");
+  assert.equal(restored.run('dataState.fundProjects[0].processedDates.includes("2026-10#8")'),true);
+  assert.equal(restored.run('dataState.records.some(r=>r.id===1)'),false);
+  assert.equal(restored.run('JSON.stringify(appStorage.entries("jizhangben_"))'),backup);
+});
+
+test("failure while reading the pre-commit snapshot does not leave an unsaved correction in memory", () => {
+  const runtime = correctionRuntime("recurring");
+  const before=runtime.run('JSON.stringify([dataState.records,dataState.fundProjects])');
+  runtime.run('appStorage.get=()=>{throw new Error("模拟读取失败")};');
+  assert.throws(()=>runtime.run('correctFundRecord(9,1,{bookId:1,void:true,pauseSchedule:true})'), /模拟读取失败/);
+  assert.equal(runtime.run('JSON.stringify([dataState.records,dataState.fundProjects])'),before);
+});

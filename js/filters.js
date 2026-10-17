@@ -36,8 +36,33 @@ function recordsInDetailPeriod(recs, period = "all") {
 }
 
 function currentDetailPeriod() {
+  if (["month", "year", "all", "range"].includes(filterState.periodMode)) return "all";
   if (filterState.fromDate || filterState.toDate) return "all";
   return uiState.detailPeriod || "all";
+}
+
+function applyDetailPeriodMode(mode) {
+  filterState.periodMode = ["month", "year", "period", "range", "all"].includes(mode) ? mode : "period";
+  if (filterState.periodMode === "month") {
+    const month = /^\d{4}-\d{2}$/.test(filterState.month) ? filterState.month : todayStr().slice(0, 7);
+    const [year, monthNumber] = month.split("-").map(Number);
+    filterState.fromDate = month + "-01";
+    filterState.toDate = year + "-" + String(monthNumber).padStart(2, "0") + "-" + String(new Date(year, monthNumber, 0).getDate()).padStart(2, "0");
+  } else if (filterState.periodMode === "year") {
+    const year = /^\d{4}$/.test(filterState.year) ? filterState.year : String(new Date().getFullYear());
+    filterState.year = year;
+    filterState.fromDate = year + "-01-01";
+    filterState.toDate = year + "-12-31";
+  } else if (filterState.periodMode === "all" || filterState.periodMode === "period") {
+    filterState.fromDate = "";
+    filterState.toDate = "";
+  }
+  if (typeof document !== "undefined") {
+    const from = document.getElementById("fromDate");
+    const to = document.getElementById("toDate");
+    if (from) from.value = filterState.fromDate;
+    if (to) to.value = filterState.toDate;
+  }
 }
 
 function filterByPeriod(recs) {

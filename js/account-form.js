@@ -156,16 +156,23 @@ async function handleAccountSave() {
     }
   }
 
-  if (wasEdit) {
-    const a = dataState.accounts.find(x => String(x.id) === String(uiState.editingAccountId));
-    a.name = name;
-    a.kind = kind;
-    a.initial = initialCents / 100;
-    a.initialCents = initialCents;
-  } else {
-    dataState.accounts.push({ id: nextId(dataState.accounts), name: name, kind: kind, initial: initialCents / 100, initialCents: initialCents });
+  const previousAccounts = JSON.stringify(dataState.accounts);
+  try {
+    if (wasEdit) {
+      const a = dataState.accounts.find(x => String(x.id) === String(uiState.editingAccountId));
+      a.name = name;
+      a.kind = kind;
+      a.initial = initialCents / 100;
+      a.initialCents = initialCents;
+    } else {
+      dataState.accounts.push({ id: nextId(dataState.accounts), name: name, kind: kind, initial: initialCents / 100, initialCents: initialCents });
+    }
+    saveAccounts();
+  } catch (error) {
+    dataState.accounts = JSON.parse(previousAccounts);
+    showAccMsg("保存失败，原账户和填写内容已保留；请检查手机存储空间后重试");
+    return;
   }
-  saveAccounts();
   if (backendFallback || (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange())) {
     if (typeof markLocalChangePending === "function") markLocalChangePending(wasEdit ? "account_edit" : "account_write");
   }
@@ -204,6 +211,8 @@ function openAccountBalanceEditor(id) {
   if (typeof syncAccountPickerValue === "function") syncAccountPickerValue("accountSel");
   if (amount) amount.value = current.toFixed(2);
   if (principal) principal.value = initialOf(a).toFixed(2);
+  const accountName = document.getElementById("balanceAccountName");
+  if (accountName) accountName.value = a.name;
   if (date) date.value = todayStr();
   if (typeof updateFormFields === "function") updateFormFields();
   if (typeof renderTypeChips === "function") renderTypeChips();
@@ -230,6 +239,10 @@ async function deleteAccount(id) {
   const a = dataState.accounts.find(x => String(x.id) === String(id));
   if (!a) return;
   if (a.fundOnly) return;
+  if (dataState.fixedIncomePlan && String(dataState.fixedIncomePlan.accountId) === String(id)) {
+    showAccMsg("退休金固收仍使用此账户，请先更改或清除退休金设置");
+    return;
+  }
   if ((dataState.fundProjects || []).some(project =>
     project.status === "open" && String(project.sourceAccountId) === String(id))) {
     showAccMsg("这个账户仍被基金计划使用，请先处理基金计划");

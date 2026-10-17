@@ -112,6 +112,11 @@ const CATEGORY_ICON_OPTIONS = [
   { key: "other", name: "其他" }
 ];
 
+// 新图标使用独立前缀，旧编号继续指向 1.60 及更早版本里的原始图形。
+const CATEGORY_ICON_TABLER_OPTIONS = CATEGORY_ICON_TABLER_GROUPS.flatMap(group =>
+  group.options.map(([key, name]) => ({ key, name, group: group.key }))
+);
+
 function renderUiIcons(root = document) {
   if (!root || typeof root.querySelectorAll !== "function") return;
   root.querySelectorAll("[data-icon]").forEach(node => {
@@ -124,9 +129,13 @@ function renderUiIcons(root = document) {
 function categoryIconMarkup(category, fallbackKey) {
   const name = String(category || "");
   const iconKey = dataState.customCategoryIcons && dataState.customCategoryIcons[name];
-  return CATEGORY_ICON_LIBRARY[iconKey] || CATEGORY_ICON_MARKUP[name] || CATEGORY_ICON_LIBRARY[CATEGORY_ICON_ALIASES[name]] || CATEGORY_ICON_LIBRARY[String(fallbackKey || "")] || "";
+  return categoryIconMarkupByKey(iconKey) || CATEGORY_ICON_MARKUP[name] ||
+    categoryIconMarkupByKey(CATEGORY_ICON_ALIASES[name]) || categoryIconMarkupByKey(fallbackKey) || "";
 }
 
 function categoryIconMarkupByKey(iconKey) {
-  return CATEGORY_ICON_LIBRARY[String(iconKey || "")] || "";
+  const key = String(iconKey || "");
+  if (key.startsWith("tabler:")) return TABLER_CATEGORY_ICON_MARKUP[key] || "";
+  // 第一优先保留原有编号的原始 SVG；兼容早期扩展版写入的未加前缀新图标编号。
+  return CATEGORY_ICON_LIBRARY[key] || TABLER_CATEGORY_ICON_MARKUP["tabler:" + key] || "";
 }

@@ -130,11 +130,19 @@ function exportBackup() {
   const fileName = "记账本备份_" + todayStr() + ".json";
   const content = JSON.stringify(data, null, 2);
   if (window.JizhangbenNative && typeof window.JizhangbenNative.saveBackup === "function") {
-    const savedPath = window.JizhangbenNative.saveBackup(fileName, content);
-    if (savedPath) {
-      showBackupMsg("已保存到手机的下载目录");
-      return;
-    }
+    try {
+      const savedPath = window.JizhangbenNative.saveBackup(fileName, content);
+      if (savedPath) {
+        showBackupMsg("已保存到手机的下载目录");
+        return;
+      }
+    } catch (error) { /* 保存失败时不能把 WebView 的下载点击当作成功落盘。 */ }
+    showBackupMsg("备份保存失败，未生成可用文件。请检查手机存储空间后重试。", true);
+    return;
+  }
+  if (window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) {
+    showBackupMsg("手机备份服务未就绪，请重新打开应用后重试。", true);
+    return;
   }
   const blob = new Blob([content], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -334,7 +342,7 @@ function isValidFundProjectList(value) {
     typeof project.platform === "string" && project.platform.trim() !== "" &&
     ["recurring", "one-time"].includes(project.mode) &&
     hasBackupId(project.fundAccountId) && hasBackupId(project.sourceAccountId) &&
-    Number.isInteger(Number(project.amountCents)) && Number(project.amountCents) > 0 &&
+    Number.isInteger(Number(project.amountCents)) && (Number(project.amountCents) > 0 || (project.mode === "one-time" && Number(project.amountCents) === 0)) &&
     (project.originalCostCents === undefined ||
       (Number.isSafeInteger(project.originalCostCents) && project.originalCostCents >= 0)) &&
     typeof project.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(project.startDate) &&
@@ -350,6 +358,14 @@ function isValidFundProjectList(value) {
               project.monthDays.every(day => Number.isInteger(day) && day >= 1 && day <= 31))
             : (Number.isInteger(project.monthDay) && project.monthDay >= 1 && project.monthDay <= 31)))))
   );
+}
+
+function isValidFixedIncomePlan(value) {
+  return isBackupObject(value) && hasBackupId(value.id) &&
+    Number.isSafeInteger(Number(value.amountCents)) && Number(value.amountCents) > 0 &&
+    hasBackupId(value.accountId) && Number.isInteger(Number(value.day)) && Number(value.day) >= 1 && Number(value.day) <= 31 &&
+    typeof value.startMonth === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value.startMonth) &&
+    typeof value.active === "boolean" && typeof value.nextEligibleMonth === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value.nextEligibleMonth);
 }
 
 function validateBackupValue(key, value) {
@@ -369,6 +385,7 @@ function validateBackupValue(key, value) {
   if (key.indexOf(BUDGETS_KEY_PREFIX) === 0) return isValidBudgetData(value);
   if (key.indexOf(INVESTMENT_PLANS_KEY_PREFIX) === 0) return isValidInvestmentPlanList(value);
   if (key.indexOf(FUND_PROJECTS_KEY_PREFIX) === 0) return isValidFundProjectList(value);
+  if (key.indexOf(FIXED_INCOME_KEY_PREFIX) === 0) return isValidFixedIncomePlan(value);
   if (key === STORAGE_KEY || key.indexOf("jizhangben_records_") === 0) {
     return isValidRecordList(value);
   }
@@ -402,6 +419,8 @@ function extractBackupStorage(data) {
 
 // 用“先保存快照、再替换、失败后恢复”的方式更新全部备份数据。
 function replaceBackupStorage(imported) {
+  // 原生端将整份替换放在同一个事务，避免中断于“删除旧值”和“写入新值”之间。
+  if (appStorage.replaceLedgerEntries(imported)) return;
   const existing = appStorage.entries("jizhangben_");
   try {
     appStorage.removeMany(Object.keys(existing));
@@ -441,6 +460,7 @@ function reloadData() {
   loadAccounts();
   loadInvestmentPlans();
   loadFundProjects();
+  loadFixedIncomePlan();
   loadBudgetData();
   loadCustomTypes();
   loadCustomCategories();
@@ -459,5 +479,7 @@ function reloadData() {
   renderBookList();
   renderAccountSelects();
   fillCategoryFilter();
+  renderFixedIncomeSettings();
+  if (typeof renderDeviceLockSettings === "function") renderDeviceLockSettings();
   render();
 }

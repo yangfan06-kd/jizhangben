@@ -136,7 +136,7 @@ function budgetProgressHtml(actualCents, limitCents, label) {
 function budgetCategoryOptions() {
   const period = budgetPeriod();
   const used = new Set(Object.keys(period.categories));
-  return allCategories().filter((name, index, list) => list.indexOf(name) === index && !used.has(name));
+  return allCategories("expense").filter((name, index, list) => list.indexOf(name) === index && !used.has(name));
 }
 
 function closeBudgetCategoryPicker() {
@@ -254,7 +254,7 @@ function renderBudgetCategoryList(month, period, actuals) {
             <button class="mini-btn danger" type="button" data-budget-action="remove">删除</button>
           </div>
         </div>
-        <div class="budget-category-meta"><span>已用 ${budgetMoney(used)}</span><span class="${remaining < 0 ? "over" : ""}">${remaining < 0 ? "超支 " + budgetMoney(Math.abs(remaining)) : "剩余 " + budgetMoney(remaining)}</span></div>
+        <div class="budget-category-meta"><span>已用 <strong>${budgetMoney(used)}</strong></span><span class="${remaining < 0 ? "over" : ""}">${remaining < 0 ? "超支 " : "剩余 "}<strong>${budgetMoney(Math.abs(remaining))}</strong></span></div>
         ${budgetProgressHtml(used, limitCents, name)}
       </div>
     `;

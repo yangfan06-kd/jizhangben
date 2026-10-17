@@ -171,19 +171,116 @@ function fundPersistState(includeAccounts = false) {
   if (includeAccounts) keys.push(accountsKey(dataState.currentBookId));
   const previous = Object.fromEntries(keys.map(key => [key, appStorage.get(key)]));
   try {
-    if (includeAccounts) saveAccounts();
-    save();
-    saveFundProjects();
+    dataState.records = normalizeRecords(dataState.records);
+    const updates = {
+      [recordsKey(dataState.currentBookId)]: JSON.stringify(dataState.records),
+      [fundProjectsKey(dataState.currentBookId)]: JSON.stringify(dataState.fundProjects || [])
+    };
+    if (includeAccounts) updates[accountsKey(dataState.currentBookId)] = JSON.stringify(dataState.accounts);
+    // 原生端把资金流水与计划状态放在同一个事务，避免只提交一半。
+    appStorage.setMany(updates);
   } catch (error) {
     keys.forEach(key => {
-      if (previous[key] === null) appStorage.remove(key);
-      else appStorage.set(key, previous[key]);
+      try {
+        if (previous[key] === null) appStorage.remove(key);
+        else appStorage.set(key, previous[key]);
+      } catch (rollbackError) { /* 原生批量提交失败时本来就未写入；仍要恢复内存。 */ }
     });
     load();
     loadFundProjects();
     if (includeAccounts) loadAccounts();
     throw error;
   }
+}
+
+// 只有用户保存或撤销指定资金记录时调用，启动读取不会更正历史流水。
+function correctFundRecord(projectId, recordId, changes, expectedFingerprint = null) {
+  if (!fundLocalMode()) throw new Error("请先切换到本机离线模式。");
+  if (String(changes.bookId) !== String(dataState.currentBookId)) throw new Error("账本已切换，请重新打开这笔记录。");
+  const currentProject = fundProjectById(projectId);
+  const current = dataState.records.find(record => String(record.id) === String(recordId));
+  if (!currentProject || !current || String(current.fundProjectId) !== String(projectId) ||
+      current.type !== "转账" || !["contribution", "withdrawal"].includes(current.fundAction)) {
+    throw new Error("这笔资金记录无法更正，请重新打开基金详情。");
+  }
+  if (expectedFingerprint !== null && JSON.stringify(current) !== expectedFingerprint) {
+    throw new Error("这笔记录已变化，请重新打开后核对。");
+  }
+  if (dataState.records.filter(record => String(record.id) === String(recordId)).length !== 1 ||
+      dataState.fundProjects.filter(project => String(project.id) === String(projectId)).length !== 1) {
+    throw new Error("发现重复编号，请先导出备份核对，暂不能安全更正。");
+  }
+  if (changes.void && currentProject.status === "closed" && current.fundAction === "withdrawal") {
+    throw new Error("已结清的到账记录请更正金额，暂不能撤销，以免误撤销全部赎回状态。");
+  }
+  const fundAccount = dataState.accounts.find(account => String(account.id) === String(currentProject.fundAccountId));
+  if (!fundAccount || !fundAccount.fundOnly || (fundAccount.fundProjectId != null &&
+      String(fundAccount.fundProjectId) !== String(projectId))) throw new Error("基金专属账户缺失或关联不一致，无法安全更正。");
+  const projects = JSON.parse(JSON.stringify(dataState.fundProjects));
+  const records = JSON.parse(JSON.stringify(dataState.records));
+  const project = projects.find(item => String(item.id) === String(projectId));
+  const record = records.find(item => String(item.id) === String(recordId));
+  const before = JSON.parse(JSON.stringify(record));
+  if (!changes.void) {
+    if (!Number.isSafeInteger(changes.amountCents) || changes.amountCents <= 0 || !parseLocalDate(changes.date) ||
+        changes.date > todayStr() || (project.status === "closed" && (!project.closedDate || changes.date > project.closedDate)) ||
+        !fundOrdinaryAccounts().some(account => String(account.id) === String(changes.accountId))) {
+      throw new Error("请填写有效金额、资金账户及日期；已结清基金的日期不能晚于全部赎回日。");
+    }
+    record.amountCents = changes.amountCents;
+    record.amount = changes.amountCents / 100;
+    record.date = changes.date;
+    record.account = record.fundAction === "contribution" ? changes.accountId : project.fundAccountId;
+    record.toAccount = record.fundAction === "contribution" ? project.fundAccountId : changes.accountId;
+    record.fundCorrectedAt = new Date().toISOString();
+  } else {
+    records.splice(records.indexOf(record), 1);
+  }
+  // 保留原发生项标识；即使改了日期或撤销，也不会当作漏记重新补回。
+  const scheduleKey = before.fundScheduleKey || before.fundScheduledDate;
+  if (before.fundAction === "contribution" && scheduleKey) {
+    project.processedDates = [...new Set([...(project.processedDates || []), scheduleKey])];
+  }
+  if (changes.pauseSchedule && project.mode === "recurring" && project.status === "open") project.scheduleStatus = "paused";
+  const settlements = records.filter(item => String(item.fundProjectId) === String(projectId) && item.fundAction === "settlement");
+  if (settlements.length > 1 || (project.status !== "closed" && settlements.length)) {
+    throw new Error("发现不一致的结算记录，暂不能自动更正；请先导出备份核对。");
+  }
+  const settlementBefore = settlements.length ? JSON.parse(JSON.stringify(settlements[0])) : null;
+  const totalsAfter = fundTotals(project, records);
+  if (![totalsAfter.investedCents, totalsAfter.withdrawnCents, totalsAfter.differenceCents].every(Number.isSafeInteger)) {
+    throw new Error("更正后的累计金额超出可精确计算范围，请核对金额。");
+  }
+  if (project.status === "closed") {
+    const difference = totalsAfter.differenceCents;
+    if (!parseLocalDate(project.closedDate)) throw new Error("全部赎回日期缺失，无法安全同步结算。");
+    if (difference === 0 && settlements.length) records.splice(records.indexOf(settlements[0]), 1);
+    else if (difference !== 0) {
+      const settlement = settlements[0] || {
+        id: nextId(records), type: "基金结算", category: "其他", date: project.closedDate,
+        account: project.fundAccountId, note: "基金全部赎回结算：" + project.fundName,
+        fundProjectId: String(project.id), fundAction: "settlement"
+      };
+      Object.assign(settlement, { amountCents: Math.abs(difference), amount: Math.abs(difference) / 100,
+        fundResult: difference > 0 ? "income" : "expense" });
+      if (!settlements.length) records.push(settlement);
+    }
+  }
+  project.corrections = [...(Array.isArray(project.corrections) ? project.corrections : []), {
+    action: changes.void ? "void" : "edit", at: new Date().toISOString(), before,
+    after: changes.void ? null : JSON.parse(JSON.stringify(record)), settlementBefore
+  }];
+  const originalRecords = dataState.records, originalProjects = dataState.fundProjects;
+  dataState.records = records;
+  dataState.fundProjects = projects;
+  try { fundPersistState(); }
+  catch (error) {
+    // 连读取提交前快照都失败时，也不能把未保存的更正留在页面内存中。
+    dataState.records = originalRecords;
+    dataState.fundProjects = originalProjects;
+    throw error;
+  }
+  return true;
 }
 
 function makeFundTransfer(project, dateText, amountCents, action, sourceId, targetId, scheduled = false, scheduleKey = dateText) {
@@ -237,7 +334,7 @@ function processDueInvestmentPlans(force = false) {
       const alreadyInvested = fundProjectRecords(project).some(record =>
         record.fundAction === "contribution" && record.fundScheduledDate);
       if (project.startDate <= today && !alreadyInvested && !project.processedDates.includes(project.startDate)) {
-        if (makeFundTransfer(project, project.startDate, project.amountCents, "contribution",
+        if (Number(project.amountCents) > 0 && makeFundTransfer(project, project.startDate, project.amountCents, "contribution",
           project.sourceAccountId, project.fundAccountId, true)) recordChanged = true;
         project.processedDates.push(project.startDate);
         projectChanged = true;
@@ -277,7 +374,7 @@ function fundOrdinaryAccounts() {
   return (dataState.accounts || []).filter(account => account.kind === "资金" && !account.fundOnly);
 }
 
-const FUND_PICKER_IDS = ["fundSourceAccount", "fundFrequency", "fundRedeemAccount", "fundAdjustAccount"];
+const FUND_PICKER_IDS = ["fundSourceAccount", "fundFrequency", "fundRedeemAccount", "fundAdjustAccount", "fundRecordAccount"];
 
 function closeFundPickers(exceptId = "") {
   FUND_PICKER_IDS.forEach(id => {
@@ -304,7 +401,7 @@ function syncFundPicker(id) {
 function renderFundAccountOptions() {
   const options = '<option value="">请选择资金账户</option>' + fundOrdinaryAccounts()
     .map(account => `<option value="${esc(account.id)}">${esc(account.name)}</option>`).join("");
-  ["fundSourceAccount", "fundRedeemAccount", "fundAdjustAccount"].forEach(id => {
+  ["fundSourceAccount", "fundRedeemAccount", "fundAdjustAccount", "fundRecordAccount"].forEach(id => {
     const select = document.getElementById(id);
     if (!select) return;
     const previous = select.value;
@@ -315,10 +412,12 @@ function renderFundAccountOptions() {
 }
 
 function setFundView(view) {
+  closeFundPickers();
+  if (view !== "transaction") fundUi.recordEdit = null;
   fundUi.view = view;
-  ["fundHome", "fundFormPage", "fundDetailPage", "fundRedeemPage", "fundSettingsPage", "fundAdjustPage"].forEach((id, index) => {
+  ["fundHome", "fundFormPage", "fundDetailPage", "fundRedeemPage", "fundSettingsPage", "fundAdjustPage", "fundTransactionPage"].forEach((id, index) => {
     const node = document.getElementById(id);
-    if (node) node.hidden = ["home", "form", "detail", "redeem", "settings", "adjust"][index] !== view;
+    if (node) node.hidden = ["home", "form", "detail", "redeem", "settings", "adjust", "transaction"][index] !== view;
   });
   if (view === "home") renderInvestmentPlans();
   if (view === "detail") renderFundDetail();
@@ -330,7 +429,8 @@ function setFundView(view) {
 }
 
 function fundBack() {
-  if (["redeem", "settings", "adjust"].includes(fundUi.view)) setFundView("detail");
+  if (fundUi.recordBusy) return;
+  if (["redeem", "settings", "adjust", "transaction"].includes(fundUi.view)) setFundView("detail");
   else if (fundUi.view === "form" && fundUi.editId) {
     fundUi.editId = null;
     setFundView("detail");
@@ -447,7 +547,7 @@ function renderInvestmentPlans() {
       <span class="fund-project-top"><strong>${esc(project.fundName)}</strong><em>${type}</em></span>
       <span class="fund-project-platform">${esc(project.platform)} · 专属基金账户 · ${status}</span>
       <span class="fund-project-stats"><span>投入本金 <b>${fundMoney(totals.investedCents)}</b></span><span>已取出 <b>${fundMoney(totals.withdrawnCents)}</b></span></span>
-      ${project.mode === "one-time" ? `<span class="fund-project-original">投资总原始成本 ${fundMoney(project.originalCostCents)}</span>` : ""}
+      ${project.mode === "one-time" ? `<span class="fund-project-original">投资总原始成本 <strong>${fundMoney(project.originalCostCents)}</strong></span>` : ""}
     </button>`;
   }).join("");
   const legacy = document.getElementById("fundLegacyNotice");
@@ -493,18 +593,68 @@ function renderFundDetail() {
     <div class="fund-detail-numbers"><div><span>投入本金</span><strong>${fundMoney(totals.investedCents)}</strong></div>
       <div><span>已取出到账</span><strong>${fundMoney(totals.withdrawnCents)}</strong></div></div>
     ${(project.mode === "one-time" || project.originalCostCents > 0)
-      ? `<p class="fund-detail-meta">${project.mode === "recurring" ? "原始总成本" : "投资总原始成本"}：${fundMoney(project.originalCostCents)}（建账前已投入）</p>` : ""}
+      ? `<p class="fund-detail-meta">${project.mode === "recurring" ? "原始总成本" : "投资总原始成本"}：<strong>${fundMoney(project.originalCostCents)}</strong>（建账前已投入）</p>` : ""}
     ${result}
     ${project.status === "open" ? `<div class="fund-detail-actions"><button class="btn-primary" type="button" data-fund-action="redeem">赎回</button>${toggle}</div>` : ""}
     ${project.mode === "one-time" && project.status === "open"
       ? `<button class="fund-adjust-entry" type="button" data-fund-action="adjust">＋ 追加投资</button>` : ""}
     <button class="fund-text-button" type="button" data-fund-action="settings">账户设置</button>
     <p class="fund-hint">账户余额是本金流转账面数，不代表基金实时市值。部分赎回暂不计算收益；全部赎回后统一结算。</p>
+    <div id="fundDetailMsg" class="form-msg" role="status" aria-live="polite"></div>
     <h3 class="fund-section-title">资金记录</h3>
     <div class="fund-history">${transactions.length ? transactions.map(record => {
       const label = record.fundAction === "contribution" ? "投入" : record.fundAction === "withdrawal" ? "取出" : "最终结算";
-      return `<div><span>${esc(record.date)} · ${label}</span><strong>${fundMoney(toCents(amountOf(record)))}</strong></div>`;
-    }).join("") : "<p>尚无资金记录</p>"}</div>`;
+      const edit = ["contribution", "withdrawal"].includes(record.fundAction)
+        ? `<button class="fund-record-edit" type="button" data-fund-record="${esc(record.id)}" aria-label="更正${esc(record.date)}的${label}记录">更正 <span aria-hidden="true">›</span></button>` : "";
+      return `<div><span>${esc(record.date)} · ${label}</span><strong>${fundMoney(toCents(amountOf(record)))}</strong>${edit}</div>`;
+    }).join("") : "<p>尚无资金记录</p>"}</div>
+    ${Array.isArray(project.corrections) && project.corrections.length ? `<details class="fund-correction-log"><summary>更正记录（${project.corrections.length}）</summary><div class="fund-history">${project.corrections.slice().reverse().map(item => `<div><span>${esc(String(item.at || "").slice(0, 10))} · ${item.action === "void" ? "撤销" : "更正"}${item.before?.fundAction === "withdrawal" ? "取出" : "投入"}<br>原记账日期 ${esc(item.before?.date || "")}</span><strong>${fundMoney(toCents(amountOf(item.before || {})))}${item.after ? " → " + fundMoney(toCents(amountOf(item.after))) : " → 已撤销"}</strong></div>`).join("")}</div></details>` : ""}`;
+}
+
+function openFundRecordEditor(recordId) {
+  const project = fundProjectById(fundUi.selectedId);
+  const record = dataState.records.find(item => String(item.id) === String(recordId) && String(item.fundProjectId) === String(project?.id));
+  if (!project || !record || !["contribution", "withdrawal"].includes(record.fundAction)) return;
+  setFundView("transaction");
+  fundUi.recordEdit = { bookId: dataState.currentBookId, projectId: project.id, recordId: record.id, fingerprint: JSON.stringify(record) };
+  document.getElementById("fundRecordForm").reset();
+  document.getElementById("fundRecordTitle").textContent = record.fundAction === "contribution" ? "更正投入记录" : "更正取出记录";
+  document.getElementById("fundRecordName").textContent = project.fundName + " · " + project.platform;
+  document.getElementById("fundRecordAmount").value = (toCents(amountOf(record)) / 100).toFixed(2);
+  document.getElementById("fundRecordDate").value = record.date;
+  document.getElementById("fundRecordDate").max = project.status === "closed" ? project.closedDate : todayStr();
+  document.getElementById("fundRecordAccountLabel").textContent = record.fundAction === "contribution" ? "出账资金账户" : "到账资金账户";
+  renderFundAccountOptions();
+  document.getElementById("fundRecordAccount").value = String(record.fundAction === "contribution" ? record.account : record.toAccount);
+  syncFundPicker("fundRecordAccount");
+  document.getElementById("fundRecordPauseField").hidden = project.mode !== "recurring" || project.status !== "open" || project.scheduleStatus !== "active";
+  document.getElementById("fundRecordVoidBtn").hidden = project.status === "closed" && record.fundAction === "withdrawal";
+  showFundMessage("fundRecordMsg", "");
+}
+
+async function handleFundRecordSave(event, voidRecord = false) {
+  event?.preventDefault();
+  if (fundUi.recordBusy || !fundUi.recordEdit) return;
+  const edit = { ...fundUi.recordEdit };
+  const changes = { bookId: edit.bookId, void: voidRecord,
+    amountCents: toCents(Number(document.getElementById("fundRecordAmount").value)),
+    date: document.getElementById("fundRecordDate").value,
+    accountId: document.getElementById("fundRecordAccount").value,
+    pauseSchedule: document.getElementById("fundRecordPause").checked };
+  fundUi.recordBusy = true;
+  const buttons = document.querySelectorAll("#fundRecordForm button");
+  buttons.forEach(button => { button.disabled = true; });
+  try {
+    if (voidRecord && !await appConfirm("撤销后会移除这笔资金流水并重算本金、账户余额及最终结算。自动定投的这一笔不会再次补记。后续定投仅在勾选暂停时停止。", { title: "确认撤销这笔记录" })) return;
+    correctFundRecord(edit.projectId, edit.recordId, changes, edit.fingerprint);
+    render();
+    setFundView("detail");
+  } catch (error) {
+    showFundMessage("fundRecordMsg", "更正未保存：" + (error.message || "本机保存失败，请重试。"), true);
+  } finally {
+    fundUi.recordBusy = false;
+    buttons.forEach(button => { button.disabled = false; });
+  }
 }
 
 function renderFundSettings() {
@@ -657,7 +807,9 @@ async function handleFundCreate(event) {
   const weekdays = frequency === "weekly" ? Array.from(document.querySelectorAll("#fundWeekdaysField input:checked"))
     .map(input => Number(input.value)).sort() : [];
   const monthDays = frequency === "monthly" ? selectedFundMonthDays() : [];
-  if (!fundName || !platform || amountCents <= 0 || !startDate ||
+  const amountIsValid = Number.isSafeInteger(amountCents) &&
+    (fundUi.mode === "one-time" ? amountCents >= 0 : amountCents > 0);
+  if (!fundName || !platform || !amountIsValid || !startDate ||
       !fundOrdinaryAccounts().some(account => String(account.id) === sourceAccountId)) {
     return showFundMessage("fundCreateMsg", "请填写基金名称、平台、有效金额、日期和投资资金账户。", true);
   }
@@ -757,6 +909,8 @@ function bindInvestmentPlanEvents() {
   document.getElementById("fundCreateForm").onsubmit = handleFundCreate;
   document.getElementById("fundRedeemForm").onsubmit = handleFundRedeem;
   document.getElementById("fundAdjustForm").onsubmit = handleFundAdjust;
+  document.getElementById("fundRecordForm").onsubmit = handleFundRecordSave;
+  document.getElementById("fundRecordVoidBtn").onclick = event => handleFundRecordSave(event, true);
   document.getElementById("fundFrequency").onchange = renderFundFrequencyFields;
   const monthMenu = document.getElementById("fundMonthDayMenu");
   monthMenu.innerHTML = Array.from({ length: 31 }, (_, index) =>
@@ -769,6 +923,8 @@ function bindInvestmentPlanEvents() {
     if (back) return fundBack();
     const detail = event.target.closest("[data-fund-detail]");
     if (detail) return openFundDetail(detail.dataset.fundDetail);
+    const record = event.target.closest("[data-fund-record]");
+    if (record) return openFundRecordEditor(record.dataset.fundRecord);
     const option = event.target.closest("[data-fund-option]");
     if (option) {
       const select = document.getElementById(option.dataset.fundOption);
@@ -848,7 +1004,8 @@ function bindInvestmentPlanEvents() {
       if (!project || project.status !== "open") return;
       project.scheduleStatus = project.scheduleStatus === "active" ? "paused" : "active";
       if (project.scheduleStatus === "active") project.resumeFromDate = todayStr();
-      saveFundProjects();
+      try { fundPersistState(); }
+      catch (error) { return showFundMessage("fundDetailMsg", "本机保存失败，定投状态未改变，请重试。", true); }
       fundUi.lastRunDate = "";
       processDueInvestmentPlans(true);
       renderFundDetail();

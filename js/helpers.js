@@ -44,15 +44,16 @@ function nextId(items) {
   return id;
 }
 
-// 实际可选的类型 / 类别 = 内置 + 自定义
+// 记账类型沿用内置加自定义；类别由用户分收支建立并保存。
 function allTypes() {
   return TYPES.concat(dataState.customTypes.map(t => (typeof t === "string" ? t : t.name)));
 }
 
-function allCategories() {
+function allCategories(side = "") {
   const groups = dataState.categorySystem && Array.isArray(dataState.categorySystem.groups)
-    ? dataState.categorySystem.groups : CATEGORY_GROUPS;
-  return groups.flatMap(group => Array.isArray(group.items) ? group.items : [])
+    ? dataState.categorySystem.groups : [];
+  return groups.filter(group => !side || group.side === side)
+    .flatMap(group => Array.isArray(group.items) ? group.items : [])
     .filter((name, index, list) => list.indexOf(name) === index);
 }
 

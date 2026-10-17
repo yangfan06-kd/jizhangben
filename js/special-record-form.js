@@ -14,48 +14,28 @@ const PAY_MODES = [
   { key: "转为支出", label: "无法收回，记支出" }
 ];
 
-// 普通转账用于账户之间调拨；“转账他人”只记录资金离开本账户，
-// 不计入收入或支出，也不虚构一个本地账户。
-const TRANSFER_MODES = [
-  { key: "账户间转账", label: "账户间转账" },
-  { key: "转账他人", label: "转账他人" }
-];
-
 function renderTransferModeChips() {
+  // 保留函数供旧页面调用；“转给他人”不再作为新建入口展示。
   const box = document.getElementById("transferModeChips");
-  if (!box) return;
-  box.innerHTML = "";
-  TRANSFER_MODES.forEach(item => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "chip" + (uiState.selectedTransferMode === item.key ? " selected" : "");
-    button.textContent = item.label;
-    button.setAttribute("aria-pressed", uiState.selectedTransferMode === item.key ? "true" : "false");
-    button.onclick = () => selectTransferMode(item.key);
-    box.appendChild(button);
-  });
+  if (box) box.replaceChildren();
 }
 
 function updateTransferFields() {
   const isTransfer = uiState.selectedType === "转账";
-  const mode = uiState.selectedTransferMode || "账户间转账";
   const modeField = document.getElementById("transferModeField");
   const partyField = document.getElementById("transferPartyField");
   const toAccountField = document.getElementById("toAccountField");
-  if (modeField) modeField.style.display = isTransfer ? "block" : "none";
-  if (partyField) partyField.style.display = isTransfer && mode === "转账他人" ? "block" : "none";
-  if (toAccountField) toAccountField.style.display = isTransfer && mode !== "转账他人" ? "block" : "none";
-  if (isTransfer) renderTransferModeChips();
+  const editingLegacyTransfer = isTransfer && uiState.editingRecordId !== null &&
+    dataState.records.some(record => String(record.id) === String(uiState.editingRecordId) &&
+      record.type === "转账" && record.transferMode === "转账他人");
+  if (modeField) modeField.style.display = "none";
+  if (partyField) partyField.style.display = editingLegacyTransfer ? "block" : "none";
+  if (toAccountField) toAccountField.style.display = isTransfer && !editingLegacyTransfer ? "block" : "none";
+  if (isTransfer && !editingLegacyTransfer) uiState.selectedTransferMode = "账户间转账";
 }
 
 function selectTransferMode(mode) {
-  uiState.selectedTransferMode = TRANSFER_MODES.some(item => item.key === mode) ? mode : "账户间转账";
-  const toAccount = document.getElementById("toAccountSel");
-  if (uiState.selectedTransferMode === "转账他人" && toAccount) {
-    toAccount.value = "";
-    if (typeof syncAccountPickerValue === "function") syncAccountPickerValue("toAccountSel");
-  }
-  renderTransferModeChips();
+  uiState.selectedTransferMode = mode === "转账他人" && uiState.editingRecordId !== null ? mode : "账户间转账";
   updateTransferFields();
 }
 
@@ -264,10 +244,12 @@ function renderPayModeChips() {
 }
 
 function payOriginalOptions() {
+  const otherRecords = (Array.isArray(dataState.records) ? dataState.records : [])
+    .filter(record => String(record.id) !== String(uiState.editingRecordId));
   return (Array.isArray(dataState.records) ? dataState.records : [])
     .filter(record => record.type === "代付" && record.payMode === "代付")
     .filter(record => String(record.id) !== String(uiState.editingRecordId || ""))
-    .map(record => ({ record, remaining: payOutstandingFor(record) }))
+    .map(record => ({ record, remaining: payOutstandingFor(record, otherRecords) }))
     .filter(item => item.remaining > 0);
 }
 
@@ -284,6 +266,7 @@ function renderPayLinkOptions() {
     select.appendChild(option);
   });
   if ([...select.options].some(option => option.value === current)) select.value = current;
+  renderCompactFilterPicker("payLinkSel", "payLinkPickerBtn", "payLinkPickerMenu", "请选择原代付");
 }
 
 function updatePayFields() {
@@ -294,7 +277,7 @@ function updatePayFields() {
   const accountField = document.querySelector("#panelRecord .record-supporting-fields > .record-account-field");
   const accountLabel = document.getElementById("recordAccountLabel");
   if (modeField) modeField.style.display = isPay ? "block" : "none";
-  if (partyField) partyField.style.display = isPay ? "block" : "none";
+  if (partyField) partyField.style.display = isPay && uiState.selectedPayMode === "代付" ? "block" : "none";
   const settlement = isPay && uiState.selectedPayMode !== "代付" && !!uiState.selectedPayMode;
   if (linkField) linkField.style.display = settlement ? "block" : "none";
   const writeoff = isPay && uiState.selectedPayMode === "转为支出";

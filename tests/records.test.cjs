@@ -6,6 +6,120 @@ function setRecords(runtime, records) {
   runtime.run(`dataState.records = ${JSON.stringify(records)}`);
 }
 
+test("混合本金及跨期结算的净资产与逐账户独立预期一致，计算不写存储", () => {
+  const { homeFixture } = require('./fixtures/home-records.cjs');
+  const fixture = homeFixture(3);
+  const runtime = createRuntime({ existing: '原值' });
+  runtime.run(`dataState.accounts=${JSON.stringify(fixture.accounts)};dataState.records=${JSON.stringify(fixture.records)}`);
+  const stored = runtime.localStorage.toObject();
+  const before = runtime.run('JSON.stringify({accounts:dataState.accounts,records:dataState.records})');
+  assert.equal(runtime.run('toCents(computeNetWorthFor(dataState.accounts,dataState.records))'), fixture.expected.netCents);
+  assert.deepEqual(JSON.parse(runtime.run('JSON.stringify(Object.fromEntries(Object.entries(computeBalances()).map(([id,n])=>[id,toCents(n)])))')), fixture.expected.balancesCents);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>dataState.records.reduce((s,r)=>s+toCents(incomeEffect(r)),0))'), fixture.expected.incomeCents);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>dataState.records.reduce((s,r)=>s+toCents(expenseEffect(r)),0))'), fixture.expected.expenseCents);
+  assert.equal(runtime.run('JSON.stringify({accounts:dataState.accounts,records:dataState.records})'), before);
+  assert.deepEqual(runtime.localStorage.toObject(), stored);
+  assert.equal(runtime.run('activeRecordCalculationIndex'), null);
+});
+
+test("借贷代付和押金净资产索引保留零编号、空关联、重复编号和结清语义", () => {
+  const runtime = createRuntime();
+  setRecords(runtime, [
+    {id:0,type:'借贷',loanMode:'借入',amountCents:10000},
+    {id:1,type:'借贷',loanMode:'偿还',amountCents:1000},
+    {id:2,type:'借贷',loanMode:'偿还',loanLinkId:0,amountCents:2000},
+    {id:3,type:'借贷',loanMode:'偿还',loanLinkId:'0',amountCents:4000},
+    {id:4,type:'借贷',loanMode:'收回',loanLinkId:0,amountCents:5000},
+    {id:'x',type:'代付',payMode:'代付',amountCents:10000},
+    {id:'x',type:'代付',payMode:'代付',amountCents:9000},
+    {id:5,type:'代付',payMode:'收回',payLinkId:'x',amountCents:2000},
+    {id:6,type:'代付',payMode:'转为支出',payLinkId:'x',amountCents:3000},
+    {id:0,type:'押金',depositDir:'付',amountCents:10000},
+    {id:7,type:'押金',depositDir:'退回',depositLinkId:0,amountCents:1000},
+    {id:8,type:'押金',depositDir:'退回',depositLinkId:'0',amountCents:2000},
+    {id:'y',type:'押金',depositDir:'收',amountCents:6000},
+    {id:9,type:'押金',depositDir:'退',depositLinkId:'y',amountCents:5000,depositFinal:true},
+    {id:10,type:'代付',amountCents:1000},
+    {id:11,type:'借贷',loanMode:'偿还',loanLinkId:'无原账',amountCents:9000},
+    {id:'',type:'押金',depositDir:'付',amountCents:100},
+    {id:12,type:'押金净资产',amountCents:-50000}
+  ]);
+  runtime.run(`function outstandingSnapshot(){return JSON.stringify({loan:dataState.records.map(r=>loanOutstandingFor(r)),pay:dataState.records.map(r=>payOutstandingFor(r)),deposit:depositNetWorthAdjustment(),loanNet:loanNetWorthAdjustment(),payNet:payNetWorthAdjustment()})}`);
+  const plain = runtime.run('outstandingSnapshot()');
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,outstandingSnapshot)'), plain);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>loanOutstandingFor(dataState.records[0]))'), 70);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>depositNetWorthAdjustment())'), 80);
+});
+
+test("净资产跨账本嵌套及异常后释放索引，原数组编辑删除和换账本立即生效", () => {
+  const { homeFixture } = require('./fixtures/home-records.cjs');
+  const fixture = homeFixture(1), other = homeFixture(2);
+  const runtime = createRuntime();
+  runtime.run(`dataState.accounts=${JSON.stringify(fixture.accounts)};dataState.records=${JSON.stringify(fixture.records)};globalThis.other=${JSON.stringify(other)}`);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>{computeNetWorthFor(other.accounts,other.records);return toCents(computeNetWorthFor(dataState.accounts,dataState.records))})'), fixture.expected.netCents);
+  assert.equal(runtime.run('activeRecordCalculationIndex'), null);
+  assert.throws(()=>runtime.run('computeNetWorthFor(null,dataState.records)'));
+  assert.equal(runtime.run('activeRecordCalculationIndex'), null);
+  runtime.run('dataState.records.find(r=>r.id===26).amountCents=8500');
+  assert.equal(runtime.run('toCents(computeNetWorthFor(dataState.accounts,dataState.records))'), fixture.expected.netCents - 1000);
+  runtime.run('dataState.records.splice(dataState.records.findIndex(r=>r.id===26),1)');
+  assert.equal(runtime.run('toCents(computeNetWorthFor(dataState.accounts,dataState.records))'), fixture.expected.netCents + 7500);
+  runtime.run('dataState.records=other.records;dataState.accounts=other.accounts');
+  assert.equal(runtime.run('toCents(computeNetWorthFor(dataState.accounts,dataState.records))'), other.expected.netCents);
+});
+
+test("一次关联计算使用临时索引，结果、跨期结算及旧数据与原路径一致", () => {
+  const runtime=createRuntime({existing_records:"保留原数据"});
+  const {linkedRecords}=require("./fixtures/linked-records.cjs");
+  setRecords(runtime,linkedRecords(2));
+  const stored=runtime.localStorage.toObject();
+  const before=runtime.run("JSON.stringify(dataState.records)");
+  runtime.run(`function linkedSnapshot(rows=dataState.records) {return rows.map(record=>({
+    income:incomeEffect(record),expense:expenseEffect(record),text:amountText(record),
+    refund:record.type==="退款"?refundEffect(record):null,
+    reimbursement:record.type==="报销"?reimbursementEffect(record):null,
+    deposit:record.type==="押金"?depositSettlementInfo(record,record.id):null
+  }));}`);
+  const plain=runtime.run("JSON.stringify(linkedSnapshot())");
+  assert.equal(runtime.run("withRecordCalculationIndex(dataState.records,()=>JSON.stringify(linkedSnapshot()))"),plain);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>linkedSnapshot().reduce((sum,r)=>sum+r.income,0))'),60);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>linkedSnapshot().reduce((sum,r)=>sum+r.expense,0))'),600);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>linkedSnapshot(dataState.records.filter(r=>r.date.startsWith("2026-02"))).reduce((sum,r)=>sum+r.expense,0))'),360);
+  assert.equal(runtime.run("JSON.stringify(dataState.records)"),before);
+  assert.deepEqual(runtime.localStorage.toObject(),stored);
+});
+
+test("临时索引保留同日顺序、重复编号首条、零编号与缺失关联的旧语义", () => {
+  const runtime=createRuntime();
+  setRecords(runtime,[
+    {id:1,type:"支出",amountCents:10000,date:"2026-01-01"},
+    {id:1,type:"支出",amountCents:90000,date:"2026-01-01"},
+    {id:3,type:"退款",refundLinkId:"1",amountCents:6000,date:"2026-01-02"},
+    {id:2,type:"退款",refundLinkId:1,amountCents:5000,date:"2026-01-02"},
+    {id:4,type:"报销",reimbursementLinkId:"缺失",amountCents:500,date:"2026-01-02"},
+    {id:5,type:"押金",depositLinkId:"缺失",depositFinal:true,amountCents:200,date:"2026-01-02"},
+    {id:0,type:"支出",amountCents:700,date:"2026-01-01"},
+    {id:6,type:"退款",refundLinkId:"0",amountCents:800,date:"2026-01-02"},
+    {id:7,type:"constructor",amountCents:100,date:"2026-01-02"}
+  ]);
+  runtime.run('function edgeSnapshot(){return dataState.records.map(r=>({income:incomeEffect(r),expense:expenseEffect(r)}));}');
+  const plain=runtime.run("JSON.stringify(edgeSnapshot())");
+  assert.equal(runtime.run("withRecordCalculationIndex(dataState.records,()=>JSON.stringify(edgeSnapshot()))"),plain);
+  assert.equal(runtime.run("withRecordCalculationIndex(dataState.records,()=>refundEffect(dataState.records[3]).income)"),10);
+});
+
+test("临时索引不串用其它账本，嵌套和异常退出后能重新读取变更", () => {
+  const runtime=createRuntime();
+  setRecords(runtime,[{id:1,type:"支出",amountCents:10000},{id:2,type:"退款",refundLinkId:1,amountCents:6000}]);
+  runtime.run('globalThis.otherRecords=[{id:1,type:"支出",amountCents:2000},{id:2,type:"退款",refundLinkId:1,amountCents:3000}];');
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>refundEffect(otherRecords[1],otherRecords).income)'),10);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>{withRecordCalculationIndex(otherRecords,()=>refundEffect(otherRecords[1],otherRecords));return refundEffect(dataState.records[1]).income;})'),0);
+  assert.throws(()=>runtime.run('withRecordCalculationIndex(dataState.records,()=>{refundEffect(dataState.records[1]);throw new Error("模拟中断");})'));
+  runtime.run('dataState.records[0].amountCents=5000');
+  assert.equal(runtime.run('refundEffect(dataState.records[1]).income'),10);
+  assert.equal(runtime.run('withRecordCalculationIndex(dataState.records,()=>refundEffect(dataState.records[1]).income)'),10);
+});
+
 test("a paid deposit and its full return do not count as income or expense", () => {
   const runtime = createRuntime();
   setRecords(runtime, [

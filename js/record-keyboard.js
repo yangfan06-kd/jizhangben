@@ -2,9 +2,14 @@
 
 let recordKeyboardExpression = "";
 let recordKeyboardVisible = false;
+let recordKeyboardTargetId = "amount";
 
 function recordAmountInput() {
   return document.getElementById("amount");
+}
+
+function recordKeyboardTargetInput() {
+  return document.getElementById(recordKeyboardTargetId) || recordAmountInput();
 }
 
 function normalizeAmountExpression(value) {
@@ -83,12 +88,12 @@ function evaluateAmountExpression(value) {
 function recordAmountValue() {
   const input = recordAmountInput();
   if (!input) return null;
-  const source = recordKeyboardExpression || input.value;
+  const source = recordKeyboardTargetId === "amount" ? (recordKeyboardExpression || input.value) : input.value;
   return evaluateAmountExpression(source);
 }
 
 function dispatchRecordAmountInput() {
-  const input = recordAmountInput();
+  const input = recordKeyboardTargetInput();
   if (input) input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
@@ -106,6 +111,8 @@ function readableRecordKeyboardExpression(value) {
 }
 
 function syncRecordAmountVisual(input) {
+  // 顶部金额始终对应 amount；本金计算在自己的输入框显示。
+  input = recordAmountInput() || input;
   const visual = document.getElementById("recordAmountVisual");
   const text = document.getElementById("recordAmountVisualText");
   if (!visual || !text) return;
@@ -115,8 +122,12 @@ function syncRecordAmountVisual(input) {
 }
 
 function updateRecordAmountDisplay() {
-  const input = recordAmountInput();
-  const expressionBox = document.getElementById("recordAmountExpression");
+  const input = recordKeyboardTargetInput();
+  const amountExpression = document.getElementById("recordAmountExpression");
+  const principalExpression = document.getElementById("balancePrincipalExpression");
+  const expressionBox = recordKeyboardTargetId === "balancePrincipal" ? principalExpression : amountExpression;
+  const inactiveExpression = recordKeyboardTargetId === "balancePrincipal" ? amountExpression : principalExpression;
+  if (inactiveExpression) { inactiveExpression.hidden = true; inactiveExpression.textContent = ""; }
   if (!input) return;
   const expression = recordKeyboardExpression;
   if (!expression) {
@@ -126,6 +137,7 @@ function updateRecordAmountDisplay() {
       expressionBox.hidden = true;
       expressionBox.textContent = "";
     }
+    syncRecordKeyboardLayout();
     return;
   }
   const result = evaluateAmountExpression(expression);
@@ -138,6 +150,11 @@ function updateRecordAmountDisplay() {
     expressionBox.hidden = !shouldShow;
     expressionBox.textContent = shouldShow ? readableRecordKeyboardExpression(expression) : "";
   }
+  if (typeof syncPrivacyInputMasks === "function" && document.body && document.body.classList &&
+      typeof document.body.classList.contains === "function" && document.body.classList.contains("privacy-masked")) {
+    syncPrivacyInputMasks(true);
+  }
+  syncRecordKeyboardLayout();
 }
 
 function setRecordKeyboardExpression(value) {
@@ -153,33 +170,72 @@ function syncRecordKeyboardTypeButtons() {
   });
 }
 
+// 按可见键盘实际高度预留表单滚动空间，包含字体放大和安全区域造成的变化。
+function syncRecordKeyboardLayout() {
+  const root = document.documentElement;
+  const keyboard = document.getElementById("recordKeyboard");
+  if (!root || !root.style || !keyboard) return;
+  if (!recordKeyboardVisible || keyboard.hidden) {
+    root.style.removeProperty("--record-keyboard-space");
+    root.style.removeProperty("--record-keyboard-max-height");
+    return;
+  }
+  const amountField = document.getElementById("recordAmountTapTarget");
+  if (recordKeyboardTargetId === "amount" && amountField &&
+      typeof amountField.getBoundingClientRect === "function" && Number.isFinite(window.innerHeight)) {
+    const bounds = amountField.getBoundingClientRect();
+    // 短横屏也要看到第一行结果；按键仍保持触摸尺寸，键盘内部可滚动。
+    if (bounds.top >= 0 && bounds.bottom < window.innerHeight) {
+      root.style.setProperty("--record-keyboard-max-height", Math.max(44, Math.floor(window.innerHeight - bounds.bottom - 8)) + "px");
+    } else root.style.removeProperty("--record-keyboard-max-height");
+  } else root.style.removeProperty("--record-keyboard-max-height");
+  if (typeof keyboard.getBoundingClientRect !== "function") return;
+  const height = keyboard.getBoundingClientRect().height;
+  if (Number.isFinite(height) && height > 0) {
+    root.style.setProperty("--record-keyboard-space", Math.ceil(height + 12) + "px");
+  }
+}
+
 function showRecordKeyboard() {
   const keyboard = document.getElementById("recordKeyboard");
-  const openButton = document.getElementById("recordKeyboardOpenBtn");
-  const input = recordAmountInput();
+  const input = recordKeyboardTargetInput();
   if (!keyboard || !input) return;
   if (!recordKeyboardExpression) recordKeyboardExpression = input.value || "";
   keyboard.hidden = false;
-  if (openButton) openButton.hidden = true;
   recordKeyboardVisible = true;
   document.body.classList.add("record-keyboard-open");
+  const typeButtons = typeof document.querySelector === "function" ? document.querySelector(".record-keyboard-types") : null;
+  if (typeButtons) typeButtons.hidden = recordKeyboardTargetId !== "amount";
   updateRecordAmountDisplay();
   syncRecordKeyboardTypeButtons();
+  syncRecordKeyboardLayout();
 }
 
 function hideRecordKeyboard() {
   const keyboard = document.getElementById("recordKeyboard");
-  const openButton = document.getElementById("recordKeyboardOpenBtn");
   if (keyboard) keyboard.hidden = true;
-  if (openButton) openButton.hidden = uiState.activeTab !== "record";
   recordKeyboardVisible = false;
   document.body.classList.remove("record-keyboard-open");
   updateRecordAmountDisplay();
+  syncRecordKeyboardLayout();
 }
 
 function resetRecordKeyboard() {
   recordKeyboardExpression = "";
+  recordKeyboardTargetId = "amount";
   hideRecordKeyboard();
+}
+
+function targetRecordKeyboard(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  // 同一金额字段再次聚焦时保留未确认的计算式；换字段才读取新字段的值。
+  if (recordKeyboardTargetId !== inputId || !recordKeyboardExpression) {
+    recordKeyboardExpression = input.value || "";
+  }
+  recordKeyboardTargetId = inputId;
+  showRecordKeyboard();
+  updateRecordAmountDisplay();
 }
 
 function appendRecordKeyboardDigit(digit) {
@@ -207,14 +263,18 @@ function appendRecordKeyboardOperator(operator) {
 
 async function confirmRecordKeyboardExpression() {
   const result = evaluateAmountExpression(recordKeyboardExpression);
-  if (result === null || result < 0) {
-    if (typeof showMsg === "function") showMsg("请输入正确的金额或计算式");
+  const negativeIncome = recordKeyboardTargetId === "amount" && typeSide(uiState.selectedType) === "income";
+  if (result === null || (result < 0 && !negativeIncome)) {
+    if (typeof showRecordFieldError === "function") showRecordFieldError("请输入正确的金额或计算式", recordKeyboardTargetId);
+    else if (typeof showMsg === "function") showMsg("请输入正确的金额或计算式");
     return;
   }
   const rounded = Math.round((result + Number.EPSILON) * 100) / 100;
   setRecordKeyboardExpression(String(rounded));
   hideRecordKeyboard();
-  if (typeof handleSave === "function") await handleSave();
+  if ((recordKeyboardTargetId === "amount" ||
+      (recordKeyboardTargetId === "balancePrincipal" && uiState.balanceTargetAccountId)) &&
+      typeof handleSave === "function") await handleSave();
 }
 
 function handleRecordKeyboardKey(key) {
@@ -234,22 +294,33 @@ document.querySelectorAll("[data-record-keyboard-type]").forEach(button => {
 });
 const recordKeyboardHandle = document.getElementById("recordKeyboardHandle");
 if (recordKeyboardHandle) recordKeyboardHandle.onclick = hideRecordKeyboard;
-const recordKeyboardOpenButton = document.getElementById("recordKeyboardOpenBtn");
-if (recordKeyboardOpenButton) recordKeyboardOpenButton.onclick = () => {
-  showRecordKeyboard();
-  const input = recordAmountInput();
-  if (input) input.focus({ preventScroll: true });
-};
 const amountInput = recordAmountInput();
 const recordAmountTapTarget = document.getElementById("recordAmountTapTarget");
 if (recordAmountTapTarget) recordAmountTapTarget.addEventListener("click", event => {
   if (event.target === amountInput) return;
+  targetRecordKeyboard("amount");
   if (amountInput) amountInput.focus({ preventScroll: true });
 });
 if (amountInput) {
-  amountInput.addEventListener("focus", showRecordKeyboard);
-  amountInput.addEventListener("click", showRecordKeyboard);
+  amountInput.addEventListener("focus", () => targetRecordKeyboard("amount"));
+  amountInput.addEventListener("click", () => targetRecordKeyboard("amount"));
   amountInput.addEventListener("keydown", event => {
+    if (/^\d$/.test(event.key) || [".", "+", "-", "Backspace", "Enter"].includes(event.key)) {
+      event.preventDefault();
+      if (/^\d$/.test(event.key)) handleRecordKeyboardKey(event.key);
+      else if (event.key === ".") handleRecordKeyboardKey(".");
+      else if (event.key === "+") handleRecordKeyboardKey("plus");
+      else if (event.key === "-") handleRecordKeyboardKey("minus");
+      else if (event.key === "Backspace") handleRecordKeyboardKey("backspace");
+      else if (event.key === "Enter") handleRecordKeyboardKey("confirm");
+    }
+  });
+}
+const balancePrincipalInput = document.getElementById("balancePrincipal");
+if (balancePrincipalInput) {
+  balancePrincipalInput.addEventListener("focus", () => targetRecordKeyboard("balancePrincipal"));
+  balancePrincipalInput.addEventListener("click", () => targetRecordKeyboard("balancePrincipal"));
+  balancePrincipalInput.addEventListener("keydown", event => {
     if (/^\d$/.test(event.key) || [".", "+", "-", "Backspace", "Enter"].includes(event.key)) {
       event.preventDefault();
       if (/^\d$/.test(event.key)) handleRecordKeyboardKey(event.key);
@@ -263,5 +334,15 @@ if (amountInput) {
 }
 document.addEventListener("focusin", event => {
   if (!recordKeyboardVisible || !event.target.closest || !event.target.closest("#panelRecord")) return;
-  if (event.target.id !== "amount" && !event.target.closest("#recordKeyboard")) hideRecordKeyboard();
+  if (!(["amount", "balancePrincipal"].includes(event.target.id)) && !event.target.closest("#recordKeyboard")) hideRecordKeyboard();
 });
+
+const recordKeyboardLayoutElement = document.getElementById("recordKeyboard");
+if (recordKeyboardLayoutElement && typeof ResizeObserver === "function") {
+  const recordKeyboardLayoutObserver = new ResizeObserver(syncRecordKeyboardLayout);
+  recordKeyboardLayoutObserver.observe(recordKeyboardLayoutElement);
+}
+// 旧 WebView 没有 ResizeObserver 时仍支持窗口尺寸改变和显式开关键盘。
+if (typeof window.addEventListener === "function") {
+  window.addEventListener("resize", syncRecordKeyboardLayout);
+}

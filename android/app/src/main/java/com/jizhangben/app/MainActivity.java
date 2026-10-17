@@ -23,6 +23,7 @@ public class MainActivity extends BridgeActivity {
         WebView webView = getBridge() == null ? null : getBridge().getWebView();
         if (webView != null) {
             webView.addJavascriptInterface(new BackupBridge(this), "JizhangbenNative");
+            webView.addJavascriptInterface(new LedgerStore(this), "JizhangbenStorage");
         }
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override

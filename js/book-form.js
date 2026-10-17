@@ -54,6 +54,7 @@ function applyLocalBookDelete(id) {
   appStorage.remove(budgetKey(id));
   appStorage.remove(investmentPlansKey(id));
   appStorage.remove(fundProjectsKey(id));
+  appStorage.remove(fixedIncomeKey(id));
   saveBooks();
   if (String(dataState.currentBookId) === String(id) && dataState.books.length > 0) {
     dataState.currentBookId = dataState.books[0].id;
@@ -62,6 +63,7 @@ function applyLocalBookDelete(id) {
     loadAccounts();
     loadInvestmentPlans();
     loadFundProjects();
+    loadFixedIncomePlan();
     loadBudgetData();
     resetForm();
     resetAccountForm();
@@ -92,6 +94,7 @@ function renderBookSelect() {
     sel.appendChild(og);
   });
   sel.value = String(dataState.currentBookId);
+  renderCompactFilterPicker("bookSel", "bookPickerBtn", "bookPickerMenu", "选择账本");
 }
 
 // 切换到另一个账本：记住选择，重新读这个账本的账目和账户
@@ -104,6 +107,7 @@ function switchBook(id) {
   loadAccounts();
   loadInvestmentPlans();
   loadFundProjects();
+  loadFixedIncomePlan();
   loadBudgetData();
   // 清掉编辑中的状态和筛选，避免串到别的账本
   resetForm();
@@ -117,7 +121,9 @@ function switchBook(id) {
   renderBookSelect();
   renderAccountSelects();
   fillCategoryFilter();
+  renderFixedIncomeSettings();
   processDueInvestmentPlans();
+  processDueFixedIncome();
   render();
   if (dataState.backendBooksLoaded) {
     const localAccounts = dataState.accounts;

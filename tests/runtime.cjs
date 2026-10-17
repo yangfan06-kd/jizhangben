@@ -34,16 +34,22 @@ class MemoryStorage {
   }
 }
 
-function createRuntime(initialStorage = {}) {
+function createRuntime(initialStorage = {}, runtimeOptions = {}) {
   const localStorage = new MemoryStorage(initialStorage);
-  const context = vm.createContext({ window: { localStorage }, console });
-  const projectRoot = path.resolve(__dirname, "..");
+  const context = vm.createContext({
+    window: Object.assign({ localStorage }, runtimeOptions.window || {}),
+    console,
+    TextEncoder
+  });
+  const projectRoot = runtimeOptions.sourceRoot || path.resolve(__dirname, "..");
   const scripts = [
     "js/constants.js",
     "js/state.js",
     "js/helpers.js",
+    "js/compact-calendar.js",
     "js/dialogs.js",
     "js/filters.js",
+    "js/report-period.js",
     "js/deposit-form.js",
     "js/storage-adapter.js",
     "js/migrations.js",
@@ -51,9 +57,12 @@ function createRuntime(initialStorage = {}) {
     "js/api-client.js",
     "js/records.js",
     "js/investment-plans.js",
+    "js/fixed-income.js",
+    "js/device-security.js",
     "js/budget.js",
     "js/backup.js",
     "js/external-import.js",
+    "js/category-icons-tabler.js",
     "js/icons.js",
     "js/custom-options.js",
     "js/category-system.js",

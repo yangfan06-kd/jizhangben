@@ -3,6 +3,33 @@ const assert = require("node:assert/strict");
 const { createRuntime } = require("./runtime.cjs");
 const { validateReleaseApiBaseUrl } = require("../mobile/validate-api-url.cjs");
 
+test("offline account save failure retains existing accounts and the user's input", async () => {
+  for (const editing of [false, true]) {
+    const accounts = [{ id: 1, name: "旧账户", kind: "资金", initialCents: 10000 }];
+    const runtime = createRuntime({ jizhangben_accounts_1: JSON.stringify(accounts) });
+    runtime.run(`
+      dataState.currentBookId=1;dataState.accounts=${JSON.stringify(accounts)};
+      uiState.editingAccountId=${editing ? 1 : "null"};
+      var accountFormNodes={accName:{value:"待保存账户"},accKind:{value:"资金"},accInitial:{value:"250"}};
+      var accountResetCalls=0,accountFailureMessage="";
+      document={getElementById(id){return accountFormNodes[id];}};
+      backendWritesEnabled=()=>false;
+      resetAccountForm=()=>{accountResetCalls++;};
+      showAccMsg=message=>{accountFailureMessage=message;};
+      render=()=>{};
+    `);
+    const before = runtime.localStorage.toObject();
+    runtime.localStorage.setItem = () => { throw new Error("storage_full"); };
+    await runtime.run("handleAccountSave()");
+    assert.deepEqual(JSON.parse(runtime.run("JSON.stringify(dataState.accounts)")), accounts);
+    assert.deepEqual(runtime.localStorage.toObject(), before);
+    assert.equal(runtime.run("accountFormNodes.accName.value"), "待保存账户");
+    assert.equal(runtime.run("accountFormNodes.accInitial.value"), "250");
+    assert.equal(runtime.run("accountResetCalls"), 0);
+    assert.match(runtime.run("accountFailureMessage"), /保存失败/);
+  }
+});
+
 test("release API URL requires a real HTTPS API endpoint", () => {
   assert.equal(validateReleaseApiBaseUrl("http://localhost:8000/api").code, "https-required");
   assert.equal(validateReleaseApiBaseUrl("https://ledger.example.com/api").code, "local-or-example");

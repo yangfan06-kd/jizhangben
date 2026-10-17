@@ -1,6 +1,56 @@
 // 记账计算模块：负责把一笔记录转换成收入、支出和账户资金变化。
 // 押金本金只影响资金流；最终结算差额才进入收入或支出。
 
+// 只在一次只读、同步绘制/计算内使用，退出即释放，避免编辑后复用旧结果。
+let activeRecordCalculationIndex = null;
+function withRecordCalculationIndex(records, calculate) {
+  const previous = activeRecordCalculationIndex;
+  if (previous && previous.records === records) return calculate();
+  activeRecordCalculationIndex = { records, index: null };
+  try { return calculate(); }
+  finally { activeRecordCalculationIndex = previous; }
+}
+
+function calculationIndexFor(records) {
+  const scope = activeRecordCalculationIndex;
+  if (!scope || scope.records !== records) return null;
+  if (!scope.index) {
+    const byId = new Map();
+    const links = new Map(['退款', '报销', '押金', '借贷', '代付'].map(type => [type, new Map()]));
+    const depositOutstanding = new Map();
+    const fields = { '退款': 'refundLinkId', '报销': 'reimbursementLinkId', '押金': 'depositLinkId', '借贷': 'loanLinkId', '代付': 'payLinkId' };
+    (Array.isArray(records) ? records : []).forEach((record, index) => {
+      const id = String(record.id);
+      if (!byId.has(id)) byId.set(id, record); // 与原 find 一致，重复编号取首条。
+      const groups = links.get(record.type);
+      if (!groups) return;
+      const field = fields[record.type];
+      // 押金与退款/报销原有的空关联处理不同，照原语义建立键。
+      const key = String(record.type === '押金' ? record[field] : (record[field] || ''));
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ record, index });
+      // 净资产原路径把空值和数字 0 的关联归为空键；最终押金结算用原值，不能混用。
+      if (record.type === '押金') {
+        const outstandingKey = String(record.depositLinkId || '');
+        if (!depositOutstanding.has(outstandingKey)) depositOutstanding.set(outstandingKey, []);
+        depositOutstanding.get(outstandingKey).push({ record, index });
+      }
+    });
+    scope.index = { byId, links, depositOutstanding };
+  }
+  return scope.index;
+}
+
+function calculationOriginal(records, id) {
+  const index = calculationIndexFor(records);
+  return index ? index.byId.get(String(id)) : (Array.isArray(records) ? records : []).find(record => String(record.id) === String(id));
+}
+
+function calculationLinkedEntries(records, type, key) {
+  const index = calculationIndexFor(records);
+  return index ? (index.links.get(type).get(String(key)) || []) : null;
+}
+
 function isIncome(r) {
   if (r.type === "收入") return true;
   if (r.type === "基金结算") return r.fundResult === "income";
@@ -37,7 +87,9 @@ function loanOutstandingFor(record, records = dataState.records) {
   const originalMode = record.loanMode === "借入" || record.loanMode === "借出";
   if (!originalMode) return 0;
   const settleMode = record.loanMode === "借入" ? "偿还" : "收回";
-  const settled = (Array.isArray(records) ? records : []).reduce((sum, item) => {
+  const indexed = calculationLinkedEntries(records, "借贷", String(record.id || ""));
+  const candidates = indexed ? indexed.map(item => item.record) : (Array.isArray(records) ? records : []);
+  const settled = candidates.reduce((sum, item) => {
     if (item.type !== "借贷" || item.loanMode !== settleMode) return sum;
     if (String(item.loanLinkId || "") !== String(record.id || "")) return sum;
     return sum + toCents(amountOf(item));
@@ -73,7 +125,7 @@ function expenseEffect(r) {
 function amountText(r) {
   const n = amountOf(r).toFixed(2);
   if (r.type === "基金结算") return { text: (r.fundResult === "income" ? "+¥" : "−¥") + n, cls: r.fundResult === "income" ? "income" : "expense" };
-  if (r.type === "收入") return { text: "+¥" + n, cls: "income" };
+  if (r.type === "收入") return { text: (amountOf(r) < 0 ? "−¥" : "+¥") + Math.abs(amountOf(r)).toFixed(2), cls: "income" };
   if (r.type === "报销") {
     const effect = reimbursementEffect(r);
     return { text: "+¥" + n, cls: effect.income > 0 ? "income" : "neutral" };
@@ -100,7 +152,7 @@ function amountText(r) {
   }
   const ct = customTypeInfo(r.type);
   if (ct) {
-    if (ct.side === "income") return { text: "+¥" + n, cls: "income" };
+    if (ct.side === "income") return { text: (amountOf(r) < 0 ? "−¥" : "+¥") + Math.abs(amountOf(r)).toFixed(2), cls: "income" };
     if (ct.side === "expense") return { text: "−¥" + n, cls: "expense" };
   }
   return { text: "¥" + n, cls: "neutral" };
@@ -198,7 +250,10 @@ function depositNetWorthAdjustment(records = dataState.records) {
   const list = Array.isArray(records) ? records : [];
   const adjustmentCents = list.reduce((sum, original) => {
     if (original.type !== "押金" || original.id == null || (original.depositDir !== "付" && original.depositDir !== "收")) return sum;
-    const linkedReturns = list.filter(record => record.type === "押金" && String(record.depositLinkId || "") === String(original.id));
+    const index = calculationIndexFor(records);
+    const indexed = index ? (index.depositOutstanding.get(String(original.id)) || []) : null;
+    const linkedReturns = indexed ? indexed.map(item => item.record)
+      : list.filter(record => record.type === "押金" && String(record.depositLinkId || "") === String(original.id));
     if (linkedReturns.some(record => record.depositFinal)) return sum;
     const returnedCents = linkedReturns.reduce((returned, record) => returned + toCents(amountOf(record)), 0);
     const outstandingCents = Math.max(0, toCents(amountOf(original)) - returnedCents);
@@ -212,6 +267,10 @@ function isLoanOriginalModeForCalculation(mode) {
 }
 
 function computeNetWorthFor(accs, recs) {
+  return withRecordCalculationIndex(recs, () => computeNetWorthContents(accs, recs));
+}
+
+function computeNetWorthContents(accs, recs) {
   const balances = computeBalancesFor(accs, recs);
   let net = 0;
   accs.forEach(account => {
@@ -223,6 +282,8 @@ function computeNetWorthFor(accs, recs) {
 // 报销优先冲减被报销的原支出；超过原支出的部分才算新增收入。
 // 这样“先个人垫付、后单位报销”不会把同一笔钱重复算成收入。
 function reimbursementEntriesFor(original, records) {
+  const indexed = calculationLinkedEntries(records, "报销", String(original && original.id || ""));
+  if (indexed) return [...indexed].sort((a, b) => String(a.record.date || "").localeCompare(String(b.record.date || "")) || a.index - b.index);
   return (Array.isArray(records) ? records : [])
     .map((record, index) => ({ record, index }))
     .filter(item => item.record.type === "报销" &&
@@ -232,9 +293,7 @@ function reimbursementEntriesFor(original, records) {
 
 function reimbursementEffect(record, records = dataState.records) {
   if (!record || record.type !== "报销") return { income: 0, expense: 0, applied: 0, excess: 0 };
-  const original = (Array.isArray(records) ? records : []).find(item =>
-    String(item.id) === String(record.reimbursementLinkId || "")
-  );
+  const original = calculationOriginal(records, record.reimbursementLinkId || "");
   if (!original) {
     // 兼容早期未关联原支出的报销记录：仍按原有“冲减支出”语义读取。
     return { income: 0, expense: -amountOf(record), applied: amountOf(record), excess: 0 };
@@ -271,6 +330,8 @@ function reimbursementOutstandingFor(original, records = dataState.records, excl
 }
 
 function refundEntriesFor(original, records) {
+  const indexed = calculationLinkedEntries(records, "退款", String(original && original.id || ""));
+  if (indexed) return [...indexed].sort((a, b) => String(a.record.date || "").localeCompare(String(b.record.date || "")) || a.index - b.index);
   return (Array.isArray(records) ? records : [])
     .map((record, index) => ({ record, index }))
     .filter(item => item.record.type === "退款" &&
@@ -280,9 +341,7 @@ function refundEntriesFor(original, records) {
 
 function refundEffect(record, records = dataState.records) {
   if (!record || record.type !== "退款") return { income: 0, expense: 0, applied: 0, excess: 0 };
-  const original = (Array.isArray(records) ? records : []).find(item =>
-    String(item.id) === String(record.refundLinkId || "")
-  );
+  const original = calculationOriginal(records, record.refundLinkId || "");
   if (!original) {
     // 兼容旧版未关联原支出的退款记录：仍按旧版“冲减支出”读取。
     return { income: 0, expense: -amountOf(record), applied: amountOf(record), excess: 0 };
@@ -321,7 +380,9 @@ function refundOutstandingFor(original, records = dataState.records, excludeId =
 // 代付的未收回金额：收回和确认无法收回都会结算原代付，但只有后者进入支出。
 function payOutstandingFor(record, records = dataState.records) {
   if (!record || record.type !== "代付" || record.payMode !== "代付") return 0;
-  const settled = (Array.isArray(records) ? records : []).reduce((sum, item) => {
+  const indexed = calculationLinkedEntries(records, "代付", String(record.id || ""));
+  const candidates = indexed ? indexed.map(item => item.record) : (Array.isArray(records) ? records : []);
+  const settled = candidates.reduce((sum, item) => {
     if (item.type !== "代付" || (item.payMode !== "收回" && item.payMode !== "转为支出")) return sum;
     if (String(item.payLinkId || "") !== String(record.id || "")) return sum;
     return sum + toCents(amountOf(item));
@@ -339,9 +400,11 @@ function payNetWorthAdjustment(records = dataState.records) {
 
 function depositSettlementInfo(r, excludeId) {
   if (!r || r.type !== "押金" || !r.depositLinkId || !r.depositFinal) return { income: 0, expense: 0, difference: 0 };
-  const original = dataState.records.find(x => String(x.id) === String(r.depositLinkId));
+  const original = calculationOriginal(dataState.records, r.depositLinkId);
   if (!original || original.type !== "押金") return { income: 0, expense: 0, difference: 0 };
-  const returnedCents = dataState.records.reduce((sum, x) => {
+  const indexedReturns = calculationLinkedEntries(dataState.records, "押金", String(original.id));
+  const returns = indexedReturns ? indexedReturns.map(item => item.record) : dataState.records;
+  const returnedCents = returns.reduce((sum, x) => {
     if (x.type !== "押金" || String(x.depositLinkId) !== String(original.id) || String(x.id) === String(excludeId)) return sum;
     return sum + toCents(amountOf(x));
   }, 0) + toCents(amountOf(r));
