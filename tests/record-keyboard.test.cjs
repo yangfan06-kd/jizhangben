@@ -11,6 +11,11 @@ function createKeyboardRuntime(useResizeObserver = true) {
     var keyboardStyleProperties = {};
     var keyboardResizeCallback;
     var keyboardWindowListeners = {};
+    var keyboardDocumentListeners = {};
+    var viewportListeners = {};
+    var keyboardScrolls = [];
+    window.visualViewport = { offsetTop: 0, height: 430, addEventListener(name, callback) { viewportListeners[name] = callback; } };
+    window.scrollBy = options => keyboardScrolls.push(options.top);
     window.addEventListener = (name, callback) => { keyboardWindowListeners[name] = callback; };
     globalThis.ResizeObserver = function(callback) {
       keyboardResizeCallback = callback;
@@ -38,7 +43,7 @@ function createKeyboardRuntime(useResizeObserver = true) {
       body: { classList: { add() {}, remove() {} } },
       getElementById(id) { return keyboardElements[id] || null; },
       querySelectorAll(selector) { return selector === "[data-record-keyboard-type]" ? keyboardTypeButtons : []; },
-      addEventListener() {}
+      addEventListener(name, callback) { keyboardDocumentListeners[name] = callback; }
     };
     Event = function Event(type, options) { this.type = type; this.bubbles = !!(options && options.bubbles); };
     var saveCalls = 0;
@@ -55,6 +60,25 @@ function createKeyboardRuntime(useResizeObserver = true) {
   runtime.run(keyboardSource);
   return runtime;
 }
+
+test("system keyboard makes only the minimal scroll needed for the focused note", () => {
+  const runtime = createKeyboardRuntime();
+  runtime.run(`
+    uiState.activeTab="record";
+    document.activeElement={id:"note",type:"text",closest:selector=>selector==="#panelRecord",getBoundingClientRect:()=>({top:402,bottom:446})};
+    showRecordKeyboard();
+    keyboardDocumentListeners.focusin({target:document.activeElement});
+  `);
+  assert.equal(runtime.run("recordKeyboardVisible"), false);
+  assert.equal(runtime.run('keyboardStyleProperties["--record-keyboard-space"]'), undefined);
+  assert.equal(runtime.run("keyboardScrolls[0]"), 28);
+  runtime.run(`document.activeElement.getBoundingClientRect=()=>({top:200,bottom:244});viewportListeners.resize()`);
+  assert.equal(runtime.run("keyboardScrolls.length"), 1);
+  runtime.run(`window.visualViewport.offsetTop=100;document.activeElement.getBoundingClientRect=()=>({top:90,bottom:134});viewportListeners.resize()`);
+  assert.equal(runtime.run("keyboardScrolls[1]"), -18);
+  runtime.run('uiState.activeTab="home";viewportListeners.resize()');
+  assert.equal(runtime.run("keyboardScrolls.length"), 2);
+});
 
 test("keyboard layout follows measured height and clears its space on hide without changing amounts", () => {
   const runtime = createKeyboardRuntime();

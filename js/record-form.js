@@ -206,6 +206,28 @@ function localAccountIdByName(name) {
   return account ? account.id : null;
 }
 
+// 仅在保存成功后沿用选择；普通重置、取消编辑和切换账本仍走原有流程。
+// 新的一笔不继承金额、备注、编辑标识和结算关联，避免重复结算。
+function resetFormAfterSave(record) {
+  resetForm();
+  const type = allTypes().includes(record.type) ? record.type : "支出";
+  const side = typeSide(type);
+  uiState.selectedType = type;
+  uiState.selectedCategory = allCategories(side === "neutral" ? "" : side).includes(record.category)
+    ? record.category : defaultRecordCategory(type);
+  const accountValue = id => dataState.accounts.some(account => String(account.id) === String(id))
+    ? String(id) : "";
+  document.getElementById("accountSel").value = accountValue(record.account);
+  document.getElementById("toAccountSel").value = accountValue(record.toAccount);
+  renderTypeChips();
+  renderCategoryChips();
+  updateFormFields();
+  if (typeof syncAccountPickerValue === "function") {
+    syncAccountPickerValue("accountSel");
+    syncAccountPickerValue("toAccountSel");
+  }
+}
+
 function localDepositIdByFingerprint(fingerprint) {
   if (!fingerprint) return null;
   const record = dataState.records.find(item => (
@@ -234,7 +256,7 @@ function saveRecordLocally(record, message, restore, status = "local") {
   dataState.records.push(record);
   save();
   if (typeof markLocalChangePending === "function") markLocalChangePending("record_write");
-  resetForm();
+  resetFormAfterSave(record);
   showMsg(message, status);
   render();
   continueRecordingAfterSave();
@@ -373,7 +395,7 @@ function saveEditedRecordLocally(draft, originalFingerprint, message) {
   applyRecordDraft(target, draft);
   save();
   if (typeof markLocalChangePending === "function") markLocalChangePending("record_edit");
-  resetForm();
+  resetFormAfterSave(target);
   showMsg(message, "local");
   render();
   continueRecordingAfterSave();
@@ -596,7 +618,7 @@ async function handleSave() {
       dataState.records.push(mapped);
       const recordsRefreshed = await refreshBackendRecordsAfterWrite();
       await refreshBackendOverviewAfterWrite();
-      resetForm();
+      resetFormAfterSave(mapped);
       showMsg(recordsRefreshed
         ? "已记一笔（已同步服务端）"
         : "已记一笔（服务端已保存，明细刷新稍后重试）",
@@ -639,7 +661,7 @@ async function handleSave() {
       else dataState.records.push(mapped);
       const recordsRefreshed = await refreshBackendRecordsAfterWrite();
       await refreshBackendOverviewAfterWrite();
-      resetForm();
+      resetFormAfterSave(mapped);
       showMsg(recordsRefreshed
         ? "已保存修改（已同步服务端）"
         : "已保存修改（服务端已保存，明细刷新稍后重试）",
@@ -699,7 +721,7 @@ async function handleSave() {
       (localOnlySpecial || (typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange()))) {
     markLocalChangePending(wasEdit ? "record_edit" : "record_write");
   }
-  resetForm();
+  resetFormAfterSave(localRecord);
   const localMessage = ["余额", "借贷", "代付", "报销", "退款"].includes(selectedType) && backendRecordWritesEnabled()
     ? (selectedType === "余额" ? "余额已保存在本机，联网同步将在后续版本支持"
       : selectedType === "借贷" ? "借贷已保存在本机，联网关联将在后续版本支持"

@@ -11,6 +11,8 @@ const filterState = {
   toDate: "",
   account: "",
   category: "",
+  // 报表跳转的实际收支方向，仅作内存筛选，不写入账本。
+  reportSide: "",
   searchKey: "",
   periodMode: "period",
   month: stateCurrentMonth(),
@@ -46,6 +48,8 @@ const uiState = {
   detailVisibleCount: 100,
   // 流水浏览状态只留在内存，不能写入用户的账本或设置。
   detailBrowsePosition: null,
+  // 仅记录报表分类流水的返回来源和滚动位置，不保存到用户数据。
+  detailReportReturn: null,
   detailPeriod: "month",
   detailFiltersExpanded: false,
   typesExpanded: false,
@@ -95,6 +99,7 @@ function resetFilterState() {
   filterState.toDate = "";
   filterState.account = "";
   filterState.category = "";
+  filterState.reportSide = "";
   filterState.searchKey = "";
   filterState.periodMode = "period";
   filterState.month = stateCurrentMonth();

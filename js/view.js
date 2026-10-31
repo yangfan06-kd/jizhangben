@@ -93,7 +93,7 @@ function renderHomeRecentRecords() {
 // 首页的“全部”与日期入口明确切换查询范围；只改内存筛选，不保存或迁移账本。
 function openHomeRecords(date = "") {
   const day = parseLocalDate(date) ? date : "";
-  Object.assign(filterState, { account: "", category: "", searchKey: "", fromDate: day, toDate: day, periodMode: day ? "range" : "all" });
+  Object.assign(filterState, { account: "", category: "", reportSide: "", searchKey: "", fromDate: day, toDate: day, periodMode: day ? "range" : "all" });
   uiState.detailExpanded = true;
   switchTab("detail");
 }
@@ -161,10 +161,12 @@ function renderDetailFilters() {
   if (filterState.account) active.push("账户");
   if (filterState.category) active.push("类别");
   if (filterState.searchKey.trim()) active.push("搜索");
+  const reportSideLabel = { income: "收入", expense: "支出", combined: "收支" }[filterState.reportSide];
+  if (reportSideLabel) active.push(reportSideLabel);
   panel.hidden = !uiState.detailFiltersExpanded;
   toggle.setAttribute("aria-expanded", uiState.detailFiltersExpanded ? "true" : "false");
   toggle.innerHTML = '<span class="detail-filter-button-main"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8Z"/></svg><span>筛选条件' +
-    (active.length ? '（已选' + active.length + '项）' : '') + '</span></span><span class="detail-filter-button-action">' +
+    (active.length ? '（已选' + active.length + '项' + (reportSideLabel ? ' · ' + reportSideLabel : '') + '）' : '') + '</span></span><span class="detail-filter-button-action">' +
     (uiState.detailFiltersExpanded ? '收起 ▴' : '展开 ▾') + '</span>';
   reset.disabled = active.length === 0;
   renderCompactFilterPicker("filterAccountSel", "filterAccountPickerBtn", "filterAccountPickerMenu", "全部账户");
@@ -464,6 +466,17 @@ function renderSelectedCategoryTotal(box) {
     box.textContent = "";
     return;
   }
+  if (filterState.reportSide) {
+    const rows = filteredRecords();
+    const sides = filterState.reportSide === "combined" ? ["expense", "income"] : [filterState.reportSide];
+    box.hidden = false;
+    box.innerHTML = `<span>${esc(category)}类合计</span>` + sides.map(side => {
+      const effect = side === "income" ? incomeEffect : expenseEffect;
+      const total = rows.reduce((sum, record) => sum + toCents(effect(record)), 0) / 100;
+      return `<span>${side === "income" ? "收入" : "支出"} <strong class="${side}">${reportMoney(total)}</strong></span>`;
+    }).join("");
+    return;
+  }
   const records = recordsInDetailPeriod(dataState.records, currentDetailPeriod()).filter(record => {
     if (filterState.fromDate && record.date < filterState.fromDate) return false;
     if (filterState.toDate && record.date > filterState.toDate) return false;
@@ -594,11 +607,25 @@ function renderContents() {
   if (typeof renderInvestmentPlans === "function") renderInvestmentPlans();
 }
 
+// 报表分类流水返回来源页面，保留报表选项及点入时的滚动位置。
+function returnFromReportDetail() {
+  const source = uiState.detailReportReturn;
+  if (uiState.activeTab !== "detail" || !source || String(source.bookId) !== String(dataState.currentBookId)) return false;
+  switchTab("overview", { replaceHistory: true });
+  window.scrollTo(0, source.scrollTop);
+  return true;
+}
+
 // 切换页面，一次只显示一个；首页只负责概览，低频操作进入独立页面。
-// 进入独立页面写入浏览器历史；回首页时可替换当前历史，避免返回手势再次进入已离开的页面。
+// 进入独立页面写入浏览器历史；返回时可替换当前历史，避免手势再次进入已离开的页面。
 function switchTab(tab, options = {}) {
   if (typeof compactCalendar !== "undefined" && compactCalendar) closeCompactCalendar();
   const currentTab = uiState.activeTab || "home";
+  if (tab === "detail" && options.fromReport) {
+    uiState.detailReportReturn = { bookId: dataState.currentBookId, scrollTop: Math.max(0, window.scrollY || 0) };
+  } else if (tab !== "detail" || currentTab !== "detail") {
+    uiState.detailReportReturn = null;
+  }
   if (currentTab === "categorySystem" && tab !== currentTab && typeof rememberCategorySystemScrollPosition === "function") {
     rememberCategorySystemScrollPosition();
   }
@@ -617,6 +644,7 @@ function switchTab(tab, options = {}) {
     }
   }
   uiState.activeTab = tab;
+  document.body.classList.toggle("record-page-open", tab === "record");
   // 每次从其它页面进入流水，都直接展示明细；用户仍可在流水页手动收起。
   if (tab === "detail" && currentTab !== "detail") uiState.detailExpanded = true;
   const app = document.querySelector(".app");

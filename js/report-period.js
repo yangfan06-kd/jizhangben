@@ -31,6 +31,34 @@ function reportRecords(records = dataState.records, state = reportState, referen
   return bounds ? records.filter(record => record.date >= bounds.start && record.date <= bounds.end) : records.slice();
 }
 
+// 从报表进入同账本、同日期和同实际收支方向的流水，不沿用旧搜索／账户条件。
+function openReportCategoryRecords(category, side) {
+  if (typeof category !== "string" || !category || !["income", "expense", "combined"].includes(side)) return false;
+  let bounds;
+  try { bounds = reportPeriodBounds(); }
+  catch (error) { appNotice(error.message); return false; }
+  resetFilterState();
+  Object.assign(filterState, {
+    category, reportSide: side,
+    fromDate: bounds ? bounds.start : "", toDate: bounds ? bounds.end : "",
+    periodMode: ["month", "year"].includes(reportState.periodMode) ? reportState.periodMode : bounds ? "range" : "all",
+    month: reportState.month, year: reportState.year
+  });
+  uiState.detailPeriod = "all";
+  uiState.detailFiltersExpanded = false;
+  uiState.detailExpanded = true;
+  if (typeof document !== "undefined") {
+    if (typeof fillCategoryFilter === "function") fillCategoryFilter();
+    const values = { fromDate: filterState.fromDate, toDate: filterState.toDate, searchInput: "", filterAccountSel: "", filterCategorySel: category };
+    Object.entries(values).forEach(([id, value]) => {
+      const field = document.getElementById(id);
+      if (field) field.value = value;
+    });
+  }
+  switchTab("detail", { fromReport: true });
+  return true;
+}
+
 function aggregateReportCategories(records) {
   const categories = new Map();
   let incomeCents = 0, expenseCents = 0;

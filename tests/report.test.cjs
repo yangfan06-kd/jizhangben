@@ -200,3 +200,110 @@ test("综合扇形图连续分配类别颜色，极小扇区保留图例，图�
   assert.match(html, /支出·零星&lt;script&gt; ¥1\.00 · ＜0\.1%/);
   assert.doesNotMatch(html, /<text\b|<g\b|#FFFFFF|序号/);
 });
+
+function createReportDrilldownRuntime() {
+  const runtime = createRuntime({jizhangben_books:'[{"id":1,"name":"合成账本"}]',unchanged:'保留'});
+  loadCharts(runtime);
+  runtime.run(`
+    dataState.currentBookId=1;
+    dataState.records=[
+      {id:1,type:"支出",category:"同类",amountCents:10000,date:"2026-09-01",account:1},
+      {id:2,type:"退款",category:"同类",amountCents:2000,date:"2026-09-02",account:1,refundLinkId:1},
+      {id:3,type:"收入",category:"同类",amountCents:3000,date:"2026-09-03",account:1},
+      {id:4,type:"收入",category:"同类",amountCents:-500,date:"2026-09-04",account:1},
+      {id:5,type:"转账",category:"同类",amountCents:5000,date:"2026-09-04",account:1,toAccount:2},
+      {id:6,type:"支出",category:"别类",amountCents:1200,date:"2026-09-04",account:1},
+      {id:7,type:"支出",category:"同类",amountCents:1200,date:"2026-08-31",account:1},
+      {id:8,type:"代付",payMode:"转为支出",category:"同类",amountCents:800,date:"2026-09-05",account:1},
+      {id:9,type:"押金",depositDir:"付",depositTarget:"合成房东",category:"租房",amountCents:100000,date:"2026-08-01",account:1},
+      {id:10,type:"押金",depositDir:"退回",depositTarget:"合成房东",depositLinkId:9,depositFinal:true,category:"同类",amountCents:70000,date:"2026-09-05",account:1},
+      {id:11,type:"报销",category:"同类",amountCents:9000,date:"2026-09-06",account:1,reimbursementLinkId:12},
+      {id:12,type:"支出",category:"同类",amountCents:7000,date:"2026-08-25",account:1}
+    ];
+    Object.assign(reportState,{periodMode:"month",month:"2026-09"});
+    Object.assign(filterState,{fromDate:"2000-01-01",toDate:"2000-01-02",account:"missing",category:"missing",searchKey:"missing",reportSide:"income"});
+    uiState.detailVisibleCount=300;uiState.detailBrowsePosition={scrollTop:5000};
+    globalThis.fields={fromDate:{value:"old"},toDate:{value:"old"},filterAccountSel:{value:"missing"},filterCategorySel:{value:"missing"},searchInput:{value:"missing"}};
+    globalThis.document={getElementById(id){return fields[id]||null;}};
+    globalThis.visited=[];globalThis.switchTab=tab=>{visited.push(tab);uiState.activeTab=tab;};
+  `);
+  return runtime;
+}
+
+test("点击支出柱形保留报表时期，清除遗留条件，包含退款和结算而不混入收入或中性流水", () => {
+  const runtime=createReportDrilldownRuntime(), stored=runtime.localStorage.toObject();
+  const records=value(runtime,'dataState.records'), report=value(runtime,'reportState');
+  assert.equal(runtime.run('openReportCategoryRecords("同类","expense")'),true);
+  assert.deepEqual(value(runtime,'filteredRecords().map(record=>record.id)'),[1,2,8,10,11]);
+  assert.equal(runtime.run('filteredRecords().reduce((sum,r)=>sum+toCents(expenseEffect(r)),0)'),31800);
+  assert.equal(runtime.run('filterState.fromDate'),'2026-09-01');
+  assert.equal(runtime.run('filterState.toDate'),'2026-09-30');
+  assert.equal(runtime.run('filterState.periodMode'),'month');
+  assert.equal(runtime.run('filterState.account'), '');
+  assert.equal(runtime.run('filterState.searchKey'), '');
+  assert.equal(runtime.run('fields.searchInput.value'), '');
+  assert.equal(runtime.run('fields.filterCategorySel.value'), '同类');
+  assert.equal(runtime.run('uiState.detailVisibleCount'),100);
+  assert.equal(runtime.run('uiState.detailBrowsePosition'),null);
+  assert.equal(runtime.run('uiState.detailExpanded'),true);
+  assert.deepEqual(value(runtime,'visited'),['detail']);
+  assert.deepEqual(value(runtime,'dataState.records'),records);
+  assert.deepEqual(value(runtime,'reportState'),report);
+  assert.deepEqual(runtime.localStorage.toObject(),stored);
+});
+
+test("点击收入柱形保留负收入与超额报销，同名支出不混入且类别合计与图表一致", () => {
+  const runtime=createReportDrilldownRuntime();
+  runtime.run('openReportCategoryRecords("同类","income")');
+  assert.deepEqual(value(runtime,'filteredRecords().map(record=>record.id)'),[3,4,11]);
+  assert.equal(runtime.run('filteredRecords().reduce((sum,r)=>sum+toCents(incomeEffect(r)),0)'),4500);
+  runtime.run(fs.readFileSync(path.join(__dirname,'../js/view.js'),'utf8'));
+  runtime.run('globalThis.totalBox={};renderSelectedCategoryTotal(totalBox)');
+  assert.match(runtime.run('totalBox.innerHTML'),/收入/);
+  assert.match(runtime.run('totalBox.innerHTML'),/¥45\.00/);
+  assert.doesNotMatch(runtime.run('totalBox.innerHTML'),/支出/);
+});
+
+test("综合同名类别可查看双向贡献，未分类能找到原空类别，清除筛选后恢复普通流水", () => {
+  const runtime=createReportDrilldownRuntime();
+  runtime.run('openReportCategoryRecords("同类","combined")');
+  assert.deepEqual(value(runtime,'filteredRecords().map(record=>record.id)'),[1,2,3,4,8,10,11]);
+  runtime.run('dataState.records.push({id:99,type:"支出",category:"",date:"2026-09-10",amountCents:100});openReportCategoryRecords("未分类","expense")');
+  assert.deepEqual(value(runtime,'filteredRecords().map(record=>record.id)'),[99]);
+  runtime.run('resetFilterState();filterState.periodMode="all"');
+  assert.equal(runtime.run('filterState.reportSide'),'');
+  assert.equal(runtime.run('filteredRecords().length'),13);
+});
+
+test("报表跳转支持全部日期、自选和整年，非法范围不会破坏现有筛选", () => {
+  const runtime=createReportDrilldownRuntime();
+  runtime.run('reportState.periodMode="all";openReportCategoryRecords("同类","expense")');
+  assert.equal(runtime.run('filterState.periodMode'),'all');
+  assert.equal(runtime.run('filterState.fromDate'),'');
+  assert.equal(runtime.run('filterState.toDate'),'');
+  assert.ok(value(runtime,'filteredRecords().map(r=>r.id)').includes(7));
+  runtime.run('Object.assign(reportState,{periodMode:"year",year:"2025"});openReportCategoryRecords("同类","expense")');
+  assert.equal(runtime.run('filterState.fromDate'),'2025-01-01');
+  assert.equal(runtime.run('filterState.toDate'),'2025-12-31');
+  runtime.run('Object.assign(reportState,{periodMode:"range",fromDate:"2026-09-03",toDate:"2026-09-04"});openReportCategoryRecords("同类","income")');
+  assert.deepEqual(value(runtime,'filteredRecords().map(r=>r.id)'),[3,4]);
+  const before=value(runtime,'filterState');
+  runtime.run('reportState.fromDate="2026-09-05";appNotice=()=>{}');
+  assert.equal(runtime.run('openReportCategoryRecords("同类","income")'),false);
+  assert.deepEqual(value(runtime,'filterState'),before);
+});
+
+test("柱形按钮实际绑定正确的类别与方向，综合双向分别跳转且特殊名称安全显示", () => {
+  const runtime=createRuntime();loadCharts(runtime);
+  runtime.run(`
+    globalThis.box={innerHTML:"",querySelectorAll(){globalThis.links=Array.from(this.innerHTML.matchAll(/data-report-link="(\\d+)"/g),match=>({dataset:{reportLink:match[1]}}));return links;}};
+    globalThis.calls=[];openReportCategoryRecords=(category,side)=>calls.push({category,side});
+    uiState.chartKind="expense";renderBarChart(box,[["餐饮",12]]);links[0].onclick();
+    uiState.chartKind="income";renderBarChart(box,[["工资",25]]);links[0].onclick();
+    renderCombinedBarChart(box,["同类"],{同类:25},{同类:12});links.forEach(button=>button.onclick());
+  `);
+  assert.deepEqual(value(runtime,'calls'),[{category:'餐饮',side:'expense'},{category:'工资',side:'income'},{category:'同类',side:'combined'},{category:'同类',side:'expense'},{category:'同类',side:'income'}]);
+  runtime.run(`renderBarChart(box,${JSON.stringify([['类别"<script>',12]])})`);
+  assert.doesNotMatch(runtime.run('box.innerHTML'),/<script>|onclick=/);
+  assert.match(runtime.run('box.innerHTML'),/&quot;&lt;script&gt;/);
+});

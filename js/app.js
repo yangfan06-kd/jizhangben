@@ -3,7 +3,7 @@
 
 if (typeof renderUiIcons === "function") renderUiIcons();
 
-// 使用浏览器历史承接 Android 的系统返回/边缘返回；专项页面的系统返回直接回首页。
+// 浏览器返回沿用页面历史；Android 返回优先关闭弹层，再按页面来源返回。
 if (window.history && typeof window.history.replaceState === "function") {
   window.history.replaceState({ tab: "home" }, "", "#home");
   window.addEventListener("popstate", event => {
@@ -25,7 +25,7 @@ if (window.history && typeof window.history.replaceState === "function") {
   });
 }
 
-// 原生 Android 返回键会调用这个函数；在专项页面直接回首页，首页才交回系统退出。
+// Android 返回键／边缘返回调用此函数；报表分类流水回报表，普通专项页仍回首页。
 window.handleNativeBack = function handleNativeBack() {
   if (typeof compactCalendar !== "undefined" && compactCalendar) {
     closeCompactCalendar();
@@ -53,6 +53,7 @@ window.handleNativeBack = function handleNativeBack() {
     switchTab("record", { replaceHistory: true });
     return true;
   }
+  if (returnFromReportDetail()) return true;
   if (uiState && uiState.activeTab && uiState.activeTab !== "home") {
     switchTab("home", { replaceHistory: true });
     return true;
@@ -119,6 +120,7 @@ document.getElementById("detailPeriodCards").onclick = event => {
   filterState.toDate = "";
   filterState.account = "";
   filterState.category = "";
+  filterState.reportSide = "";
   filterState.searchKey = "";
   uiState.detailExpanded = true;
   switchTab("detail");
@@ -139,7 +141,9 @@ document.querySelectorAll("[data-tab]:not(.tab)").forEach(b => {
 document.getElementById("recordBackBtn").onclick = () => switchTab("home", { replaceHistory: true });
 document.getElementById("fixedIncomeBackBtn").onclick = () => switchTab("record", { replaceHistory: true });
 document.querySelectorAll(".page-back-home").forEach(b => {
-  b.onclick = () => switchTab("home", { replaceHistory: true });
+  b.onclick = () => {
+    if (!returnFromReportDetail()) switchTab("home", { replaceHistory: true });
+  };
 });
 document.getElementById("categoryPickerCloseBtn").onclick = closeCategoryPicker;
 document.getElementById("categoryPickerManageBtn").onclick = () => {

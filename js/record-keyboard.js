@@ -332,9 +332,32 @@ if (balancePrincipalInput) {
     }
   });
 }
+// 系统输入法只滚动到刚好露出输入框，避免居中定位把金额、类别和账户推走。
+// 不干预用户滑动；仅在输入焦点或可视窗口尺寸变化时校正遮挡。
+function keepRecordTextInputVisible() {
+  const input = document.activeElement;
+  if (uiState.activeTab !== "record" || !input || input.readOnly || input.type !== "text" ||
+      !input.closest || !input.closest("#panelRecord")) return;
+  const viewport = window.visualViewport;
+  const top = (viewport ? viewport.offsetTop : 0) + 8;
+  const bottom = (viewport ? viewport.offsetTop + viewport.height : window.innerHeight) - 12;
+  const bounds = input.getBoundingClientRect();
+  if (!Number.isFinite(bottom) || bottom <= top) return;
+  const delta = bounds.bottom > bottom ? bounds.bottom - bottom : bounds.top < top ? bounds.top - top : 0;
+  if (delta && typeof window.scrollBy === "function") window.scrollBy({ top: delta, behavior: "instant" });
+}
+
+function scheduleRecordTextInputVisibility() {
+  if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(keepRecordTextInputVisible);
+  else keepRecordTextInputVisible();
+}
+
 document.addEventListener("focusin", event => {
-  if (!recordKeyboardVisible || !event.target.closest || !event.target.closest("#panelRecord")) return;
-  if (!(["amount", "balancePrincipal"].includes(event.target.id)) && !event.target.closest("#recordKeyboard")) hideRecordKeyboard();
+  if (!event.target.closest || !event.target.closest("#panelRecord")) return;
+  if (!(["amount", "balancePrincipal"].includes(event.target.id)) && !event.target.closest("#recordKeyboard")) {
+    if (recordKeyboardVisible) hideRecordKeyboard();
+    scheduleRecordTextInputVisibility();
+  }
 });
 
 const recordKeyboardLayoutElement = document.getElementById("recordKeyboard");
@@ -344,5 +367,11 @@ if (recordKeyboardLayoutElement && typeof ResizeObserver === "function") {
 }
 // 旧 WebView 没有 ResizeObserver 时仍支持窗口尺寸改变和显式开关键盘。
 if (typeof window.addEventListener === "function") {
-  window.addEventListener("resize", syncRecordKeyboardLayout);
+  window.addEventListener("resize", () => {
+    syncRecordKeyboardLayout();
+    scheduleRecordTextInputVisibility();
+  });
+}
+if (window.visualViewport && typeof window.visualViewport.addEventListener === "function") {
+  window.visualViewport.addEventListener("resize", scheduleRecordTextInputVisibility);
 }

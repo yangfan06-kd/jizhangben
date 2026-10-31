@@ -165,6 +165,7 @@ function createDetailNavigationRuntime() {
   const runtime = createRuntime({ old_records: "旧流水", old_categories: "自定义目录" });
   runtime.run(`
     globalThis.nodes = {};
+    globalThis.bodyClasses = new Set();
     function detailNode() {
       return { style: {}, children: [], hidden: false,
         appendChild(child) { this.children.push(child); }, querySelectorAll() { return []; },
@@ -172,6 +173,7 @@ function createDetailNavigationRuntime() {
         get innerHTML() { return this.html || ""; } };
     }
     globalThis.document = {
+      body: {classList: {toggle(name, active) {if(active) bodyClasses.add(name);else bodyClasses.delete(name);}}},
       getElementById(id) { return nodes[id] || (nodes[id]=detailNode()); },
       createElement() { return detailNode(); }, querySelector() { return null; }, querySelectorAll() { return []; }
     };
@@ -184,6 +186,66 @@ function createDetailNavigationRuntime() {
   runtime.run(`renderDetailPeriodCards=()=>{};renderChart=()=>{};renderDetailFilters=()=>{};`);
   return runtime;
 }
+
+function createReportBackRuntime() {
+  const runtime = createDetailNavigationRuntime();
+  loadScript(runtime, "charts.js");
+  runtime.run(`
+    renderChart=()=>{};renderOverview=()=>{};renderReportPeriodControls=()=>{};fillCategoryFilter=()=>{};
+    globalThis.historyEvents=[];globalThis.windowEvents={};
+    window.history={replaceState(state){historyEvents.push({mode:"replace",tab:state.tab});},pushState(state){historyEvents.push({mode:"push",tab:state.tab});}};
+    window.addEventListener=(name,listener)=>{windowEvents[name]=listener;};
+    document.getElementById("categoryPickerDialog").hidden=true;
+  `);
+  // 加载实际入口的历史与原生返回处理，避开与本测试无关的数据初始化。
+  const appSource=fs.readFileSync(path.join(__dirname,"../js/app.js"),"utf8");
+  runtime.run(appSource.slice(0,appSource.indexOf("async function openRecordPage")));
+  return runtime;
+}
+
+test("报表分类流水的 Android 返回回到报表，保留时期、图表选择和浏览位置", () => {
+  for (const side of ["expense","income","combined"]) {
+    const runtime=createReportBackRuntime(), stored=runtime.localStorage.toObject();
+    const records=runtime.run("JSON.stringify(dataState.records)");
+    runtime.run(`switchTab("overview");window.scrollY=1200;Object.assign(reportState,{periodMode:"range",fromDate:"2026-10-01",toDate:"2026-10-15"});uiState.chartKind=${JSON.stringify(side)};uiState.chartType="bar";openReportCategoryRecords("餐饮",${JSON.stringify(side)})`);
+    assert.equal(runtime.run("uiState.activeTab"),"detail");
+    assert.equal(runtime.run("window.handleNativeBack()"),true);
+    assert.equal(runtime.run("uiState.activeTab"),"overview");
+    assert.equal(runtime.run("window.scrollY"),1200);
+    assert.equal(runtime.run("reportState.fromDate"),"2026-10-01");
+    assert.equal(runtime.run("reportState.toDate"),"2026-10-15");
+    assert.equal(runtime.run("uiState.chartKind"),side);
+    assert.equal(runtime.run("uiState.chartType"),"bar");
+    assert.equal(runtime.run("uiState.detailReportReturn"),null);
+    assert.equal(runtime.run("historyEvents.at(-1).mode"),"replace");
+    assert.equal(runtime.run("JSON.stringify(dataState.records)"),records);
+    assert.deepEqual(runtime.localStorage.toObject(),stored);
+    runtime.run("window.handleNativeBack()");
+    assert.equal(runtime.run("uiState.activeTab"),"home");
+    assert.equal(runtime.run("window.handleNativeBack()"),false);
+  }
+});
+
+test("普通流水与离开后再次进入的流水仍返回首页，跨账本不复用报表来源", () => {
+  const runtime=createReportBackRuntime();
+  runtime.run('switchTab("detail");window.handleNativeBack()');
+  assert.equal(runtime.run("uiState.activeTab"),"home");
+  runtime.run('switchTab("overview");openReportCategoryRecords("餐饮","expense");switchTab("home");switchTab("detail");window.handleNativeBack()');
+  assert.equal(runtime.run("uiState.activeTab"),"home");
+  runtime.run('switchTab("overview");openReportCategoryRecords("餐饮","expense");dataState.currentBookId=2;window.handleNativeBack()');
+  assert.equal(runtime.run("uiState.activeTab"),"home");
+  assert.equal(runtime.run("uiState.detailReportReturn"),null);
+});
+
+test("报表分类流水返回优先关闭日期弹层，清除筛选不丢失返回来源", () => {
+  const runtime=createReportBackRuntime();
+  runtime.run('switchTab("overview");window.scrollY=800;openReportCategoryRecords("餐饮","expense");compactCalendar={};closeCompactCalendar=()=>{compactCalendar=null;};window.handleNativeBack()');
+  assert.equal(runtime.run("uiState.activeTab"),"detail");
+  assert.equal(runtime.run("compactCalendar"),null);
+  runtime.run("resetFilterState();window.handleNativeBack()");
+  assert.equal(runtime.run("uiState.activeTab"),"overview");
+  assert.equal(runtime.run("window.scrollY"),800);
+});
 
 test("再次进入相同流水保留已加载数量和位置，仍汇总全部账目且不写入存储", () => {
   const runtime=createDetailNavigationRuntime();

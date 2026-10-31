@@ -910,6 +910,115 @@ test("account edit network failure restores local account IDs before fallback", 
   assert.match(runtime.run("document.getElementById('accMsg').textContent"), /服务端不可用/);
 });
 
+function prepareConsecutiveRecord(runtime, type = "支出", category = "生活") {
+  installRecordDom(runtime);
+  runtime.run(`
+    window.JIZHANGBEN_OFFLINE_MODE = true;
+    dataState.currentBookId = 1;
+    dataState.records = [];
+    dataState.accounts = [{id: 1, name: "微信"}, {id: 2, name: "银行卡"}];
+    dataState.categorySystem = {groups: [
+      {id: "expense", side: "expense", items: ["餐饮", "生活"]},
+      {id: "income", side: "income", items: ["工资", "奖金"]}
+    ]};
+    uiState.selectedType = ${JSON.stringify(type)};
+    uiState.selectedCategory = ${JSON.stringify(category)};
+    uiState.editingRecordId = null;
+    formElements.amount.value = "12.34";
+    formElements.note.value = "仅此一笔";
+    formElements.date.value = "2026-10-28";
+    formElements.accountSel.value = "2";
+  `);
+}
+
+test("consecutive expense saves retain chosen category and account without repeating other fields", async () => {
+  const runtime = createRuntime();
+  prepareConsecutiveRecord(runtime);
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.records.length"), 1);
+  assert.equal(runtime.run("uiState.selectedCategory"), "生活");
+  assert.equal(runtime.run("formElements.accountSel.value"), "2");
+  assert.equal(runtime.run("formElements.amount.value"), "");
+  assert.equal(runtime.run("formElements.note.value"), "");
+  assert.equal(runtime.run("uiState.editingRecordId"), null);
+  runtime.run('formElements.amount.value="8"');
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.records.length"), 2);
+  assert.equal(runtime.run("dataState.records[1].category"), "生活");
+  assert.equal(runtime.run("dataState.records[1].account"), "2");
+  assert.equal(runtime.run("dataState.records[0].note"), "仅此一笔");
+});
+
+test("consecutive negative income keeps income selection instead of expense defaults", async () => {
+  const runtime = createRuntime();
+  prepareConsecutiveRecord(runtime, "收入", "奖金");
+  runtime.run('formElements.amount.value="-10"');
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.records[0].amountCents"), -1000);
+  assert.equal(runtime.run("uiState.selectedType"), "收入");
+  assert.equal(runtime.run("uiState.selectedCategory"), "奖金");
+  assert.equal(runtime.run("formElements.accountSel.value"), "2");
+});
+
+test("failed local save preserves input and existing records without resetting selections", async () => {
+  const runtime = createRuntime();
+  prepareConsecutiveRecord(runtime);
+  runtime.run('save=()=>{throw new Error("disk full")};');
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.records.length"), 0);
+  assert.equal(runtime.run("uiState.selectedCategory"), "生活");
+  assert.equal(runtime.run("formElements.accountSel.value"), "2");
+  assert.equal(runtime.run("formElements.amount.value"), "12.34");
+  assert.equal(runtime.run("formElements.note.value"), "仅此一笔");
+  assert.match(runtime.run("formElements.formMsg.textContent"), /保存失败/);
+});
+
+test("editing a record preserves the selection for a new entry and does not duplicate the edited record", async () => {
+  const runtime = createRuntime();
+  prepareConsecutiveRecord(runtime);
+  runtime.run('dataState.records=[{id:9,type:"支出",category:"餐饮",amountCents:300,account:"1",date:"2026-10-28"}];uiState.editingRecordId=9;');
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.records.length"), 1);
+  assert.equal(runtime.run("dataState.records[0].amountCents"), 1234);
+  assert.equal(runtime.run("uiState.editingRecordId"), null);
+  assert.equal(runtime.run("uiState.selectedCategory"), "生活");
+  assert.equal(runtime.run("formElements.accountSel.value"), "2");
+});
+
+test("transfer saves retain both accounts without inheriting a category or amount", async () => {
+  const runtime = createRuntime();
+  prepareConsecutiveRecord(runtime, "转账", null);
+  runtime.run('formElements.toAccountSel.value="1";');
+  await runtime.run("handleSave()");
+  assert.equal(runtime.run("dataState.records.length"), 1);
+  assert.equal(runtime.run("uiState.selectedType"), "转账");
+  assert.equal(runtime.run("uiState.selectedCategory"), null);
+  assert.equal(runtime.run("formElements.accountSel.value"), "2");
+  assert.equal(runtime.run("formElements.toAccountSel.value"), "1");
+  assert.equal(runtime.run("formElements.amount.value"), "");
+});
+
+test("success reset clears settlement links and rejects removed or wrong-side selections", () => {
+  const runtime = createRuntime();
+  prepareConsecutiveRecord(runtime);
+  runtime.run(`
+    formElements.depositLinkSel.value="old";
+    formElements.depositFinal.checked=true;
+    uiState.selectedDepositDir="退回";
+    resetFormAfterSave({type:"押金",category:null,account:2});
+  `);
+  assert.equal(runtime.run("formElements.depositLinkSel.value"), "");
+  assert.equal(runtime.run("formElements.depositFinal.checked"), false);
+  assert.equal(runtime.run("uiState.selectedDepositDir"), null);
+  assert.equal(runtime.run("formElements.accountSel.value"), "2");
+  runtime.run('resetFormAfterSave({type:"收入",category:"生活",account:"deleted"})');
+  assert.equal(runtime.run("uiState.selectedCategory"), "工资");
+  assert.equal(runtime.run("formElements.accountSel.value"), "");
+  runtime.run("resetForm()");
+  assert.equal(runtime.run("uiState.selectedType"), "支出");
+  assert.equal(runtime.run("uiState.selectedCategory"), "餐饮");
+});
+
 test("new ordinary record posts server option and account UUIDs", async () => {
   const runtime = createRuntime();
   installRecordDom(runtime);

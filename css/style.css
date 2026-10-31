@@ -1221,9 +1221,10 @@
   body.privacy-masked #homeTrendChart { filter: blur(6px); user-select: none; }
   .privacy-mask-input-host { position: relative; }
   .privacy-input-mask { position: absolute; z-index: 4; display: flex; align-items: center; overflow: hidden; color: var(--ink); font: inherit; letter-spacing: .08em; white-space: nowrap; pointer-events: none; }
-  .detail-category-total { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; color: var(--muted); font-size: 11px; text-align: right; }
+  .detail-category-total { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 6px; color: var(--muted); font-size: 11px; text-align: right; }
   .detail-category-total[hidden] { display: none !important; }
   .detail-category-total strong { color: var(--expense); font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .detail-category-total strong.income { color: var(--income); }
   .row-category-button { padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; text-align: left; cursor: pointer; }
   .row-category-button:focus-visible { outline: 2px solid var(--expense); outline-offset: 2px; border-radius: 3px; }
   .special-expense-picker .compact-picker-menu { max-height: min(230px, 40vh); }
@@ -1402,13 +1403,17 @@
   .report-bar-list { list-style: none; padding: 0; margin: 0; min-width: 0; }
   .report-bar-item { padding: 6px 0; border-bottom: 1px solid #E8ECE8; }
   .report-bar-item:last-child { border: 0; }
+  .report-bar-link { display: block; width: 100%; min-height: 44px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .report-bar-link:focus-visible { outline: 2px solid var(--expense); outline-offset: 2px; }
+  .report-bar-link:active { opacity: .72; }
+  .report-bar-link.report-bar-category { display: flex; min-height: 24px; }
   .report-bar-category { display: flex; align-items: baseline; gap: 6px; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
   .report-bar-rank { flex: 0 0 18px; color: var(--muted); font-size: 12px; font-weight: 400; }
   .report-bar-figures { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 7px; margin: 3px 0; }
   .report-bar-type { font-size: 12px; }
   .report-bar-value { font-size: 15px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
   .report-bar-ratio { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .report-bar-track { position: relative; height: 7px; border-radius: 4px; background: #EFF3EF; overflow: hidden; }
+  .report-bar-track { display: block; position: relative; height: 7px; border-radius: 4px; background: #EFF3EF; overflow: hidden; }
   .report-bar-fill { display: block; height: 100%; border-radius: inherit; }
   .report-bar-fill.kind-expense { background: #2F8F73; }
   .report-bar-fill.kind-income { background: #C65B55; }
@@ -2177,6 +2182,10 @@
   /* ===== 记一笔专用数字键盘 ===== */
   html { scroll-padding-bottom: var(--record-keyboard-space, 0px); }
   body.record-keyboard-open { padding-bottom: var(--record-keyboard-space, calc(380px + env(safe-area-inset-bottom))); }
+  /* 记一笔没有底部导航，不再预留导航空位；金额键盘仍按实际高度避让。 */
+  body.record-page-open:not(.record-keyboard-open) { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  body.record-page-open #panelRecord { padding-bottom: 0; margin-bottom: 0; }
+  #panelRecord .form-msg:empty { display: none; }
   body.record-keyboard-open #panelRecord > #saveBtn,
   body.record-keyboard-open #panelRecord > #cancelBtn { display: none !important; }
   .record-keyboard[hidden] { display: none !important; }

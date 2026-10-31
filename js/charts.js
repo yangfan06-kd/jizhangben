@@ -109,9 +109,24 @@ function reportBarMeasure(kind, amount, total, scale, signed) {
   const percentage = !signed && total > 0 ? Math.max(0, amount / total * 100) : null;
   const ratio = percentage === null ? "不计占比" : (percentage > 0 && percentage < 0.1 ? "＜0.1%" : percentage.toFixed(1) + "%");
   const width = Math.min(100, signed ? (scale ? Math.abs(amount) / scale * 50 : 0) : percentage || 0);
-  return '<div class="report-bar-figures"><span class="report-bar-type kind-' + kind + '">' + label + '</span>' +
-    '<strong class="report-bar-value">' + reportMoney(amount) + '</strong><span class="report-bar-ratio">' + ratio + '</span></div>' +
-    '<div class="report-bar-track' + (signed ? ' signed' : '') + '" aria-hidden="true"><span class="report-bar-fill kind-' + kind + (amount < 0 ? ' negative' : ' positive') + '" style="width:' + width.toFixed(4) + '%"></span></div>';
+  return '<span class="report-bar-figures"><span class="report-bar-type kind-' + kind + '">' + label + '</span>' +
+    '<strong class="report-bar-value">' + reportMoney(amount) + '</strong><span class="report-bar-ratio">' + ratio + '</span></span>' +
+    '<span class="report-bar-track' + (signed ? ' signed' : '') + '" aria-hidden="true"><span class="report-bar-fill kind-' + kind + (amount < 0 ? ' negative' : ' positive') + '" style="width:' + width.toFixed(4) + '%"></span></span>';
+}
+
+function reportBarLink(category, side, content, links, extraClass = "") {
+  const index = links.push({ category, side }) - 1;
+  const label = { income: "收入", expense: "支出", combined: "收支" }[side];
+  return '<button type="button" class="report-bar-link ' + extraClass + '" data-report-link="' + index +
+    '" aria-label="查看' + esc(category) + label + '流水">' + content + '</button>';
+}
+
+function bindReportBarLinks(box, links) {
+  if (typeof box.querySelectorAll !== "function") return;
+  box.querySelectorAll("[data-report-link]").forEach(button => {
+    const entry = links[Number(button.dataset.reportLink)];
+    if (entry) button.onclick = () => openReportCategoryRecords(entry.category, entry.side);
+  });
 }
 
 // 保留首日和当天，用最多四个均匀刻度给小屏日期留出空间。
@@ -186,12 +201,17 @@ function renderCombinedBarChart(box, cats, incomeMap, expenseMap) {
   const expenseTotal = expenseValues.reduce((sum, amount) => sum + amount, 0);
   const incomeScale = Math.max(0, ...incomeValues.map(Math.abs));
   const expenseScale = Math.max(0, ...expenseValues.map(Math.abs));
-  box.innerHTML = '<ol class="report-bar-list">' + visibleCats.map((category, index) =>
-    '<li class="report-bar-item"><div class="report-bar-category"><span class="report-bar-rank">' + (index + 1) + '</span>' + esc(category) + '</div>' +
-    ((expenseMap[category] || 0) !== 0 ? reportBarMeasure("expense", expenseMap[category], expenseTotal, expenseScale, expenseSigned) : "") +
-    ((incomeMap[category] || 0) !== 0 ? reportBarMeasure("income", incomeMap[category], incomeTotal, incomeScale, incomeSigned) : "") + '</li>'
-  ).join("") + '</ol><p class="chart-note">收入、支出占比分别按各自合计计算。' +
+  const links = [];
+  box.innerHTML = '<ol class="report-bar-list">' + visibleCats.map((category, index) => {
+    const hasExpense = (expenseMap[category] || 0) !== 0, hasIncome = (incomeMap[category] || 0) !== 0;
+    const side = hasExpense && hasIncome ? "combined" : hasExpense ? "expense" : "income";
+    const title = reportBarLink(category, side, '<span class="report-bar-rank">' + (index + 1) + '</span>' + esc(category), links, "report-bar-category");
+    return '<li class="report-bar-item">' + title +
+      (hasExpense ? reportBarLink(category, "expense", reportBarMeasure("expense", expenseMap[category], expenseTotal, expenseScale, expenseSigned), links, "report-bar-side") : "") +
+      (hasIncome ? reportBarLink(category, "income", reportBarMeasure("income", incomeMap[category], incomeTotal, incomeScale, incomeSigned), links, "report-bar-side") : "") + '</li>';
+  }).join("") + '</ol><p class="chart-note">收入、支出占比分别按各自合计计算。' +
     (incomeSigned || expenseSigned ? '含负金额的一侧不计算占比，正负金额以中线区分。' : '') + '</p>';
+  bindReportBarLinks(box, links);
 }
 
 // ============ 综合图：扇形（分类多色，图例明确标注收支方向） ============
@@ -258,10 +278,13 @@ function renderBarChart(box, entries) {
   const signed = entries.some(([, amount]) => amount < 0);
   const total = entries.reduce((sum, [, amount]) => sum + amount, 0);
   const scale = Math.max(0, ...entries.map(([, amount]) => Math.abs(amount)));
+  const links = [];
   box.innerHTML = '<ol class="report-bar-list">' + entries.map(([category, amount], index) =>
-    '<li class="report-bar-item"><div class="report-bar-category"><span class="report-bar-rank">' + (index + 1) + '</span>' + esc(category) + '</div>' +
-    reportBarMeasure(kind, amount, total, scale, signed) + '</li>'
+    '<li class="report-bar-item">' + reportBarLink(category, kind,
+      '<span class="report-bar-category"><span class="report-bar-rank">' + (index + 1) + '</span>' + esc(category) + '</span>' +
+      reportBarMeasure(kind, amount, total, scale, signed), links) + '</li>'
   ).join("") + '</ol>' + (signed ? '<p class="chart-note">负金额已计入期间合计；含负金额时不计算占比，正负金额以中线区分。</p>' : '');
+  bindReportBarLinks(box, links);
 }
 
 function renderPieChart(box, entries, total) {

@@ -179,6 +179,7 @@ function fillCategoryFilter() {
   sel.innerHTML = '<option value="">全部类别</option>';
   const active = allCategories();
   const categories = [...new Set(active.concat(dataState.records.map(record => record.category).filter(Boolean)))];
+  if (filterState.reportSide && dataState.records.some(record => !record.category) && !categories.includes("未分类")) categories.push("未分类");
   categories.forEach(c => {
     const op = document.createElement("option");
     op.value = c;

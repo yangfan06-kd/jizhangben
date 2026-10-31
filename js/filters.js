@@ -71,9 +71,19 @@ function filterByPeriod(recs) {
     if (filterState.toDate && r.date > filterState.toDate) return false;
     // 转账的转出和转入账户都属于筛选范围。
     if (filterState.account && String(r.account) !== filterState.account && String(r.toAccount) !== filterState.account) return false;
-    if (filterState.category && r.category !== filterState.category) return false;
+    const category = filterState.reportSide ? (r.category || "未分类") : r.category;
+    if (filterState.category && category !== filterState.category) return false;
+    if (!matchesReportSide(r)) return false;
     return true;
   });
+}
+
+// 与报表使用同一损益口径；退款、结算和负收入也可能属于所点方向。
+function matchesReportSide(record) {
+  if (filterState.reportSide === "income") return toCents(incomeEffect(record)) !== 0;
+  if (filterState.reportSide === "expense") return toCents(expenseEffect(record)) !== 0;
+  if (filterState.reportSide === "combined") return toCents(incomeEffect(record)) !== 0 || toCents(expenseEffect(record)) !== 0;
+  return true;
 }
 
 // 搜索关键字：匹配备注 / 押金对象 / 类别 / 类型（不区分大小写）
