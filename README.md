@@ -6,7 +6,7 @@
 
 当前版本 **2.05**（Android 版本号 **106**），包名 `com.jizhangben.app`，沿用原有签名。个人离线版无需注册，也不需要服务器或电脑保持开机。
 
-[下载 Android 安装包](https://github.com/yangfan06-kd/jizhangben/releases/download/v2.05/jizhangben-v2.05.apk) · [版本说明](https://github.com/yangfan06-kd/jizhangben/releases/tag/v2.05)
+[下载 Android 安装包](https://github.com/yangfan06-kd/jizhangben/raw/refs/heads/main/releases/jizhangben-v2.05.apk) · [查看安装包文件](releases/jizhangben-v2.05.apk)
 
 手机打开 APK 后按系统提示安装或更新。**更新前在“设置”中导出最新 JSON 备份；直接覆盖安装，不要卸载旧 App 或清除应用数据。**安装后核对账目和类别，必要时再导出一次比较。微信分发时直接发送 APK 文件即可。此 APK 使用项目既有调试签名，供个人与家人试用；只有相同包名、相同签名且版本号递增的安装包才能覆盖升级。
 
