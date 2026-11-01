@@ -49,6 +49,32 @@ function createDraftEventRuntime(initialStorage = {}) {
   return runtime;
 }
 
+test("无金额时类别账户备注不触发恢复，旧版空金额草稿也不提示", () => {
+  const runtime=createDraftEventRuntime();
+  runtime.run('recordKeyboardExpression="";draftFields.amount.value="";uiState.selectedCategory="其他";draftFields.note.value="备注";saveRecordDraft()');
+  assert.equal(runtime.run('readRecordDraft()'),null);
+  runtime.run('window.localStorage.setItem(RECORD_DRAFT_KEY,JSON.stringify({version:1,bookId:1,updatedAt:Date.now(),fields:{amount:"",note:"旧备注"},expression:""}))');
+  assert.equal(runtime.run('readRecordDraft()'),null);
+  runtime.run('draftFields.amount.value="0";saveRecordDraft()');
+  assert.equal(runtime.run('readRecordDraft().fields.amount'),"0");
+});
+
+test("上次成功选择按账本保存且独立于金额草稿", () => {
+  const runtime=createDraftEventRuntime();
+  runtime.run('draftFields.toAccountSel={value:""};rememberRecordSelection({type:"支出",category:"餐饮",account:2});uiState.selectedCategory=null;draftFields.accountSel.value="";applyLastRecordSelection()');
+  assert.equal(runtime.run('uiState.selectedCategory'),"餐饮");
+  assert.equal(runtime.run('draftFields.accountSel.value'),"2");
+  runtime.run('dataState.currentBookId=2;draftFields.accountSel.value="";applyLastRecordSelection()');
+  assert.equal(runtime.run('draftFields.accountSel.value'),"");
+});
+
+test("按日汇总保留收入支出口径，转账本金不计收支", () => {
+  const runtime=createRuntime();loadScript(runtime,'view.js');
+  runtime.run('dataState.records=[{id:1,type:"支出",amountCents:1234,date:"2026-11-01"},{id:2,type:"收入",amountCents:-100,date:"2026-11-01"},{id:3,type:"转账",amountCents:5000,date:"2026-11-01"}];globalThis.daily=detailDailyTotals(dataState.records)');
+  assert.equal(runtime.run('daily["2026-11-01"].expense'),1234);
+  assert.equal(runtime.run('daily["2026-11-01"].income'),-100);
+});
+
 test("最后一次输入即时保存草稿，页面重载后只恢复表单，不生成流水", () => {
   const runtime=createDraftEventRuntime();
   runtime.run('draftDocumentListeners.input({target:draftFields.amount})');

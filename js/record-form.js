@@ -209,6 +209,7 @@ function localAccountIdByName(name) {
 // 仅在保存成功后沿用选择；普通重置、取消编辑和切换账本仍走原有流程。
 // 新的一笔不继承金额、备注、编辑标识和结算关联，避免重复结算。
 function resetFormAfterSave(record) {
+  if (typeof rememberRecordSelection === "function") rememberRecordSelection(record);
   resetForm();
   const type = allTypes().includes(record.type) ? record.type : "支出";
   const side = typeSide(type);

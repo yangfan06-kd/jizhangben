@@ -246,6 +246,16 @@ function renderChartPanel() {
 
 // ============ 渲染：明细列表 ============
 let detailListGeneration = 0;
+function detailDailyTotals(records) {
+  const totals = Object.create(null);
+  records.forEach(record => {
+    const day = totals[record.date] || (totals[record.date] = {income:0,expense:0});
+    day.income += toCents(incomeEffect(record));
+    day.expense += toCents(expenseEffect(record));
+  });
+  return totals;
+}
+
 function renderList(continuation = null) {
   return withRecordCalculationIndex(dataState.records, () => renderListContents(continuation));
 }
@@ -311,6 +321,7 @@ function renderListContents(continuation) {
       b.date.localeCompare(a.date) || b.id - a.id
     );
   } else sorted = continuation.sorted;
+  const dailyTotals = append ? continuation.dailyTotals : detailDailyTotals(sorted);
   const visibleCount = Math.max(detailPageSize, uiState.detailVisibleCount || detailPageSize);
   const renderedCount = Math.min(visibleCount, sorted.length);
   const visible = sorted.slice(append ? continuation.visibleCount : 0, renderedCount);
@@ -321,6 +332,7 @@ function renderListContents(continuation) {
       records: dataState.records,
       context: detailBrowseContext(),
       sorted,
+      dailyTotals,
       visibleCount: renderedCount,
       lastDate: sorted[renderedCount - 1]?.date
     };
@@ -347,7 +359,10 @@ function renderListContents(continuation) {
     if (!append || date !== continuation.lastDate) {
       const head = document.createElement("div");
       head.className = "date-head";
-      head.textContent = formatDate(date);
+      const totals = dailyTotals[date] || {income:0,expense:0};
+      head.innerHTML = '<span>' + esc(formatDate(date)) + '</span><span class="daily-totals">' +
+        '<span>支出 <strong class="expense">¥' + (totals.expense / 100).toFixed(2) + '</strong></span>' +
+        '<span>收入 <strong class="income">¥' + (totals.income / 100).toFixed(2) + '</strong></span></span>';
       additions.appendChild(head);
     }
 

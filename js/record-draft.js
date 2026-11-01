@@ -8,6 +8,31 @@ const RECORD_DRAFT_FIELDS = [
 ];
 let recordDraftRestoring = false;
 
+function recordDraftHasAmount(draft) {
+  return !!draft && /\d/.test(String(draft.expression || (draft.fields && draft.fields.amount) || ""));
+}
+
+// 选择偏好与未保存金额分开存放，按账本隔离，不修改账目数据。
+function rememberRecordSelection(record) {
+  try { window.localStorage.setItem("record-selection-v1-" + dataState.currentBookId,
+    JSON.stringify({type:record.type,category:record.category,account:record.account,toAccount:record.toAccount})); } catch (_) {}
+}
+
+function applyLastRecordSelection() {
+  try {
+    const value = JSON.parse(window.localStorage.getItem("record-selection-v1-" + dataState.currentBookId) || "null");
+    if (!value || !allTypes().includes(value.type)) return;
+    uiState.selectedType = value.type;
+    const side = typeSide(value.type);
+    uiState.selectedCategory = allCategories(side === "neutral" ? "" : side).includes(value.category) ? value.category : defaultRecordCategory(value.type);
+    for (const [field,key] of [["accountSel","account"],["toAccountSel","toAccount"]]) {
+      document.getElementById(field).value = dataState.accounts.some(a=>String(a.id)===String(value[key])) ? String(value[key]) : "";
+    }
+    renderTypeChips();renderCategoryChips();updateFormFields();
+    if(typeof syncAccountPickerValue === "function") {syncAccountPickerValue("accountSel");syncAccountPickerValue("toAccountSel");}
+  } catch (_) { /* 无效偏好使用正常默认值 */ }
+}
+
 function clearRecordDraft() {
   try { window.localStorage.removeItem(RECORD_DRAFT_KEY); } catch (_) { /* 存储不可用时保留页面内容 */ }
 }
@@ -18,7 +43,7 @@ function readRecordDraft() {
     if (!draft || draft.version !== 1 || String(draft.bookId) !== String(dataState.currentBookId) ||
         !Number.isFinite(draft.updatedAt) || Date.now() - draft.updatedAt > 7 * 86400000 ||
         !draft.fields || typeof draft.fields !== "object" || Array.isArray(draft.fields)) return null;
-    return draft;
+    return recordDraftHasAmount(draft) ? draft : null;
   } catch (_) { return null; }
 }
 
@@ -32,10 +57,7 @@ function saveRecordDraft() {
   });
   const expression = typeof recordKeyboardExpression === "string" && recordKeyboardTargetId === "amount"
     ? recordKeyboardExpression : String(fields.amount || "");
-  const meaningful = expression || fields.note || uiState.selectedType !== "支出" ||
-    uiState.selectedCategory !== defaultRecordCategory("支出") ||
-    String(fields.accountSel || "") !== String(defaultRecordAccountId()) ||
-    (fields.date && fields.date !== todayStr());
+  const meaningful = recordDraftHasAmount({expression, fields});
   if (!meaningful) { clearRecordDraft(); return; }
   const draft = {
     version: 1,

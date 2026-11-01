@@ -66,6 +66,7 @@ async function openRecordPage() {
   const draft = uiState.editingRecordId === null && typeof readRecordDraft === "function" ? readRecordDraft() : null;
   const bookId = dataState.currentBookId;
   if (uiState.editingRecordId === null && typeof resetForm === "function") resetForm();
+  if (uiState.editingRecordId === null && typeof applyLastRecordSelection === "function") applyLastRecordSelection();
   switchTab("record");
   if (draft) {
     const shouldRestore = await appConfirm("发现上次未保存的记账内容，要恢复吗？");

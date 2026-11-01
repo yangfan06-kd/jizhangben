@@ -3160,3 +3160,11 @@
     #panelDetail .field-row > .field, #panelFixedIncome .field-row > .field,
     #panelAccount .field-row > .field, #panelBook .field-row > .field { flex-basis: auto; }
   }
+/* 日期分组的汇总来自当前筛选的全部记录，加载更多不会改变同日合计。 */
+#panelDetail .date-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+.daily-totals { margin-left:auto; display:flex; flex-direction:row; flex-wrap:wrap; justify-content:flex-end; align-items:baseline; gap:2px 10px; max-width:100%; font-size:.75rem; line-height:1.45; font-weight:400; }
+.daily-totals > span { white-space:nowrap; }
+.daily-totals .expense { color:var(--expense); }
+.daily-totals .income { color:var(--income); }
+body.privacy-masked .daily-totals strong { font-size:0; }
+body.privacy-masked .daily-totals strong::after { content:"******"; font-size:.75rem; }
