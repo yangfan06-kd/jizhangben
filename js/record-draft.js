@@ -96,6 +96,7 @@ function restoreRecordDraft(draft) {
       if (field.type === "checkbox") field.checked = value === true;
       else field.value = String(value);
     });
+    if (typeof syncRecordTimeFieldDisplay === "function") syncRecordTimeFieldDisplay();
     if (typeof setRecordKeyboardExpression === "function") {
       setRecordKeyboardExpression(String(draft.expression || draft.fields.amount || ""));
     }

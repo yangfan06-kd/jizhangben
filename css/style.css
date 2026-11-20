@@ -3253,3 +3253,121 @@ body.privacy-masked .daily-totals strong::after { content:"******"; font-size:.7
     .update-banner-actions { width: 100%; margin-left: 0; justify-content: flex-end; }
     .android-update-row { flex-wrap: wrap; }
   }
+  /* ===== 时间选择：默认当前时间 + 滚轮弹层 ===== */
+  .record-time-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 46px;
+    padding: 9px 2px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: .9375rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    cursor: pointer;
+  }
+  .record-time-trigger:focus-visible { outline: none; border-bottom: 2px solid var(--expense); }
+  .record-time-trigger .record-time-chevron { color: var(--muted); font-size: 16px; line-height: 1; }
+  #recordTimeText.is-empty { color: #66736D; font-weight: 400; }
+
+  body.time-picker-open { overflow: hidden; }
+  .time-picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(22, 33, 29, .38);
+  }
+  .time-picker-overlay[hidden] { display: none !important; }
+  .time-picker-sheet {
+    width: min(100%, 680px);
+    padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 20px 20px 0 0;
+    background: #fff;
+    box-shadow: 0 -12px 40px rgba(18, 28, 30, .22);
+  }
+  .time-picker-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .time-picker-head h2 { font-size: 1rem; font-weight: 700; }
+  .time-picker-close { padding: 4px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .8125rem; cursor: pointer; }
+  .time-picker-display {
+    margin: 12px 0 2px;
+    text-align: center;
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  .time-picker-date { text-align: center; color: var(--muted); font-size: .75rem; }
+  .time-picker-wheels {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 190px;
+    margin: 10px 0;
+    overflow: hidden;
+  }
+  .time-picker-wheels::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 76px;
+    width: 150px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid #CDE7DE;
+    background: #EAF7F1;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .time-picker-wheel {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 84px;
+    height: 190px;
+    padding: 76px 0;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    -webkit-mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+    mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+  }
+  .time-picker-wheel::-webkit-scrollbar { display: none; }
+  .time-picker-item {
+    display: block;
+    width: 100%;
+    height: 38px;
+    line-height: 38px;
+    border: 0;
+    background: transparent;
+    color: #AEB6BE;
+    font: inherit;
+    font-size: 1.0625rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    scroll-snap-align: center;
+    cursor: pointer;
+  }
+  .time-picker-item.selected { color: var(--ink); font-weight: 700; font-size: 1.3125rem; }
+  .time-picker-item:focus-visible { outline: 2px solid var(--expense); outline-offset: -4px; border-radius: 8px; }
+  .time-picker-sep { position: relative; z-index: 1; margin: 0 2px; color: #C7CDD3; font-size: 1.125rem; font-weight: 700; }
+  .time-picker-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .time-picker-actions .btn-ghost { display: block; flex: 1; margin-top: 0; }
+  .time-picker-actions .btn-primary { flex: 1.4; }
+  @media (max-width: 380px) {
+    .time-picker-display { font-size: 2.25rem; }
+    .time-picker-wheel { flex-basis: 76px; }
+    .time-picker-wheels::before { width: 136px; }
+  }

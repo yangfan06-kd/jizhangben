@@ -85,10 +85,25 @@ nav.bottom-nav .bottom-record-tab .bottom-plus-icon {
 .pwa-offline summary { cursor: pointer; padding: 6px 0; color: #176d52; }
 .pwa-offline p { margin: 8px 0; }
 .pwa-offline [hidden] { display: none; }
-.pwa-update-section { margin: 0 0 22px; padding: 14px; background: #fff; border: 1px solid #e2e5e0; border-radius: 12px; }
-.pwa-update-section h3 { margin: 0 0 4px; color: #24484f; font-size: .875rem; }
+.pwa-update-section {
+  margin: 0 0 20px;
+  border-bottom: 1px solid #dce4df;
+}
 .pwa-update-section .pwa-offline { margin: 0; }
-.pwa-update-section summary { min-height: 44px; display: list-item; padding: 10px 0; overflow-wrap: anywhere; }
+.pwa-update-section summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 0;
+  color: #24484f;
+  overflow-wrap: anywhere;
+}
+.pwa-update-section summary::-webkit-details-marker { display: none; }
+.pwa-update-state { margin-inline-start: auto; color: #4b655b; text-align: end; }
+.pwa-update-arrow { flex: none; font-size: 1.25rem; line-height: 1; }
+.pwa-update-section details[open] .pwa-update-arrow { transform: rotate(90deg); }
+.pwa-update-section .pwa-backup-actions { padding-bottom: 10px; }
 #bookManageBtn[data-pwa-update] .tab-icon { position: relative; }
 #bookManageBtn[data-pwa-update] .tab-icon::after {
   content: '';

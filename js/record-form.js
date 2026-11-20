@@ -431,11 +431,190 @@ function setRecordSaveBusy(busy) {
   if (cancelBtn) cancelBtn.disabled = !!busy;
 }
 
+function syncRecordTimeFieldDisplay() {
+  const field = document.getElementById("recordTime");
+  const text = document.getElementById("recordTimeText");
+  if (!field || !text) return;
+  const stored = recordTimeOf(field.value);
+  // 新建账目默认显示此刻，保存时若未手动选择仍按当前时间记录；编辑旧账目未存时间时显示「未记录」。
+  const editing = uiState.editingRecordId !== null;
+  text.textContent = stored || (editing ? "未记录" : currentRecordTime());
+  const empty = !stored;
+  if (text.classList && typeof text.classList.toggle === "function") text.classList.toggle("is-empty", empty);
+}
+
 function setRecordTimeField(value, editing = false) {
   const field = document.getElementById("recordTime");
   if (field) field.value = recordTimeOf(value);
-  const hint = document.getElementById("recordTimeHint");
-  if (hint) hint.textContent = editing ? "留空表示时间未记录" : "留空则在保存时记录当前时间";
+  syncRecordTimeFieldDisplay();
+}
+
+// 时间选择：点「时间」打开底部滚轮弹层，默认停在当前时刻，取消不改动。
+const TIME_PICKER_ITEM_HEIGHT = 38;
+let timePickerBuilt = false;
+let timePickerValue = { hour: 0, minute: 0 };
+let timePickerScrollFrame = null;
+let timePickerPreviousFocus = null;
+
+function timePickerTimeText(hour, minute) {
+  return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+}
+
+function buildTimePickerWheels() {
+  if (timePickerBuilt) return;
+  const hourWheel = document.getElementById("timePickerHourWheel");
+  const minuteWheel = document.getElementById("timePickerMinuteWheel");
+  if (!hourWheel || !minuteWheel) return;
+  const fill = (wheel, count) => {
+    wheel.innerHTML = "";
+    for (let value = 0; value < count; value++) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "time-picker-item";
+      item.dataset.value = String(value);
+      item.textContent = String(value).padStart(2, "0");
+      item.onclick = () => scrollTimeWheelTo(wheel, value, true);
+      wheel.appendChild(item);
+    }
+    wheel.addEventListener("scroll", onTimeWheelScroll, { passive: true });
+  };
+  fill(hourWheel, 24);
+  fill(minuteWheel, 60);
+  timePickerBuilt = true;
+}
+
+function scrollTimeWheelTo(wheel, index, smooth) {
+  if (!wheel) return;
+  const top = index * TIME_PICKER_ITEM_HEIGHT;
+  if (typeof wheel.scrollTo === "function") wheel.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+  else wheel.scrollTop = top;
+}
+
+function timeWheelIndex(wheel) {
+  if (!wheel) return 0;
+  const max = wheel.children && wheel.children.length ? wheel.children.length - 1 : 0;
+  const index = Math.round((wheel.scrollTop || 0) / TIME_PICKER_ITEM_HEIGHT);
+  return Math.min(Math.max(index, 0), max);
+}
+
+function renderTimePickerSelection() {
+  const hourWheel = document.getElementById("timePickerHourWheel");
+  const minuteWheel = document.getElementById("timePickerMinuteWheel");
+  const hour = timeWheelIndex(hourWheel);
+  const minute = timeWheelIndex(minuteWheel);
+  timePickerValue = { hour, minute };
+  const display = document.getElementById("timePickerDisplay");
+  if (display) display.textContent = timePickerTimeText(hour, minute);
+  [hourWheel, minuteWheel].forEach(wheel => {
+    if (!wheel || !wheel.children) return;
+    const selected = timeWheelIndex(wheel);
+    Array.prototype.forEach.call(wheel.children, (item, index) => {
+      if (item.classList && typeof item.classList.toggle === "function") item.classList.toggle("selected", index === selected);
+      if (typeof item.setAttribute === "function") item.setAttribute("aria-selected", index === selected ? "true" : "false");
+    });
+  });
+}
+
+function onTimeWheelScroll() {
+  if (timePickerScrollFrame !== null) return;
+  if (typeof requestAnimationFrame !== "function") {
+    renderTimePickerSelection();
+    return;
+  }
+  timePickerScrollFrame = requestAnimationFrame(() => {
+    timePickerScrollFrame = null;
+    renderTimePickerSelection();
+  });
+}
+
+function updateTimePickerDate() {
+  const label = document.getElementById("timePickerDate");
+  if (!label) return;
+  const dateInput = document.getElementById("date");
+  const dateText = dateInput ? dateInput.value : "";
+  const parsed = typeof parseLocalDate === "function" ? parseLocalDate(dateText || todayStr()) : null;
+  if (!parsed) {
+    label.textContent = "";
+    return;
+  }
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  let text = parsed.getFullYear() + " 年 " + (parsed.getMonth() + 1) + " 月 " + parsed.getDate() + " 日 · 周" + weekdays[parsed.getDay()];
+  if (typeof todayStr === "function" && dateText === todayStr()) text += " · 今天";
+  label.textContent = text;
+}
+
+function openRecordTimePicker() {
+  const overlay = document.getElementById("timePickerOverlay");
+  const field = document.getElementById("recordTime");
+  if (!overlay || !field) return;
+  buildTimePickerWheels();
+  const hourWheel = document.getElementById("timePickerHourWheel");
+  const minuteWheel = document.getElementById("timePickerMinuteWheel");
+  const initial = recordTimeOf(field.value) || currentRecordTime();
+  const [hour, minute] = initial.split(":").map(Number);
+  timePickerPreviousFocus = document.activeElement;
+  overlay.hidden = false;
+  if (document.body && document.body.classList) document.body.classList.add("time-picker-open");
+  const trigger = document.getElementById("recordTimeBtn");
+  if (trigger) trigger.setAttribute("aria-expanded", "true");
+  const applyPosition = () => {
+    scrollTimeWheelTo(hourWheel, hour, false);
+    scrollTimeWheelTo(minuteWheel, minute, false);
+    renderTimePickerSelection();
+  };
+  applyPosition();
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(applyPosition);
+  updateTimePickerDate();
+}
+
+function closeRecordTimePicker() {
+  const overlay = document.getElementById("timePickerOverlay");
+  if (!overlay) return;
+  overlay.hidden = true;
+  if (document.body && document.body.classList) document.body.classList.remove("time-picker-open");
+  const trigger = document.getElementById("recordTimeBtn");
+  if (trigger) trigger.setAttribute("aria-expanded", "false");
+  if (timePickerPreviousFocus && typeof timePickerPreviousFocus.focus === "function") {
+    try { timePickerPreviousFocus.focus({ preventScroll: true }); } catch (_) { /* 旧浏览器忽略焦点参数 */ }
+  }
+  timePickerPreviousFocus = null;
+}
+
+function confirmRecordTimePicker() {
+  const field = document.getElementById("recordTime");
+  if (field) {
+    field.value = timePickerTimeText(timePickerValue.hour, timePickerValue.minute);
+    // 通知未保存草稿逻辑记录这次选择。
+    if (typeof field.dispatchEvent === "function" && typeof Event === "function") {
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+  syncRecordTimeFieldDisplay();
+  closeRecordTimePicker();
+}
+
+function bindRecordTimePickerEvents() {
+  const trigger = document.getElementById("recordTimeBtn");
+  if (trigger) trigger.onclick = openRecordTimePicker;
+  const cancelTop = document.getElementById("timePickerCancelTop");
+  const cancelBtn = document.getElementById("timePickerCancelBtn");
+  const confirmBtn = document.getElementById("timePickerConfirmBtn");
+  if (cancelTop) cancelTop.onclick = closeRecordTimePicker;
+  if (cancelBtn) cancelBtn.onclick = closeRecordTimePicker;
+  if (confirmBtn) confirmBtn.onclick = confirmRecordTimePicker;
+  const overlay = document.getElementById("timePickerOverlay");
+  if (overlay) overlay.onclick = event => { if (event.target === overlay) closeRecordTimePicker(); };
+  if (typeof document.addEventListener === "function") {
+    document.addEventListener("keydown", event => {
+      const dialog = document.getElementById("timePickerOverlay");
+      if (!dialog || dialog.hidden) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRecordTimePicker();
+      }
+    });
+  }
+  syncRecordTimeFieldDisplay();
 }
 
 async function handleSave() {

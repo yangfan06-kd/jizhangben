@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>时间选择 · 默认不占位，点时间再调</title>
+<style>
+  :root {
+    --bg: #F7F5F1; --card: #FFFFFF; --ink: #1E2227; --muted: #6B7280; --line: #E2E5E9;
+    --expense: #147D5A; --dark: #24484F; --soft-mint: #EAF7F1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #EFEDE8; color: var(--ink);
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    padding: 30px 36px 36px;
+  }
+  body.only { background: var(--bg); padding: 20px; display: flex; justify-content: center; }
+  body.only .page-title, body.only .caption { display: none; }
+  body.only[data-only="A"] .frame:not([data-variant="A"]),
+  body.only[data-only="B"] .frame:not([data-variant="B"]) { display: none; }
+
+  .page-title { margin-bottom: 18px; }
+  .page-title h1 { font-size: 22px; }
+  .page-title p { margin-top: 6px; color: #5F6E65; font-size: 13px; }
+  .page-title b { color: var(--ink); }
+
+  .rack { display: flex; gap: 26px; align-items: flex-start; }
+  .frame { width: 390px; flex: 0 0 390px; }
+
+  .phone {
+    width: 390px; height: 844px; background: var(--bg); border-radius: 26px;
+    overflow: hidden; position: relative; box-shadow: 0 18px 50px rgba(30, 34, 39, .18);
+    border: 1px solid #DAD5C9;
+  }
+  .screen { padding: 18px 16px 0; height: 100%; display: flex; flex-direction: column; }
+
+  .back { display: flex; align-items: center; gap: 6px; min-height: 34px; font-size: 15px; }
+  .back i { font-style: normal; font-size: 20px; line-height: 1; }
+
+  .type-tabs { display: flex; gap: 18px; margin-top: 8px; padding-bottom: 6px; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .type-tabs span { font-size: 15px; color: var(--muted); white-space: nowrap; padding-bottom: 7px; }
+  .type-tabs .on { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
+
+  .amount-label { margin-top: 16px; color: var(--muted); font-size: 13px; }
+  .amount { margin-top: 2px; font-size: 44px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums;
+            font-family: "SF Mono", "Cascadia Mono", Consolas, monospace; }
+
+  /* 真实记账页的字段样式：标签在上，控件只有下边线 */
+  .field-label { color: var(--muted); font-size: 13px; margin: 12px 0 2px; }
+  .trigger-row { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 2px;
+                 border-bottom: 1px solid var(--line); font-size: 15px; }
+  .trigger-row .cat-icon { display: inline-flex; width: 20px; height: 20px; color: #4C6A62; }
+  .trigger-row .cat-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .trigger-row .name { font-weight: 600; }
+  .trigger-row .chev-right { margin-left: auto; color: var(--muted); font-size: 20px; line-height: 1; }
+  .trigger-row .chev-down { margin-left: auto; color: var(--muted); font-size: 16px; line-height: 1; }
+  .text-input { display: flex; align-items: center; min-height: 46px; padding: 0 2px; border-bottom: 1px solid var(--line);
+                color: #9AA1AA; font-size: 15px; }
+
+  .dt-row { display: flex; gap: 12px; }
+  .dt-col { flex: 1; }
+  .dt-input { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 2px;
+              border-bottom: 1px solid var(--line); font-size: 15px; }
+  .dt-input .time { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .dt-input .chev-down { color: var(--muted); font-size: 16px; line-height: 1; }
+
+  /* 时间：默认「现在」+ 更多… */
+  .time-quick { display: flex; gap: 7px; margin-top: 10px; }
+  .pill { flex: 0 0 auto; min-height: 34px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line);
+          background: #fff; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 5px; }
+  .pill.on { background: var(--dark); border-color: var(--dark); color: #fff; font-weight: 600; }
+  .pill.more { border-style: dashed; color: var(--expense); }
+
+  .actions { margin-top: 18px; padding-bottom: 20px; }
+  .btn-primary { background: var(--dark); color: #fff; border-radius: 12px; min-height: 48px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; }
+  .btn-ghost { margin-top: 10px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+
+  .dim { position: absolute; inset: 0; background: rgba(25, 37, 39, .45); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 20px 20px 0 0; padding: 10px 18px 18px; box-shadow: 0 -12px 40px rgba(18, 28, 30, .22); }
+  .handle { width: 38px; height: 4px; border-radius: 2px; background: #D9DEE2; margin: 0 auto 10px; }
+  .sheet-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .sheet-head h3 { font-size: 16px; font-weight: 700; }
+  .sheet-head a { color: var(--muted); text-decoration: none; font-size: 13px; }
+
+  .big-time { text-align: center; margin: 12px 0 2px; font-size: 40px; font-weight: 700; letter-spacing: .02em;
+              font-variant-numeric: tabular-nums; font-family: "SF Mono", "Cascadia Mono", Consolas, monospace; }
+  .big-time em { font-style: normal; color: var(--expense); }
+  .big-sub { text-align: center; color: var(--muted); font-size: 12px; }
+
+  .wheels { position: relative; height: 186px; margin: 10px 0 10px; overflow: hidden; }
+  .wheel-band { position: absolute; left: 24px; right: 24px; top: 74px; height: 38px; background: var(--soft-mint); border: 1px solid #CDE7DE; border-radius: 10px; }
+  .wheels::before, .wheels::after { content: ""; position: absolute; left: 0; right: 0; height: 46px; z-index: 3; pointer-events: none; }
+  .wheels::before { top: 0; background: linear-gradient(#fff, rgba(255,255,255,0)); }
+  .wheels::after { bottom: 0; background: linear-gradient(rgba(255,255,255,0), #fff); }
+  .wheel-cols { position: relative; z-index: 2; display: flex; height: 100%; }
+  .wheel-col { flex: 1; display: flex; flex-direction: column; align-items: center; margin-top: -40px; }
+  .wheel-col .cell { height: 38px; line-height: 38px; font-size: 17px; color: #AEB6BE; font-variant-numeric: tabular-nums; }
+  .wheel-col .cell.sel { font-size: 21px; font-weight: 700; color: var(--ink); }
+  .wheel-sep { align-self: center; margin-top: 74px; color: #C7CDD3; font-size: 18px; font-weight: 700; }
+
+  .sheet-actions { display: flex; gap: 10px; margin-top: 14px; }
+  .sheet-actions .btn-ghost { flex: 1; margin: 0; }
+  .sheet-actions .btn-primary { flex: 1.4; }
+
+  .caption { margin-top: 12px; }
+  .caption h4 { font-size: 15px; }
+  .caption p { margin-top: 5px; font-size: 12.5px; line-height: 1.65; color: #5F6E65; }
+  .caption p b { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="page-title">
+  <h1>时间选择 · 默认不占位，点「时间」再调</h1>
+  <p>默认只显示当前时间 <b>22:30</b>，不再多占一行；点「时间」那一格才打开滚轮弹层。类别、账户保持现状。</p>
+</div>
+
+<div class="rack">
+
+  <!-- ============ 记账页（默认当前时间） ============ -->
+  <div class="frame" data-variant="B">
+    <div class="phone">
+      <div class="screen">
+        <div class="back"><i>‹</i>修改账目</div>
+        <div class="type-tabs"><span class="on">支出</span><span>收入</span><span>转账</span><span>余额</span><span>借贷</span><span>代付</span><span>报销</span></div>
+
+        <div class="amount-label">金额</div>
+        <div class="amount">16</div>
+
+        <div class="field-label">类别</div>
+        <div class="trigger-row">
+          <span class="cat-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 3v6a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3"/><path d="M6 11v10"/><path d="M17 3c-2 2-2.5 5-2.5 7H17v11"/></svg>
+          </span>
+          <span class="name">餐饮</span>
+          <span class="chev-right" aria-hidden="true">›</span>
+        </div>
+
+        <div class="field-label">账户</div>
+        <div class="trigger-row">
+          <span class="name">微信</span>
+          <span class="chev-down" aria-hidden="true">⌄</span>
+        </div>
+
+        <div class="field-label">备注</div>
+        <div class="text-input">选填</div>
+
+        <div class="dt-row">
+          <div class="dt-col">
+            <div class="field-label">日期</div>
+            <div class="dt-input">2026-11-20<span class="chev-down">⌄</span></div>
+          </div>
+          <div class="dt-col">
+            <div class="field-label">时间</div>
+            <div class="dt-input"><span class="time">22:30</span><span class="chev-down">⌄</span></div>
+          </div>
+        </div>
+
+
+        <div class="actions"><div class="btn-primary">保存这笔账</div><div class="btn-ghost">取消修改</div></div>
+      </div>
+    </div>
+    <div class="caption">
+      <h4>① 默认：只显示当前时间</h4>
+      <p>页面干净，<b>不出现那两颗 pills</b>；「时间」格子里就是当前时间 22:30，和现在一样，不需要额外操作。</p>
+    </div>
+  </div>
+
+  <!-- ============ 点「更多…」后的弹层 ============ -->
+  <div class="frame" data-variant="A">
+    <div class="phone">
+      <div class="screen">
+        <div class="back"><i>‹</i>修改账目</div>
+        <div class="type-tabs"><span class="on">支出</span><span>收入</span><span>转账</span><span>余额</span><span>借贷</span><span>代付</span><span>报销</span></div>
+
+        <div class="amount-label">金额</div>
+        <div class="amount">16</div>
+
+        <div class="field-label">类别</div>
+        <div class="trigger-row">
+          <span class="cat-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 3v6a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3"/><path d="M6 11v10"/><path d="M17 3c-2 2-2.5 5-2.5 7H17v11"/></svg>
+          </span>
+          <span class="name">餐饮</span>
+          <span class="chev-right" aria-hidden="true">›</span>
+        </div>
+
+        <div class="field-label">账户</div>
+        <div class="trigger-row">
+          <span class="name">微信</span>
+          <span class="chev-down" aria-hidden="true">⌄</span>
+        </div>
+
+        <div class="field-label">备注</div>
+        <div class="text-input">选填</div>
+
+        <div class="dt-row">
+          <div class="dt-col">
+            <div class="field-label">日期</div>
+            <div class="dt-input">2026-11-20<span class="chev-down">⌄</span></div>
+          </div>
+          <div class="dt-col">
+            <div class="field-label">时间</div>
+            <div class="dt-input"><span class="time">22:30</span><span class="chev-down">⌄</span></div>
+          </div>
+        </div>
+
+
+        <div class="actions"><div class="btn-primary">保存这笔账</div><div class="btn-ghost">取消修改</div></div>
+      </div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="sheet-head"><h3>选择时间</h3><a>取消</a></div>
+        <div class="big-time">22<em>:</em>30</div>
+        <div class="big-sub">2026 年 11 月 20 日 · 今天</div>
+        <div class="wheels">
+          <div class="wheel-band"></div>
+          <div class="wheel-cols">
+            <div class="wheel-col">
+              <div class="cell">19</div><div class="cell">20</div><div class="cell">21</div>
+              <div class="cell sel">22</div><div class="cell">23</div><div class="cell">00</div>
+            </div>
+            <div class="wheel-sep">:</div>
+            <div class="wheel-col">
+              <div class="cell">15</div><div class="cell">20</div><div class="cell">25</div>
+              <div class="cell sel">30</div><div class="cell">35</div><div class="cell">40</div>
+            </div>
+          </div>
+        </div>
+        <div class="sheet-actions"><div class="btn-ghost">取消</div><div class="btn-primary">确定</div></div>
+      </div>
+    </div>
+    <div class="caption">
+      <h4>② 点「时间」后：直接开滚轮</h4>
+      <p>点击「时间」这一格直接弹出滚轮，默认停在当前时刻；滚完点确定即可，没有预设、没有说明文字。</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const only = new URLSearchParams(location.search).get("only");
+  if (only && ["A", "B"].includes(only)) {
+    document.body.classList.add("only");
+    document.body.dataset.only = only;
+  }
+</script>
+</body>
+</html>

@@ -150,6 +150,7 @@ document.querySelectorAll("[data-tab]:not(.tab)").forEach(b => {
 document.getElementById("recordBackBtn").onclick = () => {
   if (!returnFromRecordEdit()) switchTab("home", { replaceHistory: true });
 };
+if (typeof bindRecordTimePickerEvents === "function") bindRecordTimePickerEvents();
 document.getElementById("recordEntryBack").onclick = () => {
   if (!returnFromRecordEntry()) switchTab("home", { replaceHistory: true });
 };

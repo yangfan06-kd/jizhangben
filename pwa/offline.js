@@ -4,15 +4,23 @@
   const VERSION = window.JIZHANGBEN_PWA_BUILD_ID;
   let registration = null, ready = false, phase = 'preparing', applying = false, activeVersion = null;
   const panel = document.createElement('details'); panel.className = 'pwa-offline';
-  panel.innerHTML = '<summary id="pwaOfflineStatus">正在准备离线资源…</summary><p id="pwaOfflineMessage">首次使用需要联网下载完整程序，账目仍保存在本机。</p><div class="pwa-backup-actions"><button type="button" class="btn-ghost" id="pwaOfflineCheck">检查离线与更新</button><button type="button" class="btn-primary" id="pwaOfflineApply" hidden>保留草稿并更新</button></div>';
+  panel.innerHTML = `
+    <summary id="pwaOfflineStatus">
+      <strong id="pwaUpdateTitle">应用与更新</strong>
+      <span id="pwaOfflineState" class="pwa-update-state">正在准备离线资源…</span>
+      <span class="pwa-update-arrow" aria-hidden="true">›</span>
+    </summary>
+    <p id="pwaOfflineMessage">首次使用需要联网下载完整程序，账目仍保存在本机。</p>
+    <div class="pwa-backup-actions">
+      <button type="button" class="btn-ghost" id="pwaOfflineCheck">检查离线与更新</button>
+      <button type="button" class="btn-primary" id="pwaOfflineApply" hidden>保留草稿并更新</button>
+    </div>`;
   const updateSection = document.createElement('section');
   updateSection.className = 'pwa-update-section';
   updateSection.setAttribute('aria-labelledby', 'pwaUpdateTitle');
-  const updateTitle = document.createElement('h3');
-  updateTitle.id = 'pwaUpdateTitle'; updateTitle.textContent = '应用与更新';
-  updateSection.append(updateTitle, panel);
+  updateSection.append(panel);
   document.querySelector('#panelBook .page-head').after(updateSection);
-  const status = document.getElementById('pwaOfflineStatus'), message = document.getElementById('pwaOfflineMessage');
+  const status = document.getElementById('pwaOfflineState'), message = document.getElementById('pwaOfflineMessage');
   const updateButton = document.getElementById('pwaOfflineApply');
   const settingsButton = document.getElementById('bookManageBtn');
   function showUpdateAvailable(available) {
@@ -40,9 +48,9 @@
       const waiting = !!registration.waiting || !!activeVersion && activeVersion !== VERSION;
       showUpdateAvailable(waiting);
       if (waiting) {
-        phase = 'update'; text('新版已准备，点此查看更新', ready ? '当前版本仍可离线使用。更新会重新打开程序；新记账草稿会先核对保存，其他编辑请先完成。' : '当前版本离线资源不完整。请先完成编辑，再联网切换已准备的新版本。');
+        phase = 'update'; text('新版已准备', ready ? '当前版本仍可离线使用。更新会重新打开程序；新记账草稿会先核对保存，其他编辑请先完成。' : '当前版本离线资源不完整。请先完成编辑，再联网切换已准备的新版本。');
       } else if (ready) {
-        phase = 'ready'; text(navigator.onLine ? '程序资源已核对，可离线使用' : '当前离线，可继续记账', '程序离线缓存与账目分开保存。网站数据被清理仍可能丢失账目，请另存备份。');
+        phase = 'ready'; text(navigator.onLine ? '可离线使用' : '当前离线，可继续记账', '程序离线缓存与账目分开保存。网站数据被清理仍可能丢失账目，请另存备份。');
       } else { phase = 'incomplete'; text('离线资源未完整准备', '请联网后点击检查重试；不要清理网站数据或账本。'); }
       return ready;
     } catch (_) { ready = false; phase = 'incomplete'; showUpdateAvailable(false); text('暂时无法确认离线状态', '请联网后点击检查重试，当前账本不受此检查影响。'); return false; }
