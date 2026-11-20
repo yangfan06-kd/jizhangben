@@ -1,7 +1,7 @@
 {
-    "versionCode":  113,
-    "versionName":  "2.12",
-    "notes":  "记账时间改为默认当前时间，点击时间用应用内滚轮选择；其他交互不变。",
-    "publishedAt":  "2026-11-20T15:03:05Z",
-    "apk":  "download/jizhangben-v2.12.apk"
+    "versionCode":  114,
+    "versionName":  "2.13",
+    "notes":  "记账时间改为默认当前时间 + 应用内滚轮选择；日期和时间并排显示，其他交互不变。",
+    "publishedAt":  "2026-11-20T15:18:51Z",
+    "apk":  "download/jizhangben-v2.13.apk"
 }

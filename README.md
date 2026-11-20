@@ -4,15 +4,20 @@
 
 ## 下载 Android 版
 
-当前版本 **2.12**（Android 版本号 **113**），包名 `com.jizhangben.app`，沿用原有签名。个人离线版无需注册，也不需要服务器或电脑保持开机。
+当前版本 **2.13**（Android 版本号 **114**），包名 `com.jizhangben.app`，沿用原有签名。个人离线版无需注册，也不需要服务器或电脑保持开机。
 
-[下载 Android 安装包](https://jizhangben-download.pages.dev/) · [GitHub 备用下载](https://github.com/yangfan06-kd/jizhangben/raw/refs/heads/main/releases/jizhangben-v2.12.apk) · [应用内更新说明](docs/ANDROID_IN_APP_UPDATE.md)
+[下载 Android 安装包](https://jizhangben-download.pages.dev/) · [GitHub 备用下载](https://github.com/yangfan06-kd/jizhangben/raw/refs/heads/main/releases/jizhangben-v2.13.apk) · [应用内更新说明](docs/ANDROID_IN_APP_UPDATE.md)
 
 手机打开 APK 后按系统提示安装或更新。**直接覆盖安装，不要卸载旧 App 或清除应用数据，账目和设置都会保留**；想多一层保险，可以更新前在「设置」里导出一份 JSON 备份。微信分发时直接发送 APK 文件即可。此 APK 使用项目既有调试签名，供个人与家人试用；只有相同包名、相同签名且版本号递增的安装包才能覆盖升级。
 
-安装包 SHA-256：`4DE10D6DAA8519AEBFCCA72A0322991D700C309ABCB0EF3463328241CE15AE75`（3.23 MB）。
+安装包 SHA-256：`4D3D7968E477D168C2B5882B0691FAE7A7D8AA9FF360A6EE20205E2798D185CC`（3.23 MB）。
 
 从 2.10 起，App 打开时会在后台检查下载站的版本清单，发现更高版本才在首页提示「去下载 / 稍后」；点过「稍后」还能在「设置 → 检查更新」里重新找到下载入口。已装 2.09 及更早版本的用户需要手动覆盖安装一次带更新功能的版本（2.10 或更新），之后才会收到应用内提醒。
+
+## 2.13 更新内容
+
+- 记账页排布调整：「备注」单独一行，「日期」和「时间」左右并排，与 2.12 效果图一致；时间仍是默认当前时间、点击打开应用内滚轮，取消不改。
+- 功能与 2.12 相同，仅 `versionCode` 递增到 114。
 
 ## 2.12 更新内容
 
@@ -77,6 +82,7 @@ Android 使用原生 SQLite 事务保存；尚未改动的旧存储仍兼容读�
 
 ## 验证范围
 
+- 2.13 发布前用真实网页资源复核排布（备注单独一行、日期/时间并排）和时间选择；前端自动检查 39 项通过。
 - 2.12 发布前用真实 App 网页资源在无头浏览器走通时间选择：默认显示当前时间、滚轮选到 21:05 后字段与保存值一致、取消不改；同时回归类别弹层、账户下拉和原生日期输入。前端自动检查 39 项通过，详见 [时间选择说明](docs/TIME_PICKER_UI.md)。
 - 2.10 发布前完成一次安卓本机构建；自动化检查覆盖「发现新版时提示且下载入口正确」「同版本不提示」「断网或清单异常不影响记账」三种情况，详见 [应用内更新说明](docs/ANDROID_IN_APP_UPDATE.md)。
 - 2.07 发布前 238 项前端回归通过；每日汇总与默认选择在隔离浏览器核验，并检查了 320px 小屏布局。
