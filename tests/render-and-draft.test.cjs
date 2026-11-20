@@ -179,11 +179,11 @@ test("流水分批显示时，汇总仍包含全部匹配记录", () => {
   `);
   loadScript(runtime, "view.js");
   runtime.run("renderList()");
-  assert.equal(runtime.run('document.getElementById("list").children.filter(x => x.className === "row").length'), 100);
+  assert.equal(runtime.run('document.getElementById("list").children.filter(x => x.className.split(" ").includes("row")).length'), 100);
   assert.match(runtime.run('document.getElementById("detailPeriodTotals").innerHTML'), /共 250 笔/);
   assert.match(runtime.run('document.getElementById("detailLoadMore").textContent'), /剩余 150 笔/);
   runtime.run('document.getElementById("detailLoadMore").onclick()');
-  assert.equal(runtime.run('document.getElementById("list").children.filter(x => x.className === "row").length'), 200);
+  assert.equal(runtime.run('document.getElementById("list").children.filter(x => x.className.split(" ").includes("row")).length'), 200);
   assert.match(runtime.run('document.getElementById("detailPeriodTotals").innerHTML'), /共 250 笔/);
 });
 
@@ -280,7 +280,7 @@ test("再次进入相同流水保留已加载数量和位置，仍汇总全部�
   runtime.run('switchTab("detail");document.getElementById("detailLoadMore").onclick();window.scrollY=4200;switchTab("home");window.scrollY=50;switchTab("detail")');
   assert.equal(runtime.run("uiState.detailVisibleCount"),200);
   assert.equal(runtime.run("window.scrollY"),4200);
-  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className==="row").length'),200);
+  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className.split(" ").includes("row")).length'),200);
   assert.match(runtime.run("nodes.detailPeriodTotals.innerHTML"),/共 250 笔/);
   assert.equal(runtime.run("JSON.stringify(dataState.records)"),records);
   assert.deepEqual(runtime.localStorage.toObject(),stored);
@@ -310,12 +310,12 @@ test("重新筛选或重置后旧位置失效，不影响原有返回首页行�
 
 test("继续加载保留原行，跨日期只补一个标题，汇总始终覆盖全量", () => {
   const runtime=createDetailNavigationRuntime();
-  runtime.run('dataState.records.forEach(record=>{record.date=record.id>150?"2026-10-10":"2026-10-09";});switchTab("detail");globalThis.firstRow=nodes.list.children.find(x=>x.className==="row");nodes.detailLoadMore.onclick()');
-  assert.equal(runtime.run('nodes.list.children.find(x=>x.className==="row")===firstRow'),true);
-  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className==="row").length'),200);
+  runtime.run('dataState.records.forEach(record=>{record.date=record.id>150?"2026-10-10":"2026-10-09";});switchTab("detail");globalThis.firstRow=nodes.list.children.find(x=>x.className.split(" ").includes("row"));nodes.detailLoadMore.onclick()');
+  assert.equal(runtime.run('nodes.list.children.find(x=>x.className.split(" ").includes("row"))===firstRow'),true);
+  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className.split(" ").includes("row")).length'),200);
   assert.equal(runtime.run('nodes.list.children.filter(x=>x.className==="date-head").length'),2);
   runtime.run('nodes.detailLoadMore.onclick()');
-  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className==="row").length'),250);
+  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className.split(" ").includes("row")).length'),250);
   assert.equal(runtime.run('nodes.list.children.filter(x=>x.className==="date-head").length'),2);
   assert.equal(runtime.run('nodes.detailLoadMore.hidden'),true);
   assert.equal(runtime.run('nodes.detailLoadMore.onclick'),null);
@@ -328,10 +328,10 @@ test("过期加载事件不能把旧筛选或旧数据追加到新列表，正�
   assert.equal(runtime.run('uiState.detailVisibleCount'),100);
   assert.equal(runtime.run('nodes.list.children.length'),0);
   runtime.run('filterState.account="";refreshDetail();oldMore=nodes.detailLoadMore.onclick;oldMore();oldMore()');
-  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className==="row").length'),100);
+  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className.split(" ").includes("row")).length'),100);
   runtime.run('filterState.account="";refreshDetail();oldMore=nodes.detailLoadMore.onclick;dataState.records=dataState.records.slice(0,2);renderList();oldMore()');
   assert.equal(runtime.run('uiState.detailVisibleCount'),100);
-  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className==="row").length'),2);
+  assert.equal(runtime.run('nodes.list.children.filter(x=>x.className.split(" ").includes("row")).length'),2);
   runtime.run('dataState.records[0].amountCents=200;renderList()');
   assert.match(runtime.run('nodes.detailPeriodTotals.innerHTML'),/¥3\.00/);
 });

@@ -1,7 +1,7 @@
 // 仅保留未提交的新记账表单；独立于账目存储和备份，不会自动写成流水。
 const RECORD_DRAFT_KEY = "record-form-draft-v1";
 const RECORD_DRAFT_FIELDS = [
-  "amount", "note", "date", "accountSel", "toAccountSel", "balancePrincipal",
+  "amount", "note", "date", "recordTime", "accountSel", "toAccountSel", "balancePrincipal",
   "balanceAccountName", "transferParty", "depositTarget", "depositLinkSel",
   "depositFinal", "loanParty", "loanLinkSel", "payParty", "payLinkSel",
   "reimbursementParty", "reimbursementLinkSel", "refundLinkSel"

@@ -27,6 +27,8 @@ mobile/www/
 
 # Android APKs are included in source control selectively
 releases/*.apk
+# Download-site APK is a deploy artifact; the installable file is served by the site
+site/download/*.apk
 
 # Local signing material is never published
 *.jks

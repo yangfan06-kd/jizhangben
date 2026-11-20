@@ -66,21 +66,21 @@ function nextEligibleMonthAfterPause(plan, today = todayStr()) {
   return fixedIncomeDueDate(currentMonth, plan.day) <= today ? fixedIncomeShiftMonth(currentMonth, 1) : currentMonth;
 }
 
-function processDueFixedIncome() {
+// 不保存、不改界面：由调用者把流水与日期游标放入同一提交。
+function collectDueFixedIncomeChanges() {
   const plan = dataState.fixedIncomePlan;
-  if (!plan || !dataState.currentBookId) return 0;
+  const unchanged = { added: 0, changed: false, recordsChanged: false };
+  if (!plan || !dataState.currentBookId) return unchanged;
   const today = todayStr();
   const currentMonth = today.slice(0, 7);
   if (!plan.active) {
     const next = nextEligibleMonthAfterPause(plan, today);
-    if (plan.nextEligibleMonth !== next) {
-      plan.nextEligibleMonth = next;
-      try { saveFixedIncomePlan(); } catch (_) { /* keep the current session usable */ }
-    }
-    return 0;
+    if (plan.nextEligibleMonth === next) return unchanged;
+    plan.nextEligibleMonth = next;
+    return { added: 0, changed: true, recordsChanged: false };
   }
   const account = dataState.accounts.find(item => String(item.id) === String(plan.accountId) && !item.fundOnly && item.kind === "资金");
-  if (!account || !Number.isSafeInteger(Number(plan.amountCents)) || Number(plan.amountCents) <= 0) return 0;
+  if (!account || !Number.isSafeInteger(Number(plan.amountCents)) || Number(plan.amountCents) <= 0) return unchanged;
   let month = /^\d{4}-\d{2}$/.test(plan.nextEligibleMonth || "") ? plan.nextEligibleMonth : plan.startMonth;
   const startMonth = /^\d{4}-\d{2}$/.test(plan.startMonth || "") ? plan.startMonth : currentMonth;
   if (month < startMonth) month = startMonth;
@@ -104,18 +104,28 @@ function processDueFixedIncome() {
   }
   const nextMonth = fixedIncomeShiftMonth(currentMonth, 1);
   const newNextEligibleMonth = fixedIncomeDueDate(currentMonth, plan.day) <= today ? nextMonth : (plan.nextEligibleMonth || startMonth);
-  if (!added.length && newNextEligibleMonth === plan.nextEligibleMonth) return 0;
+  if (!added.length && newNextEligibleMonth === plan.nextEligibleMonth) return unchanged;
+  if (added.length) dataState.records = normalizeRecords(dataState.records.concat(added));
+  plan.nextEligibleMonth = newNextEligibleMonth;
+  return { added: added.length, changed: true, recordsChanged: added.length > 0 };
+}
 
+function processDueFixedIncome() {
+  if (window.PwaFunds) return window.PwaFunds.requestDue();
+  if (!dataState.fixedIncomePlan || !dataState.currentBookId) return 0;
   const previousRecords = appStorage.get(recordsKey(dataState.currentBookId));
   const previousPlan = appStorage.get(fixedIncomeKey(dataState.currentBookId));
   const previousState = dataState.records;
-  dataState.records = normalizeRecords(previousState.concat(added));
-  plan.nextEligibleMonth = newNextEligibleMonth;
+  const previousPlanState = JSON.parse(JSON.stringify(dataState.fixedIncomePlan));
+  const result = collectDueFixedIncomeChanges();
+  if (!result.changed) return 0;
   try {
-    save();
-    saveFixedIncomePlan();
+    const updates = { [fixedIncomeKey(dataState.currentBookId)]: JSON.stringify(dataState.fixedIncomePlan) };
+    if (result.recordsChanged) updates[recordsKey(dataState.currentBookId)] = JSON.stringify(dataState.records);
+    appStorage.setMany(updates);
   } catch (error) {
     dataState.records = previousState;
+    dataState.fixedIncomePlan = previousPlanState;
     try {
       if (previousRecords === null) appStorage.remove(recordsKey(dataState.currentBookId));
       else appStorage.set(recordsKey(dataState.currentBookId), previousRecords);
@@ -125,15 +135,15 @@ function processDueFixedIncome() {
     fixedIncomeSay("自动补记保存失败，原账目未主动覆盖；请检查手机存储空间。", true);
     return 0;
   }
-  if (added.length && typeof markLocalChangePending === "function" && typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange()) {
+  if (result.added && typeof markLocalChangePending === "function" && typeof shouldMarkLocalChange === "function" && shouldMarkLocalChange()) {
     markLocalChangePending("fixed_income_catch_up");
   }
-  if (added.length) {
+  if (result.added) {
     fillCategoryFilter();
     render();
-    fixedIncomeSay("已补记 " + added.length + " 笔退休金收入，日期按每月设定日记录。");
+    fixedIncomeSay("已补记 " + result.added + " 笔退休金收入，日期按每月设定日记录。");
   }
-  return added.length;
+  return result.added;
 }
 
 async function saveFixedIncomeSettings(event) {
@@ -156,6 +166,7 @@ async function saveFixedIncomeSettings(event) {
     active
   };
   if (!active) plan.nextEligibleMonth = nextEligibleMonthAfterPause(plan);
+  if (window.PwaFunds) return await window.PwaFunds.savePension(plan);
   dataState.fixedIncomePlan = plan;
   try {
     saveFixedIncomePlan();
@@ -178,6 +189,7 @@ function bindFixedIncomeEvents() {
   if (form) form.onsubmit = saveFixedIncomeSettings;
   if (stop) stop.onclick = async () => {
     if (!dataState.fixedIncomePlan || !await appConfirm("清除退休金固收设置吗？已生成的收入流水会保留。")) return;
+    if (window.PwaFunds) return await window.PwaFunds.clearPension();
     const previousPlan = dataState.fixedIncomePlan;
     dataState.fixedIncomePlan = null;
     try {

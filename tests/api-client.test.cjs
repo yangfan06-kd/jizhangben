@@ -252,7 +252,7 @@ function installRecordDom(runtime) {
   runtime.run(`(() => {
     const ids = [
       "amount", "note", "date", "accountSel", "toAccountSel", "depositTarget",
-      "depositLinkSel", "depositFinal", "saveBtn", "cancelBtn", "formMsg",
+      "depositLinkSel", "depositFinal", "saveBtn", "cancelBtn", "formMsg", "reimbursementParty", "reimbursementLinkSel",
       "customInput", "customOk",
       "typeCustomBox", "categoryCustomBox", "typeChips", "categoryChips",
       "toAccountField", "depositDirField", "depositTargetField", "depositLinkField",
@@ -947,6 +947,32 @@ test("consecutive expense saves retain chosen category and account without repea
   assert.equal(runtime.run("dataState.records[1].category"), "生活");
   assert.equal(runtime.run("dataState.records[1].account"), "2");
   assert.equal(runtime.run("dataState.records[0].note"), "仅此一笔");
+});
+
+test("报销选择支出类别，无需来源，关联原支出和收支计算保持正确", async () => {
+  const runtime=createRuntime();prepareConsecutiveRecord(runtime,"报销","生活");
+  runtime.run(`dataState.records=[{id:1,type:"支出",category:"餐饮",amount:50,amountCents:5000,account:"2",date:"2026-10-27"}];
+    formElements.reimbursementLinkSel.value="1";formElements.amount.value="20";formElements.reimbursementParty.value="";`);
+  const original=JSON.stringify(runtime.run('dataState.records[0]'));
+  await runtime.run('handleSave()');
+  assert.equal(runtime.run('dataState.records.length'),2);
+  assert.equal(runtime.run('dataState.records[1].category'),"生活");
+  assert.equal(runtime.run('dataState.records[1].reimbursementLinkId'),"1");
+  assert.equal(runtime.run('expenseEffect(dataState.records[1])'),-20);
+  assert.equal(runtime.run('incomeEffect(dataState.records[1])'),0);
+  assert.equal(JSON.stringify(runtime.run('dataState.records[0]')),original);
+});
+
+test("编辑旧报销记录时保留历史来源和原支出关联", async () => {
+  const runtime=createRuntime();prepareConsecutiveRecord(runtime,"报销","生活");
+  runtime.run(`dataState.records=[{id:1,type:"支出",category:"餐饮",amountCents:5000,account:"2",date:"2026-10-27"},
+    {id:2,type:"报销",category:"生活",amountCents:1000,account:"2",date:"2026-10-28",reimbursementParty:"原公司",reimbursementLinkId:"1"}];
+    uiState.editingRecordId=2;formElements.reimbursementLinkSel.value="1";formElements.reimbursementParty.value="原公司";formElements.amount.value="15";`);
+  await runtime.run('handleSave()');
+  assert.equal(runtime.run('dataState.records.length'),2);
+  assert.equal(runtime.run('dataState.records[1].reimbursementParty'),"原公司");
+  assert.equal(runtime.run('dataState.records[1].reimbursementLinkId'),"1");
+  assert.equal(runtime.run('expenseEffect(dataState.records[1])'),-15);
 });
 
 test("consecutive negative income keeps income selection instead of expense defaults", async () => {

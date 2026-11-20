@@ -1,0 +1,70 @@
+{
+  "stage": 0,
+  "status": "planned-only-not-published",
+  "outputDirectory": "output/pwa-dist",
+  "defaultPolicy": "deny",
+  "copyDirectoriesRecursively": false,
+  "sourceFiles": [
+    "index.html",
+    "favicon.svg",
+    "css/style.css",
+    "js/constants.js",
+    "js/state.js",
+    "js/helpers.js",
+    "js/compact-calendar.js",
+    "js/dialogs.js",
+    "js/special-record-form.js",
+    "js/deposit-form.js",
+    "js/selects.js",
+    "js/storage-adapter.js",
+    "js/migrations.js",
+    "js/storage.js",
+    "js/api-client.js",
+    "js/backup.js",
+    "js/external-import.js",
+    "js/records.js",
+    "js/budget.js",
+    "js/filters.js",
+    "js/report-period.js",
+    "js/custom-options.js",
+    "js/category-system.js",
+    "js/record-form.js",
+    "js/record-keyboard.js",
+    "js/record-draft.js",
+    "js/account-form.js",
+    "js/book-form.js",
+    "js/auth-form.js",
+    "js/view.js",
+    "js/charts.js",
+    "js/overview.js",
+    "js/category-icons-tabler.js",
+    "js/icons.js",
+    "js/investment-plans.js",
+    "js/fixed-income.js",
+    "js/device-security.js",
+    "js/app.js"
+  ],
+  "plannedGeneratedFiles": [
+    "runtime-config.js",
+    "manifest.webmanifest",
+    "icons/app-192.png",
+    "icons/app-512.png",
+    "icons/apple-touch-icon.png",
+    "sw.js"
+  ],
+  "requiredRuntimeConfig": {
+    "JIZHANGBEN_OFFLINE_MODE": true,
+    "JIZHANGBEN_API_BASE_URL": null
+  },
+  "prohibitedDirectories": [
+    ".git", "android", "backend", "backups", "deploy", "docs",
+    "mobile", "node_modules", "releases", "tests", "tools", "output"
+  ],
+  "notes": [
+    "这是阶段 0 文件边界清单，尚未实现构建检查，不代表当前已有可发布 PWA。",
+    "output 是产物容器，禁止从中复制输入；仅未来生成的 output/pwa-dist 可作为站点根目录。",
+    "index.html 必须在独立产物中注入离线配置；不修改安卓原始页面的运行配置。",
+    "新增资源需逐项加入允许列表，禁止整目录或项目根目录递归发布。",
+    "Service Worker 在阶段 4 才实现，未通过完整缓存检查前不得显示可离线使用。"
+  ]
+}

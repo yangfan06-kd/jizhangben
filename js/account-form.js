@@ -81,6 +81,7 @@ async function handleAccountSave() {
     ? dataState.accounts.find(x => String(x.id) === String(uiState.editingAccountId))
     : null;
   const originalFingerprint = accountFingerprint(originalAccount);
+  if (window.PwaLedger) return window.PwaLedger.saveAccount({ name, kind, initialCents, editingId: uiState.editingAccountId });
   let backendFallback = false;
 
   if (wasEdit && !originalAccount) {
@@ -250,6 +251,7 @@ async function deleteAccount(id) {
   }
   if (!await appConfirm("确定删除账户「" + a.name + "」吗？\n（用它记过的账会显示为“未指定”）")) return;
   const fingerprint = accountFingerprint(a);
+  if (window.PwaLedger) return window.PwaLedger.deleteAccount(id, fingerprint);
   if (backendWritesEnabled() && typeof a.id === "string") {
     setAccountDeleteBusy(true);
     try {

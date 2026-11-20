@@ -26,7 +26,7 @@ async page => {
         }
         samples.sort((a,b)=>a-b);timings[name]={medianMs:+samples[1].toFixed(2),samplesMs:samples.map(n=>+n.toFixed(2))};
       }
-      const display={income:document.getElementById('incomeTotal').textContent,expense:document.getElementById('expenseTotal').textContent,net:document.getElementById('netWorth').textContent,recent:document.querySelectorAll('#homeRecentList [data-home-date]').length};
+      const display={income:document.getElementById('incomeTotal').textContent,expense:document.getElementById('expenseTotal').textContent,net:document.getElementById('netWorth').textContent,recent:document.querySelectorAll('#homeRecentList [data-home-record-id]').length};
       const netText=(fixture.expected.netCents<0?'−¥':'¥')+(Math.abs(fixture.expected.netCents)/100).toFixed(2);
       const correct=display.income==='+¥'+(fixture.expected.monthIncomeCents/100).toFixed(2)&&display.expense==='−¥'+(fixture.expected.monthExpenseCents/100).toFixed(2)&&display.net===netText;
       const unchanged=before===JSON.stringify({records:dataState.records,accounts:dataState.accounts,categories:dataState.categorySystem,icons:dataState.customCategoryIcons})&&stored===JSON.stringify(Object.entries(localStorage).sort());

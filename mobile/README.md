@@ -45,3 +45,16 @@ npx cap open android
 以后网页代码有更新，直接运行 `npm run app:build:debug`，脚本会先同步网页资源，再生成新的 `android/app/build/outputs/apk/debug/app-debug.apk`。
 
 连接手机前，在 Android 设置中打开开发者选项和 USB 调试，连接数据线后接受“允许 USB 调试”提示。确认 `adb devices` 出现一行状态为 `device` 后，运行 `npm run app:install:debug` 安装调试版；脚本会同时建立 `tcp:8000` USB 转发。如果没有设备，脚本会停止并说明需要处理的连接问题。
+
+## 发布下载站（含应用内更新清单）
+
+`mobile/release.ps1` 把「versionCode +1 → 构建签名离线 APK → 更新 `site/download/` 和下载页 → 生成应用内更新清单 → 部署 Cloudflare Pages」串成一条命令：
+
+```powershell
+cd G:\project\jizhangben-publish
+powershell -NoProfile -ExecutionPolicy Bypass -File .\mobile\release.ps1 -VersionName "2.10" -UpdateNotes "新增应用内更新提醒，修复若干问题。"
+```
+
+版本号务必加引号：PowerShell 会把不带引号的 `2.10` 解析成数字 `2.1`。
+
+`-UpdateNotes` 会显示在手机 App 的更新提示条里，写一句用户能看懂的话（有默认兜底文案）。脚本会用 aapt2 读取刚复制到 `site/download/` 的 APK，核对 `versionCode`/`versionName`，再据此生成 `site/version.json`；两者不一致时直接中止，避免发布一个「提示的版本」和「能下载的包」对不上的站点。`site/_headers` 负责给 `version.json` 加跨域和 `no-store`，部署时随 `site/` 自动上传。只构建不部署时加 `-SkipDeploy`；只验证清单、不发布时可单独运行 `mobile\site-version.ps1`。完整说明见 [docs/ANDROID_IN_APP_UPDATE.md](../docs/ANDROID_IN_APP_UPDATE.md)。

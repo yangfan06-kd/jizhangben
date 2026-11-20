@@ -84,6 +84,18 @@ test("extractBackupStorage accepts a complete current backup", () => {
   assert.equal(extracted.jizhangben_budgets_1, backup.storage.jizhangben_budgets_1);
 });
 
+test("shared backup payload keeps legacy fields and category settings without mutating the snapshot", () => {
+  const runtime = createRuntime();
+  const backup = validBackup();
+  backup.storage.jizhangben_records_1 = JSON.stringify([{ id: 10, type: "报销", amountCents: 500, reimbursementParty: "旧来源", reimbursementLinkId: 9 }]);
+  const source = { ...backup.storage, jizhangben_pending_sync: '{"version":1}', jizhangben_snapshot_owner: '"合成所有者"' };
+  const result = JSON.parse(JSON.stringify(runtime.run(`createLedgerBackup(${JSON.stringify(source)})`)));
+  assert.deepEqual(result.data.storage, backup.storage);
+  assert.equal(JSON.parse(result.content).storage.jizhangben_custom_category_icons, backup.storage.jizhangben_custom_category_icons);
+  assert.equal(JSON.parse(result.data.storage.jizhangben_records_1)[0].reimbursementParty, "旧来源");
+  assert.equal(source.jizhangben_pending_sync, '{"version":1}');
+});
+
 test("extractBackupStorage keeps compatibility with legacy flat backups", () => {
   const runtime = createRuntime();
   const legacy = {

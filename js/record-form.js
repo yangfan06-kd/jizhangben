@@ -157,6 +157,7 @@ function resetForm() {
   document.getElementById("amount").value = "";
   document.getElementById("note").value = "";
   document.getElementById("date").value = todayStr();
+  setRecordTimeField("");
   document.getElementById("accountSel").value = defaultRecordAccountId();
   document.getElementById("toAccountSel").value = "";
   const balancePrincipal = document.getElementById("balancePrincipal");
@@ -265,6 +266,7 @@ function saveRecordLocally(record, message, restore, status = "local") {
 
 function continueRecordingAfterSave() {
   if (typeof clearRecordDraft === "function") clearRecordDraft();
+  if (typeof returnFromRecordEdit === "function" && returnFromRecordEdit({ saved: true })) return;
   if (uiState.activeTab === "record" && typeof showRecordKeyboard === "function") showRecordKeyboard();
 }
 
@@ -361,6 +363,8 @@ function applyRecordDraft(target, draft) {
   target.category = draft.category;
   target.note = draft.note;
   target.date = draft.date;
+  if (recordTimeOf(draft.time)) target.time = draft.time;
+  else if (Object.prototype.hasOwnProperty.call(draft, "time")) delete target.time;
   target.account = draft.account;
   target.toAccount = draft.toAccount;
   target.transferMode = draft.transferMode;
@@ -427,6 +431,13 @@ function setRecordSaveBusy(busy) {
   if (cancelBtn) cancelBtn.disabled = !!busy;
 }
 
+function setRecordTimeField(value, editing = false) {
+  const field = document.getElementById("recordTime");
+  if (field) field.value = recordTimeOf(value);
+  const hint = document.getElementById("recordTimeHint");
+  if (hint) hint.textContent = editing ? "留空表示时间未记录" : "留空则在保存时记录当前时间";
+}
+
 async function handleSave() {
   if (uiState.recordSaveInFlight) {
     showMsg("正在保存，请稍候", "busy");
@@ -443,6 +454,7 @@ async function handleSave() {
   const amountCents = toCents(amount);
   const note = document.getElementById("note").value.trim();
   const date = document.getElementById("date").value;
+  const timeField = document.getElementById("recordTime");
   const payMode = (uiState.selectedType === "代付") ? uiState.selectedPayMode : null;
   const account = (uiState.selectedType === "代付" && payMode === "转为支出")
     ? null : (document.getElementById("accountSel").value || null);
@@ -474,7 +486,7 @@ async function handleSave() {
   const refundLinkId = (uiState.selectedType === "退款") ? (document.getElementById("refundLinkSel").value || null) : null;
 
   if (!uiState.selectedType) { showRecordFieldError("请先选择一个类型", "typeChips"); return; }
-  if (!["余额", "转账", "借贷", "代付", "报销", "退款"].includes(uiState.selectedType) && !uiState.selectedCategory) { showRecordFieldError("请先选择一个类别", "categoryChips"); return; }
+  if (!["余额", "转账", "借贷", "代付", "退款"].includes(uiState.selectedType) && !uiState.selectedCategory) { showRecordFieldError("请先选择一个类别", "categoryChips"); return; }
   const incomeAmount = typeSide(uiState.selectedType) === "income";
   const amountInvalid = !Number.isFinite(amount) || (uiState.selectedType === "余额" ? amountCents < 0 : incomeAmount ? amountCents === 0 : amountCents <= 0);
   if (amountInvalid) {
@@ -533,7 +545,6 @@ async function handleSave() {
     }
   }
   if (uiState.selectedType === "报销") {
-    if (!reimbursementParty) { showRecordFieldError("请填写报销来源", "reimbursementParty"); return; }
     if (!reimbursementLinkId) { showRecordFieldError("请关联原支出", "reimbursementLinkPickerBtn"); return; }
     const original = dataState.records.find(record => String(record.id) === String(reimbursementLinkId));
     if (!original || reimbursementOutstandingFor(original, dataState.records, uiState.editingRecordId) <= 0) { showRecordFieldError("原支出已经没有可报销金额", "reimbursementLinkPickerBtn"); return; }
@@ -548,6 +559,11 @@ async function handleSave() {
   const originalRecord = wasEdit
     ? dataState.records.find(r => String(r.id) === String(uiState.editingRecordId))
     : null;
+  if (wasEdit && !originalRecord) {
+    showMsg("这笔账目已找不到，修改未保存", "conflict");
+    return;
+  }
+  const time = recordTimeOf(timeField ? timeField.value : originalRecord?.time) || (wasEdit ? "" : currentRecordTime());
   const originalFingerprint = recordFingerprint(originalRecord);
   const accountName = account ? (dataState.accounts.find(item => String(item.id) === String(account)) || {}).name : null;
   const toAccountName = toAccount ? (dataState.accounts.find(item => String(item.id) === String(toAccount)) || {}).name : null;
@@ -565,6 +581,7 @@ async function handleSave() {
     category: selectedCategory || "其他",
     note: note,
     date: date,
+    time: time,
     account: account,
     toAccount: (selectedType === "转账") ? toAccount : null,
     transferMode: transferMode,
@@ -598,6 +615,10 @@ async function handleSave() {
   });
 
   const localOnlyTransfer = selectedType === "转账" && transferMode === "转账他人";
+
+  if (window.PwaLedger) return window.PwaLedger.saveRecord(localRecord, {
+    accountId: uiState.balanceTargetAccountId, name: balanceAccountName, principal: balancePrincipal
+  });
 
   // 余额校准先在本机完成；服务端当前的中性类型契约不允许账户字段，联网同步留到余额模型升级批次。
   if (!wasEdit && backendRecordWritesEnabled() && !localOnlyTransfer && !["余额", "借贷", "代付", "报销", "退款"].includes(selectedType)) {
@@ -735,7 +756,7 @@ async function handleSave() {
   continueRecordingAfterSave();
 }
 
-function startEdit(id) {
+function startEdit(id, options = {}) {
   const r = dataState.records.find(x => String(x.id) === String(id));
   if (!r) return;
   if (r.fundProjectId) {
@@ -744,15 +765,19 @@ function startEdit(id) {
     return;
   }
   uiState.editingRecordId = id;
+  if (typeof resetRecordKeyboard === "function") resetRecordKeyboard();
+  clearRecordFieldError();
   uiState.selectedType = r.type;
   uiState.selectedCategory = r.category;
   uiState.selectedDepositDir = r.depositDir || null;
   uiState.selectedLoanMode = r.loanMode || null;
   uiState.selectedPayMode = r.payMode || null;
   uiState.selectedTransferMode = r.transferMode || (r.type === "转账" ? "账户间转账" : null);
-  document.getElementById("amount").value = r.amount;
-  document.getElementById("note").value = r.note;
+  const amount = String(amountOf(r));
+  document.getElementById("amount").value = amount;
+  document.getElementById("note").value = r.note || "";
   document.getElementById("date").value = r.date;
+  setRecordTimeField(r.time, true);
   document.getElementById("accountSel").value = r.account || "";
   document.getElementById("toAccountSel").value = r.toAccount || "";
   const transferParty = document.getElementById("transferParty");
@@ -792,10 +817,12 @@ function startEdit(id) {
   if (typeof renderLoanModeChips === "function") renderLoanModeChips();
   if (typeof renderPayModeChips === "function") renderPayModeChips();
   if (typeof renderTransferModeChips === "function") renderTransferModeChips();
-  switchTab("record");
+  if (typeof setRecordKeyboardExpression === "function") setRecordKeyboardExpression(amount);
+  switchTab("record", options);
 }
 
 function cancelEdit() {
+  if (typeof returnFromRecordEdit === "function" && returnFromRecordEdit()) return;
   if (typeof clearRecordDraft === "function") clearRecordDraft();
   resetForm();
 }
@@ -817,6 +844,8 @@ async function deleteRec(id) {
   }
   if (!target || !await appConfirm("确定删除这笔账吗？")) return;
   const fingerprint = recordFingerprint(target);
+
+  if (window.PwaLedger) return window.PwaLedger.deleteRecord(id, fingerprint);
 
   if (backendRecordWritesEnabled() && typeof target.id === "string" && target.id) {
     uiState.recordDeleteInFlight = true;

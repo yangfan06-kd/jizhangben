@@ -4,6 +4,31 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createRuntime } = require("./runtime.cjs");
 
+test("editing a second record replaces the previous calculator expression and reads canonical cents", () => {
+  const runtime = createKeyboardRuntime();
+  runtime.run(`
+    const keyboardGet = document.getElementById;
+    const extra = new Map();
+    document.getElementById = id => keyboardGet(id) || (extra.has(id) ? extra.get(id) : (extra.set(id, {value:"",style:{},classList:{remove(){},add(){}},removeAttribute(){}}), extra.get(id)));
+    updateFormFields = () => {};
+    clearRecordFieldError = () => {};
+    renderTypeChips = () => {};
+    renderCategoryChips = () => {};
+    switchTab = () => showRecordKeyboard();
+    dataState.records = [
+      {id:1,type:"支出",amount:16,amountCents:1600,category:"晚餐",date:"2026-11-19"},
+      {id:2,type:"支出",amount:7559.4,amountCents:755940,category:"其他",date:"2026-11-19"}
+    ];
+    startEdit(2);
+    hideRecordKeyboard();
+    startEdit(1);
+  `);
+  assert.equal(runtime.run('document.getElementById("amount").value'), "16");
+  assert.equal(runtime.run("recordKeyboardExpression"), "16");
+  assert.equal(runtime.run("uiState.editingRecordId"), 1);
+  assert.equal(runtime.run("dataState.records[1].amountCents"), 755940);
+});
+
 function createKeyboardRuntime(useResizeObserver = true) {
   const runtime = createRuntime();
   runtime.run(`

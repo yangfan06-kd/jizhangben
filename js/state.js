@@ -31,6 +31,8 @@ const reportState = {
 const uiState = {
   activeTab: "home",
   editingRecordId: null,
+  recordEntry: null,
+  recordEditReturn: null,
   editingAccountId: null,
   editingBookId: null,
   selectedType: null,

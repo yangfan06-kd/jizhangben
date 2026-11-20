@@ -35,6 +35,7 @@ function categorySystemItemNames() {
 }
 
 function categorySystemCommit(change) {
+  if (window.PwaManagement) return window.PwaManagement.categoryCommit(change);
   const previous = JSON.stringify(dataState.categorySystem);
   try {
     change();
@@ -144,9 +145,10 @@ async function renameCategoryGroup(key, newNameValue) {
   const nextSystem = JSON.parse(previousSystem);
   nextSystem.groups.find(item => item.key === key).name = newName;
   updates.set(CATEGORY_SYSTEM_KEY, JSON.stringify(nextSystem));
+  if (window.PwaManagement && !await window.PwaManagement.write(Object.fromEntries(updates))) return false;
   const before = new Map(Array.from(updates.keys(), storageKey => [storageKey, appStorage.get(storageKey)]));
   try {
-    updates.forEach((value, storageKey) => appStorage.set(storageKey, value));
+    if (!window.PwaManagement) updates.forEach((value, storageKey) => appStorage.set(storageKey, value));
   } catch (error) {
     before.forEach((value, storageKey) => {
       try { if (value === null) appStorage.remove(storageKey); else appStorage.set(storageKey, value); } catch (_) { /* 尽力回滚 */ }
@@ -265,9 +267,10 @@ async function renameCategoryItem(key, oldName, newNameValue, iconKey = null) {
   if (previousCustomCategories !== null) updates.set(CUSTOM_CATEGORIES_KEY, JSON.stringify(customCategories));
   if (previousIcons !== null || iconKey !== null) updates.set(CUSTOM_CATEGORY_ICONS_KEY, JSON.stringify(icons));
 
+  if (window.PwaManagement && !await window.PwaManagement.write(Object.fromEntries(updates))) return false;
   const before = new Map(Array.from(updates.keys(), storageKey => [storageKey, appStorage.get(storageKey)]));
   try {
-    updates.forEach((value, storageKey) => appStorage.set(storageKey, value));
+    if (!window.PwaManagement) updates.forEach((value, storageKey) => appStorage.set(storageKey, value));
   } catch (error) {
     before.forEach((value, storageKey) => {
       try { if (value === null) appStorage.remove(storageKey); else appStorage.set(storageKey, value); } catch (_) { /* best-effort rollback */ }
@@ -537,15 +540,18 @@ function createCategoryGroup(nameValue) {
       key, name, side: categorySystemSide, icon: categoryGroupIconDraft, color: color.color, background: color.background, items: []
     });
   });
-  if (saved) {
-    categorySystemExpandedKey = key;
-    if (typeof document !== "undefined") {
-      setCategoryGroupFormOpen(false);
-      renderCategorySystem();
-      document.getElementById("categoryGroupName").value = "";
+  const finish = saved => {
+    if (saved) {
+      categorySystemExpandedKey = key;
+      if (typeof document !== "undefined") {
+        setCategoryGroupFormOpen(false);
+        renderCategorySystem();
+        document.getElementById("categoryGroupName").value = "";
+      }
     }
-  }
-  return saved;
+    return saved;
+  };
+  return window.PwaManagement ? saved.then(finish) : finish(saved);
 }
 
 async function createCategoryItem(key, nameValue, iconKey, button) {
@@ -557,6 +563,7 @@ async function createCategoryItem(key, nameValue, iconKey, button) {
     appNotice("这个小类已经存在；小类名称在整个类别系统中不能重复");
     return false;
   }
+  if (window.PwaManagement) return window.PwaManagement.createCategoryItem(key, name, iconKey, button);
   if (button) button.disabled = true;
   const isBuiltIn = CATEGORY_GROUPS.some(item => item.items.includes(name));
   let backendItem = null;
@@ -625,7 +632,7 @@ async function removeCategoryGroup(key) {
   const group = categorySystemGroups().find(item => item.key === key);
   if (!group) return false;
   if (!await appConfirm("删除大类「" + group.name + "」及其中 " + group.items.length + " 个小类吗？\n历史流水不会删除；这些小类以后不再出现在记账选择中。")) return false;
-  const saved = categorySystemCommit(() => {
+  const saved = await categorySystemCommit(() => {
     dataState.categorySystem.groups = categorySystemGroups().filter(item => item.key !== key);
     group.items.forEach(name => {
       if (!dataState.categorySystem.hidden.includes(name)) dataState.categorySystem.hidden.push(name);
@@ -755,6 +762,7 @@ function closeCategoryItemIconEditor() {
 }
 
 function persistCategoryItemIcon(name, iconKey) {
+  if (window.PwaManagement) return window.PwaManagement.categoryIcon(name, iconKey);
   const previousIcons = dataState.customCategoryIcons || {};
   const nextIcons = { ...previousIcons, [name]: iconKey };
   try {
@@ -805,7 +813,7 @@ async function saveCategoryItemChanges() {
         status.textContent = "更改尚未保存，可调整后重试；原设置已保留。";
         return false;
       }
-    } else if (!persistCategoryItemIcon(name, iconKey)) {
+    } else if (!await persistCategoryItemIcon(name, iconKey)) {
       status.textContent = "图标保存失败，原设置已保留；请检查存储空间后重试。";
       return false;
     }

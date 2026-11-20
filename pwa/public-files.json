@@ -1,0 +1,19 @@
+{
+  "extraSourceFiles": {
+    "pwa/preview.css": "pwa-preview.css",
+    "pwa/install.html": "install.html",
+    "pwa/icons/app-192.png": "icons/app-192.png",
+    "pwa/icons/app-512.png": "icons/app-512.png",
+    "pwa/icons/apple-touch-icon.png": "icons/apple-touch-icon.png"
+  },
+  "storagePreviewSourceFiles": {
+    "pwa/ledger-database.js": "ledger-database.js",
+    "pwa/app-storage.js": "pwa-app-storage.js",
+    "pwa/fund-storage.js": "pwa-fund-storage.js",
+    "pwa/management-storage.js": "pwa-management-storage.js",
+    "pwa/backup.js": "pwa-backup.js",
+    "pwa/offline.js": "pwa-offline.js"
+  },
+  "storagePreviewGeneratedFiles": ["service-worker.js"],
+  "generatedFiles": ["runtime-config.js", "manifest.webmanifest", "build-info.json"]
+}

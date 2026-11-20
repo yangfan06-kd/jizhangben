@@ -1,0 +1,107 @@
+/* 只在 PWA 产物加载；安卓页面不引入此文件。 */
+.pwa-storage-loading .app, .pwa-storage-loading .bottom-nav { visibility: hidden; }
+#pwaStorageGate { position: fixed; z-index: 2200; inset: 20% max(16px, calc((100vw - 480px) / 2)) auto; padding: 20px; background: #fff; border: 1px solid #dce4df; border-radius: 12px; color: #24484f; box-shadow: 0 4px 20px #24484f20; }
+#pwaStorageGate[hidden] { display: none; }
+body {
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+/* 玻璃层独立于按钮，沿用底栏原有布局和安全区。 */
+.bottom-nav {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.bottom-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0 8px max(4px, env(safe-area-inset-bottom, 0px));
+  z-index: -1;
+  pointer-events: none;
+  border: 1px solid #e1e7e3;
+  border-radius: 22px;
+  background: #fbfcfa;
+  box-shadow: 0 3px 14px rgba(36, 72, 79, .12);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bottom-nav::before {
+    background: rgba(251, 252, 250, .78);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .bottom-nav::before {
+    background: #fbfcfa;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+nav.bottom-nav .bottom-record-tab .bottom-plus-icon {
+  background-image: linear-gradient(155deg, rgba(255, 255, 255, .56), transparent 62%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+/* iPhone 会在小字号输入框聚焦时放大页面。只调整 PWA 的表单文字，保留手动缩放。
+   覆盖共享样式中各页面的字号；金额框有独立的大字显示与自定义键盘，保持原样。 */
+:is(input, textarea, select):not(#amount):not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]) {
+  font-size: max(16px, 1rem) !important;
+}
+.pwa-prototype-note {
+  display: none; /* 保留离线状态面板的插入锚点，不再展示顶部预览说明栏。 */
+  margin: 0 0 12px;
+  padding: 8px 0;
+  color: #646860;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid #e2e5e0;
+}
+.pwa-prototype-note a { display: inline-block; padding: 8px 4px; color: #176d52; }
+.pwa-install { max-width: 560px; margin: 0 auto; padding-bottom: 24px; }
+.pwa-install h1 { margin: 20px 0 12px; font-size: 24px; }
+.pwa-install h2 { margin: 24px 0 8px; font-size: 18px; }
+.pwa-install p, .pwa-install li { margin-bottom: 12px; line-height: 1.8; }
+.pwa-install ol { padding-left: 24px; }
+.pwa-install a { color: #176d52; }
+.pwa-install .pwa-back { display: inline-flex; min-height: 44px; align-items: center; }
+.pwa-install strong { color: #24484f; }
+.pwa-backup { margin-top: 14px; color: #4d5651; font-size: .875rem; line-height: 1.65; overflow-wrap: anywhere; }
+.pwa-backup-history { font-size: .8125rem; color: #646860; }
+.pwa-backup-panel { border-top: 1px solid #dce4df; padding: 12px 0; margin-top: 12px; }
+.pwa-backup-panel h4 { margin: 0 0 8px; font-size: 1rem; color: #24484f; }
+.pwa-backup-panel h4:focus { outline: none; }
+.pwa-backup-panel p { margin: 8px 0; }
+.pwa-backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pwa-backup-actions button, #pwaBackupConfirmFile { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 12px; font-size: .875rem; white-space: normal; width: auto; margin: 0; }
+.pwa-backup-actions button { flex: 1 1 120px; }
+.pwa-backup .warn { color: #9c3f32; }
+#pwaBackupReminder { padding: 8px 0 12px; border-bottom: 1px solid #dce4df; font-size: .8125rem; line-height: 1.6; }
+#pwaBackupReminder p { margin: 0 0 6px; }
+#pwaBackupImportBooks { max-height: 210px; overflow-y: auto; }
+.pwa-backup [hidden], #pwaBackupReminder[hidden] { display: none; }
+#pwaBackupConfirmFile[hidden] { display: none; }
+.pwa-offline { font-size: .8125rem; line-height: 1.6; margin: 8px 0 12px; color: #4d5651; }
+.pwa-offline summary { cursor: pointer; padding: 6px 0; color: #176d52; }
+.pwa-offline p { margin: 8px 0; }
+.pwa-offline [hidden] { display: none; }
+.pwa-update-section { margin: 0 0 22px; padding: 14px; background: #fff; border: 1px solid #e2e5e0; border-radius: 12px; }
+.pwa-update-section h3 { margin: 0 0 4px; color: #24484f; font-size: .875rem; }
+.pwa-update-section .pwa-offline { margin: 0; }
+.pwa-update-section summary { min-height: 44px; display: list-item; padding: 10px 0; overflow-wrap: anywhere; }
+#bookManageBtn[data-pwa-update] .tab-icon { position: relative; }
+#bookManageBtn[data-pwa-update] .tab-icon::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: -6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #bb452e;
+}
+#pwaResourceFailure { position: fixed; z-index: 2500; inset: 20% 16px auto; padding: 20px; background: #fff; color: #24484f; font-size: 16px; line-height: 1.7; }
+#pwaResourceFailure button { display: block; min-height: 44px; margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}

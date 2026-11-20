@@ -67,6 +67,23 @@ test("monthly fixed income moves the 31st to the last day in short months", () =
   assert.equal(runtime.run("fixedIncomeDueDate('2026-04', 31)"), "2026-04-30");
 });
 
+test("failed fixed-income batch restores both records and the month cursor before retry", () => {
+  const runtime = createRuntime();
+  const plan = { id: 'failed-cursor', amountCents: 50000, accountId: 4, day: 1,
+    startMonth: '2026-11', nextEligibleMonth: '2026-11', active: true };
+  setupFixedIncome(runtime, plan, '2026-11-11');
+  runtime.run('saveFixedIncomePlan(); save(); originalBatch = appStorage.setMany; appStorage.setMany = () => { throw new Error("模拟存储失败"); };');
+  const before = runtime.localStorage.toObject();
+  assert.equal(runtime.run('processDueFixedIncome()'), 0);
+  assert.equal(runtime.run('dataState.records.length'), 0);
+  assert.equal(runtime.run('dataState.fixedIncomePlan.nextEligibleMonth'), '2026-11');
+  assert.deepEqual(runtime.localStorage.toObject(), before);
+  runtime.run('appStorage.setMany = originalBatch');
+  assert.equal(runtime.run('processDueFixedIncome()'), 1);
+  assert.equal(runtime.run('dataState.fixedIncomePlan.nextEligibleMonth'), '2026-12');
+  assert.equal(runtime.run('processDueFixedIncome()'), 0);
+});
+
 test("a fixed-income plan starting next month waits instead of recording early", () => {
   const runtime = createRuntime();
   setupFixedIncome(runtime, {

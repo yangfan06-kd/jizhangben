@@ -385,6 +385,7 @@ function importedAccountDefinition(name, accounts) {
 
 async function commitExternalImport() {
   if (!externalImportState.rows.length) return;
+  const importDetails = { fileName: externalImportState.fileName, columns: { ...externalImportState.columns } };
   const source = document.getElementById("externalImportSource")?.value || "其他 CSV";
   const bookNameInput = document.getElementById("externalImportBookName");
   const requestedName = bookNameInput?.value.trim() || externalImportBookName(source, externalImportState.fileName);
@@ -397,9 +398,28 @@ async function commitExternalImport() {
   if (issues && !(await appConfirm(`有 ${issues} 行数据无法导入，确认后会跳过；其余 ${externalImportState.rows.length} 行将${destination}，不会覆盖现有账目。确定继续吗？`))) return;
   if (!issues && !(await appConfirm(`将 ${externalImportState.rows.length} 行导入${destination}，不会覆盖现有账目。确定继续吗？`))) return;
 
+  if (window.PwaManagement) return window.PwaManagement.importCsv({ source, requestedName, bookNames, groups, ...importDetails });
+  const { allRecords } = applyExternalImportRows({ source, requestedName, bookNames, groups, ...importDetails });
+  load();
+  loadAccounts();
+  loadBudgetData();
+  resetForm();
+  resetAccountForm();
+  resetFilterState();
+  renderBookSelect();
+  renderBookList();
+  renderAccountSelects();
+  fillCategoryFilter();
+  render();
+  clearExternalImportPreview();
+  showBackupMsg(`已导入 ${allRecords.length} 行，并新建 ${groups.size} 个独立账本。`);
+}
+
+// 仅计算和保存新账本，界面刷新交给调用者在提交后执行。
+function applyExternalImportRows({ source, requestedName, bookNames, groups, fileName, columns }) {
   const allRecords = [];
   let firstBookId = null;
-  const missingAccountName = externalImportState.columns?.account < 0 ? "未注明账户" : "现金";
+  const missingAccountName = columns?.account < 0 ? "未注明账户" : "现金";
   [...groups.entries()].forEach(([sourceBookName, rows], groupIndex) => {
     const accounts = [];
     const accountFor = name => importedAccountDefinition(name || missingAccountName, accounts);
@@ -416,7 +436,7 @@ async function commitExternalImport() {
         date: row.date,
         note: row.note || "",
         importSource: source,
-        importSourceFile: externalImportState.fileName,
+        importSourceFile: fileName,
         importSourceRow: row.sourceRow
       };
       if (row.type === "转账") {
@@ -443,17 +463,5 @@ async function commitExternalImport() {
   }
   dataState.currentBookId = firstBookId;
   appStorage.set(CURRENT_BOOK_KEY, JSON.stringify(firstBookId));
-  load();
-  loadAccounts();
-  loadBudgetData();
-  resetForm();
-  resetAccountForm();
-  resetFilterState();
-  renderBookSelect();
-  renderBookList();
-  renderAccountSelects();
-  fillCategoryFilter();
-  render();
-  clearExternalImportPreview();
-  showBackupMsg(`已导入 ${allRecords.length} 行，并新建 ${groups.size} 个独立账本。`);
+  return { allRecords, firstBookId };
 }

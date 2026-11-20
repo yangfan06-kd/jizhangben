@@ -99,9 +99,7 @@ function renderReimbursementLinkOptions() {
 
 function updateReimbursementFields() {
   const isReimbursement = uiState.selectedType === "报销";
-  const partyField = document.getElementById("reimbursementPartyField");
   const linkField = document.getElementById("reimbursementLinkField");
-  if (partyField) partyField.style.display = isReimbursement ? "block" : "none";
   if (linkField) linkField.style.display = isReimbursement ? "block" : "none";
   if (isReimbursement) renderReimbursementLinkOptions();
 }

@@ -2,6 +2,16 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRuntime } = require("./runtime.cjs");
 
+test("record time accepts a local clock value while legacy missing times remain unknown", () => {
+  const runtime = createRuntime();
+  assert.equal(runtime.run('recordTimeOf("18:42")'), "18:42");
+  for (const value of [undefined, null, "", "24:00", "12:60", "12:05:00"]) {
+    assert.equal(runtime.run(`recordTimeOf(${JSON.stringify(value)})`), "");
+  }
+  assert.equal(runtime.run('normalizeRecord({amount:16,date:"2026-11-19"}).time'), undefined);
+  assert.equal(runtime.run('normalizeRecord({amount:16,date:"2026-11-19",time:"18:42"}).time'), "18:42");
+});
+
 test("toCents avoids decimal accumulation errors", () => {
   const runtime = createRuntime();
   assert.equal(runtime.run("toCents(0.1 + 0.2)"), 30);

@@ -23,6 +23,14 @@ function normalizeRecords(list) {
   return Array.isArray(list) ? list.map(normalizeRecord).filter(Boolean) : [];
 }
 
+function recordTimeOf(value) {
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : "";
+}
+
+function currentRecordTime(now = new Date()) {
+  return String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+}
+
 function initialOf(a) {
   if (a && Number.isFinite(Number(a.initialCents))) return Number(a.initialCents) / 100;
   return toCents(a && a.initial) / 100;

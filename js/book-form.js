@@ -99,6 +99,7 @@ function renderBookSelect() {
 
 // 切换到另一个账本：记住选择，重新读这个账本的账目和账户
 function switchBook(id) {
+  if (window.PwaManagement) return window.PwaManagement.switchBook(id);
   const selectedBook = dataState.books.find(b => String(b.id) === String(id));
   if (!selectedBook) return;
   dataState.currentBookId = selectedBook.id;
@@ -214,6 +215,8 @@ async function handleBookSave() {
     showBookMsg("找不到正在编辑的账本，请重新选择", true);
     return;
   }
+
+  if (window.PwaManagement) return window.PwaManagement.saveBook({ name, category, editingId: uiState.editingBookId, dup: !!dup });
 
   if (wasEdit && backendWritesEnabled() && originalBook && typeof originalBook.id === "string") {
     setBookSaveBusy(true);
@@ -347,6 +350,7 @@ async function deleteBook(id) {
   if (dataState.books.length <= 1) { showBookMsg("至少要保留一个账本"); return; }
   if (!await appConfirm("确定删除账本「" + b.name + "」吗？\n这个账本下的所有账目和账户都会被清空。")) return;
   const fingerprint = bookFingerprint(b);
+  if (window.PwaManagement) return window.PwaManagement.deleteBook(id, fingerprint);
   if (backendWritesEnabled() && typeof b.id === "string") {
     setBookDeleteBusy(true);
     try {

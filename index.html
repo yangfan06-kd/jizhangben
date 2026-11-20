@@ -65,6 +65,17 @@
   <main id="ledgerApp" hidden>
   <!-- 首页：本月概览、紧凑流水、直接展示的趋势；期间汇总为独立页面。 -->
   <section id="panelHome" class="home-panel">
+    <!-- 安卓应用内更新提示：只在原生壳发现更高版本时出现；同一版本只主动提醒一次。 -->
+    <div id="androidUpdateBanner" class="update-banner" role="status" aria-live="polite" hidden>
+      <div class="update-banner-text">
+        <strong id="androidUpdateBannerTitle" class="update-banner-title">发现新版本</strong>
+        <span id="androidUpdateBannerNotes" class="update-banner-notes"></span>
+      </div>
+      <div class="update-banner-actions">
+        <button id="androidUpdateDownloadBtn" class="update-banner-btn primary" type="button">去下载</button>
+        <button id="androidUpdateLaterBtn" class="update-banner-btn" type="button">稍后</button>
+      </div>
+    </div>
     <div class="home-shortcuts" aria-label="常用功能">
       <button class="home-shortcut" type="button" data-tab="account">
         <span class="home-shortcut-icon" data-icon="account" aria-hidden="true"></span><span>账户</span>
@@ -186,6 +197,24 @@
           <button id="migrationCancelBtn" class="btn-ghost" type="button">取消预览</button>
         </div>
       </div>
+    </div>
+
+    <!-- 检查更新：仅安卓原生壳显示；iPhone PWA 保持隐藏，也不发检查请求。 -->
+    <div id="androidUpdateSettings" class="settings-section android-update-settings" hidden>
+      <h3 class="settings-section-title">检查更新</h3>
+      <div class="backup-desc">更新只是覆盖安装，账目和设置都会保留。发现新版本后，这里始终保留下载入口。</div>
+      <div class="android-update-row">
+        <div class="android-update-meta">
+          <span id="androidUpdateVersion" class="android-update-version"></span>
+          <span id="androidUpdateStatus" class="android-update-status">尚未检查</span>
+        </div>
+        <button id="androidUpdateCheckBtn" class="btn-ghost" type="button">检查更新</button>
+      </div>
+      <div id="androidUpdateDownloadRow" class="android-update-download" hidden>
+        <span id="androidUpdateLatest" class="android-update-latest"></span>
+        <button id="androidUpdateSettingsDownloadBtn" class="btn-primary" type="button">去下载</button>
+      </div>
+      <p class="backup-desc android-update-hint">点「去下载」会用手机浏览器打开 https://jizhangben-download.pages.dev/ ，下载 APK 后按系统提示覆盖安装即可。</p>
     </div>
 
     <details class="device-lock-settings" aria-labelledby="deviceLockTitle">
@@ -310,6 +339,7 @@
         <label class="field"><span class="field-label">金额</span><input id="fundRecordAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
         <div class="field fund-picker-field"><span id="fundRecordAccountLabel" class="field-label">资金账户</span><select id="fundRecordAccount" class="fund-native-select"></select><button id="fundRecordAccountBtn" class="fund-picker-trigger" type="button" data-fund-picker="fundRecordAccount" aria-label="选择资金账户" aria-controls="fundRecordAccountMenu" aria-expanded="false">请选择资金账户</button><div id="fundRecordAccountMenu" class="fund-picker-menu" hidden></div></div>
         <label class="field"><span class="field-label">记账日期</span><input id="fundRecordDate" type="date" required></label>
+        <label class="field"><span class="field-label">时间（选填）</span><input id="fundRecordTime" type="time"></label>
         <label id="fundRecordPauseField" class="fund-correction-pause"><input id="fundRecordPause" type="checkbox">同时暂停后续定投</label>
         <p class="fund-hint">只更正这一笔，本金和账户流水同步更新。全部赎回的基金会同步重算最终盈亏。更正日期或撤销后，这笔自动定投不会再次补记。</p>
         <div id="fundRecordMsg" class="form-msg" role="status" aria-live="polite"></div>
@@ -354,7 +384,7 @@
   <!-- 记一笔 -->
   <section class="card record-panel" id="panelRecord" style="display:none;">
     <div class="page-head">
-      <button id="recordBackBtn" class="page-back" type="button"><span aria-hidden="true">‹</span><span>记一笔</span></button>
+      <button id="recordBackBtn" class="page-back" type="button"><span aria-hidden="true">‹</span><span id="recordBackLabel">记一笔</span></button>
     </div>
 
     <div class="field record-type-field">
@@ -453,10 +483,8 @@
       <div class="backup-desc">收回或确认无法收回时关联原代付，系统才能计算待收回金额。</div>
     </div>
 
-    <div class="field special-reimbursement-field" id="reimbursementPartyField" style="display:none;">
-      <div class="field-label">报销来源</div>
-      <input id="reimbursementParty" type="text" placeholder="如：公司、学校、朋友">
-    </div>
+    <!-- 保留旧报销记录的来源字段，编辑保存时不丢失历史信息。 -->
+    <input id="reimbursementParty" type="hidden">
 
     <div class="field special-reimbursement-field" id="reimbursementLinkField" style="display:none;">
       <div class="field-label">关联原支出</div>
@@ -546,8 +574,11 @@
           <input id="note" type="text" placeholder="选填">
         </div>
         <div class="field">
-          <div class="field-label">日期</div>
+          <label class="field-label" for="date">日期</label>
           <input id="date" type="date">
+          <label class="field-label record-time-label" for="recordTime">时间</label>
+          <input id="recordTime" type="time" aria-describedby="recordTimeHint">
+          <small id="recordTimeHint" class="record-time-hint">留空则在保存时记录当前时间</small>
         </div>
       </div>
     </div>
@@ -661,6 +692,15 @@
   </section>
 
   <!-- 明细 -->
+  <section class="card record-entry-panel" id="panelRecordEntry" style="display:none;" aria-labelledby="recordEntryTitle">
+    <div class="page-heading">
+      <button id="recordEntryBack" class="page-back" type="button"><span aria-hidden="true">‹</span><span id="recordEntryBackLabel">返回</span></button>
+      <h2 id="recordEntryTitle">账目详情</h2>
+    </div>
+    <div id="recordEntryContent"></div>
+    <button id="recordEntryEdit" class="btn-primary" type="button" hidden>修改这笔账</button>
+  </section>
+
   <section class="card detail-panel" id="panelDetail" style="display:none;">
     <div class="page-head">
       <button class="page-back page-back-home" type="button"><span aria-hidden="true">‹</span><span>流水明细</span></button>
@@ -846,7 +886,7 @@
   <nav class="tabs bottom-nav" aria-label="主导航">
     <button class="tab" data-tab="detail"><span class="tab-icon" data-icon="detail" aria-hidden="true"></span><span>流水</span></button>
     <button class="tab bottom-record-tab" data-tab="record"><span class="tab-icon bottom-plus-icon" aria-hidden="true">＋</span><span>记一笔</span></button>
-    <button id="bookManageBtn" class="tab" data-tab="book"><span class="tab-icon" data-icon="book" aria-hidden="true"></span><span>设置</span></button>
+    <button id="bookManageBtn" class="tab" data-tab="book"><span class="tab-icon" data-icon="book" aria-hidden="true"></span><span>设置<span id="settingsUpdateDot" class="tab-update-dot" aria-hidden="true" hidden></span></span></button>
   </nav>
 
   </main>
@@ -930,6 +970,7 @@
 <script src="js/investment-plans.js"></script>
 <script src="js/fixed-income.js"></script>
 <script src="js/device-security.js"></script>
+<script src="js/update-check.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

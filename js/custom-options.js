@@ -109,6 +109,7 @@ function categoryGroupForName(name) {
 }
 
 function categoryPickerSide() {
+  if (uiState.selectedType === "报销") return "expense";
   const side = typeSide(uiState.selectedType);
   return side === "income" || side === "expense" ? side : "all";
 }
@@ -366,6 +367,8 @@ async function addCustom(kind) {
     return;
   }
 
+  if (window.PwaManagement) return window.PwaManagement.addCustom(kind, name);
+
   const confirmButton = document.getElementById("customOk");
   if (confirmButton) confirmButton.disabled = true;
   let backendItem = null;
@@ -421,6 +424,8 @@ async function removeCustom(kind, name) {
       : "\n已有 " + used + " 笔账用它，删除后这些账还在，只是以后不能再选它。";
   }
   if (!await appConfirm(msg)) return;
+
+  if (window.PwaManagement) return window.PwaManagement.removeCustom(kind, name);
 
   const backendEnabled = customOptionsBackendEnabled();
   const optionId = kind === "type"

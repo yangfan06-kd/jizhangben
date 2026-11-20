@@ -1172,7 +1172,7 @@
   body.privacy-masked .fund-project-stats b,
   body.privacy-masked .fund-project-original strong,
   body.privacy-masked .fund-detail-meta strong,
-  body.privacy-masked .fund-result,
+  body.privacy-masked .fund-result strong,
   body.privacy-masked .fund-history strong,
   body.privacy-masked #recordAmountVisualText,
   body.privacy-masked #overviewTotal .value {
@@ -1201,7 +1201,7 @@
   body.privacy-masked .fund-project-stats b::after,
   body.privacy-masked .fund-project-original strong::after,
   body.privacy-masked .fund-detail-meta strong::after,
-  body.privacy-masked .fund-result::after,
+  body.privacy-masked .fund-result strong::after,
   body.privacy-masked .fund-history strong::after,
   body.privacy-masked #recordAmountVisualText::after,
   body.privacy-masked #overviewTotal .value::after {
@@ -1303,9 +1303,34 @@
   .fund-settings-name { margin: 10px 0 12px; font-size: 17px; }
   .fund-delete-button { min-height: 42px; padding: 8px 11px; border: 1px solid #D49B98; border-radius: 8px; background: #FFF7F6; color: #A33E38; font: inherit; font-size: 13px; }
   .fund-delete-button[hidden] { display: none !important; }
-  .fund-result { margin: 12px 0; padding: 10px; border-radius: 9px; font-weight: 700; }
-  .fund-result.gain { background: #FDEEEB; color: #AF4840; }
-  .fund-result.loss { background: #EBF6F5; color: #277A78; }
+  .fund-status { display: inline-block; padding: 2px 7px; border-radius: 8px; background: #edf0eb; color: #42574e; font-weight: 650; white-space: nowrap; }
+  .fund-status.active { background: #dfefe6; color: #215844; }
+  .fund-status.partial { background: #fbecd6; color: #784708; }
+  .fund-status.closed { background: #e8e5f3; color: #544476; }
+  .fund-status-note { margin-inline-start: 6px; }
+  .fund-result { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; margin: 12px 0; padding: 8px 10px; border-radius: 9px; background: #edf0eb; color: #42574e; font-weight: 700; }
+  .fund-project-card .fund-result { margin: 6px 0 0; }
+  .fund-result.gain { background: #FDEEEB; color: #9b313b; }
+  .fund-result.loss { background: #EBF6F5; color: #20624b; }
+  .fund-result strong { font-variant-numeric: tabular-nums; }
+
+  .record-entry-row { cursor: pointer; }
+  .record-entry-row .record-entry-open { padding: 0; min-height: 44px; background: transparent; border: 0; font-family: inherit; cursor: pointer; }
+  .record-entry-open:focus-visible { outline: 2px solid var(--expense); outline-offset: 2px; }
+  .record-entry-panel .page-back { min-height: 44px; }
+  .record-entry-panel h2 { margin: 0 0 12px; font-size: 1.2rem; }
+  .record-entry-panel .btn-primary { margin-top: 14px; width: 100%; min-height: 44px; }
+  .record-entry-hero { display: grid; justify-items: start; gap: 3px; padding: 16px; border-radius: 12px; background: #e8f1e8; }
+  .record-entry-hero > span { color: #41594e; }
+  .record-entry-hero .row-amount { font-size: clamp(1.35rem, 7vw, 2.15rem); white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+  .record-entry-fields { margin: 12px 0 0; padding: 0 12px; background: white; border: 1px solid #e6e7df; border-radius: 12px; }
+  .record-entry-fields > div { display: grid; grid-template-columns: minmax(min-content, auto) minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf0e9; }
+  .record-entry-fields > div:last-child { border-bottom: 0; }
+  .record-entry-fields dt { color: var(--muted); }
+  .record-entry-fields dd { margin: 0; text-align: end; overflow-wrap: anywhere; white-space: pre-wrap; }
+  #panelRecord .record-time-label { display: block; margin-top: 6px; }
+  #panelRecord #recordTime { min-height: 44px; min-width: 0; width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid #dce3dc; border-radius: 0; background: transparent; padding: 8px 0; color: var(--ink); font: inherit; }
+  .record-time-hint { display: block; margin-top: 4px; font-size: .75rem; color: var(--muted); }
   .fund-history > div { display: flex; justify-content: space-between; padding: 10px 2px; border-bottom: 1px solid #EDF0EE; font-size: 12px; }
   .fund-history > div span { color: var(--muted); }
   .fund-history > div { align-items: center; }
@@ -3168,3 +3193,63 @@
 .daily-totals .income { color:var(--income); }
 body.privacy-masked .daily-totals strong { font-size:0; }
 body.privacy-masked .daily-totals strong::after { content:"******"; font-size:.75rem; }
+
+  /* ===== 安卓应用内更新提醒（首页轻提示 / 设置页检查更新 / 底栏红点） ===== */
+  .update-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border: 1px solid #F1D0BE;
+    border-radius: 12px;
+    background: #FFF6EF;
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .update-banner[hidden] { display: none !important; }
+  .update-banner-text { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .update-banner-title { color: #8A4B2A; font-size: 13px; font-weight: 700; }
+  .update-banner-notes { color: #7A665D; font-size: 12px; overflow-wrap: anywhere; }
+  .update-banner-actions { display: flex; gap: 6px; margin-left: auto; }
+  .update-banner-btn {
+    min-height: 34px;
+    padding: 6px 12px;
+    border: 1px solid #E4B79B;
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: #8A4B2A;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .update-banner-btn.primary { border-color: var(--dark); background: var(--dark); color: #FFFFFF; }
+  .update-banner-btn:focus-visible { outline: 2px solid var(--expense); outline-offset: 2px; }
+  .tab-update-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-left: 3px;
+    border-radius: 50%;
+    background: var(--income);
+    vertical-align: 4px;
+  }
+  .tab-update-dot[hidden] { display: none !important; }
+  .android-update-settings[hidden] { display: none !important; }
+  .android-update-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+  .android-update-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .android-update-version { color: var(--ink); font-size: 13px; font-weight: 600; }
+  .android-update-status { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .android-update-row .btn-ghost { display: inline-flex; align-items: center; width: auto; min-height: 38px; margin-top: 0; padding: 8px 14px; white-space: nowrap; }
+  .android-update-download { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 10px 12px; border: 1px solid #CFE4DE; border-radius: 12px; background: #F0FBF7; }
+  .android-update-download[hidden] { display: none !important; }
+  .android-update-latest { color: var(--expense); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+  .android-update-download .btn-primary { width: auto; min-height: 38px; margin: 0; padding: 8px 16px; font-size: 14px; white-space: nowrap; }
+  .android-update-hint { font-size: 12px; overflow-wrap: anywhere; }
+  @media (max-width: 380px) {
+    .update-banner-actions { width: 100%; margin-left: 0; justify-content: flex-end; }
+    .android-update-row { flex-wrap: wrap; }
+  }

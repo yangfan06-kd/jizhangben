@@ -82,7 +82,7 @@ function renderHomeRecentRecords() {
     const category = record.category || type;
     const account = record.account ? accountName(record.account) : "未指定账户";
     const accountText = record.type === "转账" && record.toAccount ? account + " → " + accountName(record.toAccount) : account;
-    return `${heading}<button class="home-recent-row" type="button" data-home-date="${esc(date)}" aria-label="${esc("查看" + dateText + "流水：" + accountText + "，" + type + "，" + category)}">
+    return `${heading}<button class="home-recent-row" type="button" data-home-record-id="${esc(record.id)}" aria-label="${esc("查看账目：" + accountText + "，" + type + "，" + category)}">
       <span class="home-recent-icon" aria-hidden="true">${categoryIconMarkup(record.category, "other")}</span>
       <span class="home-recent-main"><span class="home-recent-top"><strong class="home-recent-account">${esc(accountText)}</strong><span class="home-recent-category">${esc(category)}</span></span><span class="home-recent-meta"><span class="home-recent-type">${esc(type)}</span></span></span>
       <span class="row-amount home-recent-amount ${esc(amount.cls)}">${esc(amount.text)}</span>
@@ -96,6 +96,94 @@ function openHomeRecords(date = "") {
   Object.assign(filterState, { account: "", category: "", reportSide: "", searchKey: "", fromDate: day, toDate: day, periodMode: day ? "range" : "all" });
   uiState.detailExpanded = true;
   switchTab("detail");
+}
+
+function recordEntryRecord() {
+  const entry = uiState.recordEntry;
+  if (!entry || String(entry.bookId) !== String(dataState.currentBookId)) return null;
+  return dataState.records.find(record => String(record.id) === String(entry.id)) || null;
+}
+
+function recordPageSource() {
+  return { tab: uiState.activeTab, bookId: dataState.currentBookId, scrollTop: Math.max(0, window.scrollY || 0),
+    reportReturn: uiState.activeTab === "detail" ? uiState.detailReportReturn : null };
+}
+
+function openRecordEntry(id) {
+  if (!["home", "detail"].includes(uiState.activeTab)) return;
+  openRecordEditor(id);
+}
+
+function renderRecordEntry() {
+  const content = document.getElementById("recordEntryContent");
+  if (!content) return;
+  const record = recordEntryRecord();
+  const edit = document.getElementById("recordEntryEdit");
+  document.getElementById("recordEntryBackLabel").textContent = uiState.recordEntry?.tab === "detail" ? "流水" : "首页";
+  if (!record) {
+    content.textContent = "这笔账目已找不到";
+    edit.hidden = true;
+    return;
+  }
+  const amount = amountText(record);
+  const type = record.fundAction === "contribution" ? (record.fundMode === "recurring" ? "基金定投" : "基金投资") :
+    record.fundAction === "withdrawal" ? "基金赎回" : record.type === "押金" ? depositLabel(record.depositDir) : record.type;
+  const account = record.account ? accountName(record.account) : "未指定账户";
+  const fields = [["类别", record.category || "未分类"], ["账户", account]];
+  if (record.type === "转账" && record.toAccount) fields.push(["转入账户", accountName(record.toAccount)]);
+  fields.push(["日期与时间", `${parseLocalDate(record.date) ? formatDate(record.date) : "日期未记录"} ${recordTimeOf(record.time) || "时间未记录"}`]);
+  fields.push(["备注", record.note || "无"]);
+  const party = record.transferParty || record.depositTarget || record.loanParty || record.payParty || record.reimbursementParty;
+  if (party) fields.push(["关联对象", party]);
+  content.innerHTML = `<div class="record-entry-hero"><span>${esc(type)}</span><strong class="row-amount ${esc(amount.cls)}">${esc(amount.text)}</strong></div>
+    <dl class="record-entry-fields">${fields.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl>`;
+  const fund = record.fundProjectId && fundProjectById(record.fundProjectId);
+  edit.hidden = Boolean(record.fundProjectId && !fund);
+  edit.textContent = fund ? (["contribution", "withdrawal"].includes(record.fundAction) ? "更正这笔记录" : "查看基金") : "修改这笔账";
+}
+
+function openRecordEditor(id, options = {}) {
+  const record = dataState.records.find(item => String(item.id) === String(id));
+  if (!record || uiState.recordSaveInFlight) return;
+  const source = recordPageSource();
+  if (record.fundProjectId) {
+    if (!fundProjectById(record.fundProjectId)) return;
+    uiState.recordEditReturn = source;
+    switchTab("investment", { recordFlow: true });
+    openFundDetail(record.fundProjectId);
+    if (["contribution", "withdrawal"].includes(record.fundAction)) openFundRecordEditor(record.id);
+    return;
+  }
+  uiState.recordEditReturn = source;
+  startEdit(id, { ...options, recordFlow: true, recordFlowId: record.id });
+}
+
+function returnToRecordSource(source, options) {
+  if (!source || String(source.bookId) !== String(dataState.currentBookId)) return false;
+  if (!options.fromHistory && window.history?.state?.recordFlow && typeof window.history.back === "function") {
+    window.history.back();
+    return true;
+  }
+  switchTab(source.tab, { fromHistory: options.fromHistory, replaceHistory: true });
+  if (source.tab === "detail") uiState.detailReportReturn = source.reportReturn;
+  if (typeof window.scrollTo === "function") window.scrollTo(0, source.scrollTop);
+  return true;
+}
+
+function returnFromRecordEntry(options = {}) {
+  if (uiState.activeTab !== "recordEntry") return false;
+  return returnToRecordSource(uiState.recordEntry, options);
+}
+
+function returnFromRecordEdit(options = {}) {
+  const source = uiState.recordEditReturn;
+  if (!source || !["record", "investment"].includes(uiState.activeTab)) return false;
+  if (String(source.bookId) !== String(dataState.currentBookId)) return false;
+  if (uiState.recordSaveInFlight && !options.saved && !options.fromHistory) return true;
+  if (uiState.activeTab === "record" && !options.saved && uiState.editingRecordId !== null) resetForm();
+  const returning = returnToRecordSource(source, options);
+  if (returning && uiState.activeTab === source.tab) uiState.recordEditReturn = null;
+  return returning;
 }
 
 function detailPeriodMoney(value, side) {
@@ -368,7 +456,10 @@ function renderListContents(continuation) {
 
     groups[date].forEach(r => {
       const row = document.createElement("div");
-      row.className = "row";
+      row.className = "row record-entry-row";
+      row.onclick = event => {
+        if (!event.target.closest("button") || event.target.closest(".record-entry-open")) openRecordEntry(r.id);
+      };
 
       const amt = amountText(r);
       const isDep = (r.type === "押金");
@@ -408,8 +499,8 @@ function renderListContents(continuation) {
       }
       if (r.type === "报销") {
         const effect = typeof reimbursementEffect === "function" ? reimbursementEffect(r) : { original: null, excess: 0 };
-        noteText = "来源：" + (r.reimbursementParty || "未填写") +
-          (effect.original ? " · 原支出 ¥" + amountOf(effect.original).toFixed(2) : "") +
+        noteText = (r.reimbursementParty ? "来源：" + r.reimbursementParty + " · " : "") +
+          (effect.original ? "原支出 ¥" + amountOf(effect.original).toFixed(2) : "未关联原支出") +
           (effect.excess > 0 ? " · 超出部分计收入 ¥" + effect.excess.toFixed(2) : "") +
           (noteText ? " · " + noteText : "");
       }
@@ -429,11 +520,11 @@ function renderListContents(continuation) {
           <div class="row-note">${esc(noteText)}</div>
           <span class="badge ${badgeCls}">${esc(badgeText)}</span>
         </div>
-        <div class="row-amount ${amt.cls}">${esc(amt.text)}</div>
+        <button class="row-amount record-entry-open ${amt.cls}" type="button" aria-label="${esc("查看账目：" + accountDisplay + "，" + badgeText + "，" + (r.category || "未分类"))}">${esc(amt.text)}</button>
         <div class="row-actions">${r.fundProjectId ?
-          `<button class="mini-btn row-action-btn" data-id="${esc(r.fundProjectId)}" data-act="fund">查看基金</button>` :
-          `<button class="mini-btn row-action-btn" data-id="${r.id}" data-act="edit" title="编辑这笔账" aria-label="编辑这笔账"><span class="ui-icon" data-icon="edit" aria-hidden="true"></span><span class="action-label">编辑</span></button>
-          <button class="mini-btn danger row-action-btn" data-id="${r.id}" data-act="del" title="删除这笔账" aria-label="删除这笔账"><span class="ui-icon" data-icon="delete" aria-hidden="true"></span><span class="action-label">删除</span></button>`}</div>
+          `<button class="mini-btn row-action-btn" data-id="${esc(r.id)}" data-act="fund">查看基金</button>` :
+          `<button class="mini-btn row-action-btn" data-id="${esc(r.id)}" data-act="edit" title="编辑这笔账" aria-label="编辑这笔账"><span class="ui-icon" data-icon="edit" aria-hidden="true"></span><span class="action-label">编辑</span></button>
+          <button class="mini-btn danger row-action-btn" data-id="${esc(r.id)}" data-act="del" title="删除这笔账" aria-label="删除这笔账"><span class="ui-icon" data-icon="delete" aria-hidden="true"></span><span class="action-label">删除</span></button>`}</div>
       `;
       additions.appendChild(row);
     });
@@ -443,11 +534,8 @@ function renderListContents(continuation) {
   additions.querySelectorAll(".mini-btn").forEach(btn => {
     btn.onclick = () => {
       const id = btn.dataset.id;
-      if (btn.dataset.act === "fund") {
-        switchTab("investment");
-        if (typeof openFundDetail === "function") openFundDetail(id);
-      } else if (btn.dataset.act === "edit") startEdit(id);
-      else deleteRec(id);
+      if (btn.dataset.act === "del") deleteRec(id);
+      else openRecordEditor(id);
     };
   });
   additions.querySelectorAll(".row-category-button").forEach(button => {
@@ -606,6 +694,7 @@ function renderContents() {
   renderPeriodSummary();
   renderStats();
   renderHomeRecentRecords();
+  if (uiState.activeTab === "recordEntry") renderRecordEntry();
   renderDetailPeriodCards();
   renderList();
   renderAccountList();
@@ -655,7 +744,10 @@ function switchTab(tab, options = {}) {
     if (options.replaceHistory && typeof window.history.replaceState === "function") {
       window.history.replaceState({ tab }, "", `#${tab}`);
     } else {
-      window.history.pushState({ tab }, "", `#${tab}`);
+      const historyState = { tab };
+      if (options.recordFlow) historyState.recordFlow = true;
+      if (options.recordFlowId != null) historyState.recordFlowId = options.recordFlowId;
+      window.history.pushState(historyState, "", `#${tab}`);
     }
   }
   uiState.activeTab = tab;
@@ -665,8 +757,8 @@ function switchTab(tab, options = {}) {
   const app = document.querySelector(".app");
   if (app) app.classList.toggle("subpage-open", tab !== "home");
   const bottomNav = document.querySelector(".bottom-nav");
-  if (bottomNav) bottomNav.classList.toggle("record-hidden", tab === "record" || tab === "categorySystem" || tab === "fixedIncome");
-  const panels = ["panelHome", "panelHomePeriods", "panelBook", "panelRecord", "panelCategorySystem", "panelFixedIncome", "panelAccount", "panelDetail", "panelOverview", "panelBudget", "panelInvestment"];
+  if (bottomNav) bottomNav.classList.toggle("record-hidden", ["record", "recordEntry", "categorySystem", "fixedIncome"].includes(tab));
+  const panels = ["panelHome", "panelHomePeriods", "panelBook", "panelRecord", "panelRecordEntry", "panelCategorySystem", "panelFixedIncome", "panelAccount", "panelDetail", "panelOverview", "panelBudget", "panelInvestment"];
   panels.forEach(id => {
     const panel = document.getElementById(id);
     if (panel) panel.style.display = "none";
@@ -676,6 +768,7 @@ function switchTab(tab, options = {}) {
     homePeriods: "panelHomePeriods",
     book: "panelBook",
     record: "panelRecord",
+    recordEntry: "panelRecordEntry",
     categorySystem: "panelCategorySystem",
     fixedIncome: "panelFixedIncome",
     account: "panelAccount",
@@ -688,6 +781,15 @@ function switchTab(tab, options = {}) {
     if (target) target.style.display = "block";
     if (tab === "record" && typeof showRecordKeyboard === "function") showRecordKeyboard();
     if (tab !== "record" && typeof hideRecordKeyboard === "function") hideRecordKeyboard();
+    if (tab === "record") {
+      const label = document.getElementById("recordBackLabel");
+      if (label) label.textContent = uiState.editingRecordId === null ? "记一笔" : "修改账目";
+      if (options.recordFlow) window.scrollTo(0, 0);
+    }
+    if (tab === "recordEntry") {
+      renderRecordEntry();
+      window.scrollTo(0, 0);
+    }
     if (tab === "detail") {
       const position = currentTab !== "detail" && uiState.detailBrowsePosition;
       const restore = position && position.context === detailBrowseContext();

@@ -6,7 +6,7 @@ function updateFormFields() {
   if (typeof updateTransferFields === "function") updateTransferFields();
   const isBalance = uiState.selectedType === "余额";
   const categoryField = document.querySelector("#panelRecord .record-category-field");
-  if (categoryField) categoryField.style.display = (isBalance || ["转账", "借贷", "代付", "报销", "退款"].includes(uiState.selectedType)) ? "none" : "";
+  if (categoryField) categoryField.style.display = (isBalance || ["转账", "借贷", "代付", "退款"].includes(uiState.selectedType)) ? "none" : "";
   const amountLabel = document.getElementById("recordAmountLabel");
   if (amountLabel) amountLabel.textContent = isBalance ? "账户实际余额" : "金额";
   const accountLabel = document.getElementById("recordAccountLabel");

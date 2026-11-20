@@ -1,0 +1,9 @@
+# Cloudflare Pages response headers for the download site.
+# The Android shell fetches version.json from a different origin, so CORS must be
+# explicit. Files starting with "_" are consumed by Pages and never served as-is;
+# `npx wrangler pages deploy site` (used by mobile/release.ps1) uploads them.
+
+/version.json
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET, HEAD, OPTIONS
+  Cache-Control: no-store

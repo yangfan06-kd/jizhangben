@@ -21,6 +21,12 @@ if (window.history && typeof window.history.replaceState === "function") {
       return;
     }
     const tab = event.state && event.state.tab ? event.state.tab : "home";
+    if (tab === uiState.recordEditReturn?.tab && returnFromRecordEdit({ fromHistory: true })) return;
+    if (tab === uiState.recordEntry?.tab && returnFromRecordEntry({ fromHistory: true })) return;
+    if (tab === "record" && event.state?.recordFlowId != null && uiState.editingRecordId === null) {
+      openRecordEditor(event.state.recordFlowId, { fromHistory: true });
+      return;
+    }
     switchTab(tab, { fromHistory: true });
   });
 }
@@ -53,6 +59,7 @@ window.handleNativeBack = function handleNativeBack() {
     switchTab("record", { replaceHistory: true });
     return true;
   }
+  if (returnFromRecordEdit() || returnFromRecordEntry()) return true;
   if (returnFromReportDetail()) return true;
   if (uiState && uiState.activeTab && uiState.activeTab !== "home") {
     switchTab("home", { replaceHistory: true });
@@ -62,6 +69,7 @@ window.handleNativeBack = function handleNativeBack() {
 };
 
 async function openRecordPage() {
+  if (uiState.activeTab !== "record") uiState.recordEditReturn = null;
   // 新建时从干净的“支出”表单开始；编辑记录时保留编辑草稿。
   const draft = uiState.editingRecordId === null && typeof readRecordDraft === "function" ? readRecordDraft() : null;
   const bookId = dataState.currentBookId;
@@ -130,8 +138,8 @@ document.getElementById("homeAllRecordsBtn").onclick = () => openHomeRecords();
 document.getElementById("homeRecentList").onclick = event => {
   const add = event.target.closest("[data-home-record]");
   if (add) { openRecordPage(); return; }
-  const row = event.target.closest("[data-home-date]");
-  if (row) openHomeRecords(row.dataset.homeDate);
+  const row = event.target.closest("[data-home-record-id]");
+  if (row) openRecordEntry(row.dataset.homeRecordId);
 };
 document.querySelectorAll(".bottom-nav .tab").forEach(b => {
   b.onclick = () => b.dataset.tab === "record" ? openRecordPage() : switchTab(b.dataset.tab);
@@ -139,7 +147,16 @@ document.querySelectorAll(".bottom-nav .tab").forEach(b => {
 document.querySelectorAll("[data-tab]:not(.tab)").forEach(b => {
   b.onclick = () => b.dataset.tab === "record" ? openRecordPage() : switchTab(b.dataset.tab);
 });
-document.getElementById("recordBackBtn").onclick = () => switchTab("home", { replaceHistory: true });
+document.getElementById("recordBackBtn").onclick = () => {
+  if (!returnFromRecordEdit()) switchTab("home", { replaceHistory: true });
+};
+document.getElementById("recordEntryBack").onclick = () => {
+  if (!returnFromRecordEntry()) switchTab("home", { replaceHistory: true });
+};
+document.getElementById("recordEntryEdit").onclick = () => {
+  const record = recordEntryRecord();
+  if (record) openRecordEditor(record.id);
+};
 document.getElementById("fixedIncomeBackBtn").onclick = () => switchTab("record", { replaceHistory: true });
 document.querySelectorAll(".page-back-home").forEach(b => {
   b.onclick = () => {
@@ -342,5 +359,13 @@ function startApplicationCore() {
   }
 }
 
-if (typeof initializeDeviceSecurity === "function") initializeDeviceSecurity();
+if (window.PwaLedger) {
+  window.PwaLedger.start(() => {
+    if (typeof initializeDeviceSecurity === "function") initializeDeviceSecurity();
+    else startApplicationCore();
+  });
+} else if (typeof initializeDeviceSecurity === "function") initializeDeviceSecurity();
 else startApplicationCore();
+
+// 安卓应用内更新提醒：后台检查，不等待结果，不阻塞启动和记账；没有原生桥（iPhone PWA／浏览器）时直接跳过。
+if (typeof startAndroidUpdateCheck === "function") startAndroidUpdateCheck();

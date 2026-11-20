@@ -65,6 +65,7 @@ function readBackupFile(file) {
       catch (error) { reject(error); }
     };
     reader.onerror = () => reject(new Error("file_read_failed"));
+    reader.onabort = () => reject(new Error("file_read_aborted"));
     reader.readAsText(file);
   });
 }
@@ -116,9 +117,9 @@ async function confirmMigrationImport() {
   }
 }
 
-// 把所有 jizhangben_ 开头的本地数据打包成带版本号的 JSON 文件下载
-function exportBackup() {
-  const storage = appStorage.entries("jizhangben_");
+// 生成安卓和网页互通的备份；不改动传入的存储快照或任何账目。
+function createLedgerBackup(entries = appStorage.entries("jizhangben_")) {
+  const storage = { ...entries };
   delete storage[PENDING_SYNC_KEY];
   delete storage[LOCAL_SNAPSHOT_OWNER_KEY];
   const data = {
@@ -129,6 +130,13 @@ function exportBackup() {
   };
   const fileName = "记账本备份_" + todayStr() + ".json";
   const content = JSON.stringify(data, null, 2);
+  return { fileName, content, data };
+}
+
+// 把所有 jizhangben_ 开头的本地数据打包成带版本号的 JSON 文件下载
+function exportBackup() {
+  if (window.PwaBackup) return window.PwaBackup.prepareExport();
+  const { fileName, content } = createLedgerBackup();
   if (window.JizhangbenNative && typeof window.JizhangbenNative.saveBackup === "function") {
     try {
       const savedPath = window.JizhangbenNative.saveBackup(fileName, content);
@@ -435,6 +443,7 @@ function replaceBackupStorage(imported) {
 
 // 导入备份，写入失败时恢复导入前的数据
 async function importBackup(file) {
+  if (window.PwaManagement) return window.PwaManagement.importBackup(file);
   if (!file) return;
   if (!(await appConfirm("导入会覆盖当前所有账本和账目，确定继续吗？"))) return;
   const reader = new FileReader();
@@ -466,6 +475,11 @@ function reloadData() {
   loadCustomCategories();
   loadCustomCategoryIcons();
   loadCategorySystem();
+  refreshReloadedData();
+}
+
+// 数据读取可在事务内完成；提交后才重置输入并更新页面。
+function refreshReloadedData() {
   resetForm();
   resetAccountForm();
   resetBookForm();

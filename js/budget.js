@@ -291,6 +291,7 @@ function saveBudgetPeriodAndRender(message = "预算已保存") {
 }
 
 function saveBudgetTotal() {
+  if (window.PwaManagement) return window.PwaManagement.budget('total');
   const input = document.getElementById("budgetTotalInput");
   if (!input) return;
   const raw = input.value.trim();
@@ -310,12 +311,14 @@ function saveBudgetTotal() {
 }
 
 function clearBudgetTotal() {
+  if (window.PwaManagement) return window.PwaManagement.budget('clear');
   const period = budgetPeriod();
   period.totalCents = null;
   saveBudgetPeriodAndRender("已清除本月总预算");
 }
 
 function addBudgetCategory() {
+  if (window.PwaManagement) return window.PwaManagement.budget('add');
   const select = document.getElementById("budgetCategorySelect");
   const input = document.getElementById("budgetCategoryInput");
   const name = select && select.value ? select.value : "";
@@ -335,6 +338,7 @@ function addBudgetCategory() {
 }
 
 function updateBudgetCategory(row, remove = false) {
+  if (window.PwaManagement) return window.PwaManagement.budget(remove ? 'remove' : 'update', row);
   if (!row) return;
   const name = row.dataset.budgetCategory;
   const period = budgetPeriod();
