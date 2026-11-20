@@ -4,15 +4,20 @@
 
 ## 下载 Android 版
 
-当前版本 **2.10**（Android 版本号 **111**），包名 `com.jizhangben.app`，沿用原有签名。个人离线版无需注册，也不需要服务器或电脑保持开机。
+当前版本 **2.11**（Android 版本号 **112**），包名 `com.jizhangben.app`，沿用原有签名。个人离线版无需注册，也不需要服务器或电脑保持开机。
 
-[下载 Android 安装包](https://jizhangben-download.pages.dev/) · [GitHub 备用下载](https://github.com/yangfan06-kd/jizhangben/raw/refs/heads/main/releases/jizhangben-v2.10.apk) · [应用内更新说明](docs/ANDROID_IN_APP_UPDATE.md)
+[下载 Android 安装包](https://jizhangben-download.pages.dev/) · [GitHub 备用下载](https://github.com/yangfan06-kd/jizhangben/raw/refs/heads/main/releases/jizhangben-v2.11.apk) · [应用内更新说明](docs/ANDROID_IN_APP_UPDATE.md)
 
 手机打开 APK 后按系统提示安装或更新。**直接覆盖安装，不要卸载旧 App 或清除应用数据，账目和设置都会保留**；想多一层保险，可以更新前在「设置」里导出一份 JSON 备份。微信分发时直接发送 APK 文件即可。此 APK 使用项目既有调试签名，供个人与家人试用；只有相同包名、相同签名且版本号递增的安装包才能覆盖升级。
 
-安装包 SHA-256：`D88871401250D05A3B50BED059A8EFB3C86466828C6D99554B88CAF4D5CFF0E0`（3.23 MB）。
+安装包 SHA-256：`3270297C93191010DC2C00C4C6D447E7435DA18E775C69FD8AFA3E2A384008ED`（3.23 MB）。
 
-从 2.10 起，App 打开时会在后台检查下载站的版本清单，发现更高版本才在首页提示「去下载 / 稍后」；点过「稍后」还能在「设置 → 检查更新」里重新找到下载入口。已装 2.09 及更早版本的用户需要手动覆盖安装一次 2.10，之后才会收到应用内提醒。
+从 2.10 起，App 打开时会在后台检查下载站的版本清单，发现更高版本才在首页提示「去下载 / 稍后」；点过「稍后」还能在「设置 → 检查更新」里重新找到下载入口。已装 2.09 及更早版本的用户需要手动覆盖安装一次带更新功能的版本（2.10 或更新），之后才会收到应用内提醒。
+
+## 2.11 更新内容
+
+- 验证应用内更新提醒整条链路：已装 2.10 的手机打开新版会提示「去下载」，点按后用手机浏览器打开下载页，下载后覆盖安装；「稍后」可从「设置 → 检查更新」重新找到入口。
+- 本版功能与 2.10 相同，仅 `versionCode` 递增到 112，用于确认「发布 → 提示 → 下载 → 覆盖安装」在真机上可用。
 
 ## 2.10 更新内容
 
