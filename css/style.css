@@ -3371,3 +3371,267 @@ body.privacy-masked .daily-totals strong::after { content:"******"; font-size:.7
     .time-picker-wheel { flex-basis: 76px; }
     .time-picker-wheels::before { width: 136px; }
   }
+
+/* 首页结余卡材质。 */
+#panelHome .stats {
+  background:
+    radial-gradient(ellipse 54px 11px at 8% 0%, #ffffffed, transparent 100%),
+    radial-gradient(ellipse 58px 13px at 94% 100%, #ffffffbd, transparent 100%),
+    #e5eee8;
+  box-shadow: inset 0 0 0 1px #ffffffd9, inset 0 1px 2px #ffffffcc,
+    inset 0 -1px 1px #89949b33, 0 2px 7px #49576015;
+}
+
+/* 底部导航表面与选中态。 */
+nav.bottom-nav {
+  isolation: isolate;
+  background: transparent;
+  border-top-color: transparent;
+}
+nav.bottom-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0 4px 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #fffffff2, 0 -1px 10px #25372c1f;
+}
+nav.bottom-nav .tab.active:not(.bottom-record-tab) {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+}
+nav.bottom-nav .tab.active:not(.bottom-record-tab)::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  width: min(62px, 100%);
+  height: min(42px, 100%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #f1f2f34d, #d9dcdf75 60%, #bfc4c960);
+  box-shadow: inset 0 0 0 1px #c8ccd175, inset 0 1px 2px #ffffffd9, 0 1px 3px #40475012;
+}
+@media (prefers-reduced-transparency: reduce) {
+  nav.bottom-nav .tab.active:not(.bottom-record-tab)::before {
+    background: #eef0f2;
+  }
+}
+
+/* 借贷、代付、类别和小类图标的玻璃表面。 */
+#loanModeChips .chip,
+#payModeChips .chip,
+.category-system-sub-form .category-system-icon-choice,
+#categoryPickerOptions .category-picker-option[role="option"],
+.category-picker-manage {
+  background-image:
+    radial-gradient(ellipse 9px 6px at 5px 4px, #ffffffe8, transparent),
+    radial-gradient(ellipse 8px 5px at calc(100% - 5px) calc(100% - 4px), #ffffffa6, transparent);
+}
+
+#loanModeChips .chip,
+#payModeChips .chip {
+  background-color: #e8ece976;
+  border-color: #cbd1cd;
+  background-image:
+    radial-gradient(ellipse 10px 5px at 22% 7%, #ffffffe8, transparent),
+    radial-gradient(ellipse 8px 5px at 78% 93%, #ffffffa6, transparent);
+}
+#loanModeChips .chip.selected,
+#payModeChips .chip.selected {
+  background-color: #dfeee68c;
+  border-color: #236850;
+  color: var(--ink);
+}
+.category-system-sub-form .category-system-icon-choice {
+  background-color: #eaeaea84;
+  border-color: #d1d1d1;
+}
+.category-system-sub-form .category-system-icon-choice.selected {
+  background-color: #f2f2f274;
+  border-color: var(--icon-accent);
+}
+#categoryPickerOptions .category-picker-option[role="option"] {
+  background-color: var(--category-bg, #fafbfc);
+  background-color: color-mix(in srgb, var(--category-bg, #fafbfc) 64%, transparent);
+}
+#categoryPickerOptions .category-picker-option.selected[role="option"] {
+  background-color: #fff;
+  background-color: color-mix(in srgb, var(--category-bg, #fafbfc) 30%, transparent);
+  border-color: var(--category-color, var(--expense));
+}
+.category-picker-manage { background-color: #e3ede766; }
+
+/* 基金归档、详情操作和文字层级。 */
+#panelInvestment .fund-summary strong,
+#panelInvestment .fund-detail-numbers strong {
+  color: var(--ink);
+  font-size: clamp(1.25rem, 5vw, 1.5rem);
+}
+#panelInvestment .fund-detail-hero h2 { font-size: 1.25rem; line-height: 1.35; }
+#panelInvestment .fund-section-title,
+#panelInvestment .fund-project-top strong { font-size: 1rem; line-height: 1.4; }
+#panelInvestment .fund-intro,
+#panelInvestment .fund-hint,
+#panelInvestment .fund-footnote { font-size: .8125rem; }
+#panelInvestment :is(.fund-project-top em, .fund-type-label, .fund-project-original,
+  .fund-record-edit, .fund-status, .fund-status-note, .fund-adjust-entry),
+#panelInvestment .fund-entry b,
+#panelInvestment .fund-picker-menu button[aria-selected="true"],
+#panelInvestment .fund-weekdays label:has(input:checked),
+#panelInvestment .fund-day-menu button[aria-pressed="true"],
+#panelInvestment .fund-day-menu .fund-day-done,
+#panelInvestment .fund-redeem-choice label:has(input:checked) { color: #424846; }
+#panelInvestment .fund-result > span, #panelInvestment .fund-result.even { color: #424846; }
+
+.fund-secondary-actions { display: flex; align-items: stretch; gap: 8px; margin: 8px 0; }
+.fund-action-button,
+#panelInvestment .fund-glass-redeem,
+.fund-archive-entry {
+  min-height: 44px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 650;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.fund-action-button,
+#panelInvestment .fund-glass-redeem {
+  --fund-glass-highlight: #ffffffaf;
+  background-image: radial-gradient(ellipse 22px 8px at 8px 3px, var(--fund-glass-highlight), transparent),
+    radial-gradient(ellipse 20px 8px at calc(100% - 8px) calc(100% - 3px), var(--fund-glass-highlight), transparent);
+  box-shadow: inset 0 0 0 1px #ffffff56, 0 1px 3px #26312c17;
+}
+.fund-action-button {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border: 1px solid #cbd1cd;
+  background-color: #ffffffb8;
+  color: var(--ink);
+}
+.fund-action-emphasis { background-color: #e9eeebb8; }
+#panelInvestment .fund-glass-redeem { --fund-glass-highlight: #ffffff4d; }
+.fund-archive-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 12px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+}
+.fund-archive-entry strong { flex: 1; }
+.fund-archive-entry span { color: #515755; }
+.fund-archive-total, .fund-archive-list {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.fund-archive-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 8px 0;
+  padding: 12px;
+  color: var(--ink);
+  font-weight: 650;
+}
+.fund-archive-total strong { font-size: 1.25rem; }
+.fund-archive-list:empty { display: none; }
+.fund-archive-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(48%);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  padding: 9px 12px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: .875rem;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: pointer;
+}
+.fund-archive-row + .fund-archive-row { border-top: 1px solid var(--line); }
+.fund-archive-row strong { text-align: right; }
+.fund-archive-amount.gain { color: var(--income); }
+.fund-archive-amount.loss { color: var(--expense); }
+.fund-archive-actions {
+  position: fixed;
+  inset: auto 0 0;
+  margin: 0 auto;
+  width: min(100%, 480px);
+  max-width: 100%;
+  padding: 14px 14px max(14px, env(safe-area-inset-bottom));
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  background: #fff;
+  color: var(--ink);
+}
+.fund-archive-actions::backdrop { background: #1e282561; }
+.fund-archive-actions h3 { margin: 0 0 10px; font-size: 1rem; overflow-wrap: anywhere; }
+.fund-archive-actions button { width: 100%; margin-top: 6px; }
+[data-fund-sort-id] { -webkit-touch-callout: none; user-select: none; position: relative; }
+#panelInvestment .fund-reordering {
+  z-index: 1;
+  transform: translateY(var(--fund-drag-offset, 0px));
+  background: #fff;
+  box-shadow: 0 4px 12px #2e3b3340;
+  border-radius: 8px;
+}
+.fund-drop-before::before, .fund-drop-after::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 2px;
+  border-radius: 2px;
+  background: #515a56;
+  pointer-events: none;
+  content: "";
+}
+.fund-drop-after::after { inset: auto 0 0; }
+
+/* 普通入口和提示统一采用中性色，财务金额继续使用收支色。 */
+#panelHome .stat-balance,
+#panelHome .stat-balance-label,
+#panelHome .stat .label,
+#panelHome .home-month-label,
+#panelHome .home-all-records,
+.detail-filter-button-action,
+.detail-load-more,
+.report-period-actions button,
+#reportRangeApplyBtn,
+.budget-category-picker-option.selected,
+.compact-picker-option.selected,
+.account-picker-option.selected,
+.text-link,
+.category-picker-manage strong,
+.category-picker-manage small,
+.category-system-add-toggle,
+.category-system-sub-toggle,
+.category-system-rename-save,
+.compact-calendar-head button,
+.chip-add,
+.form-msg.success,
+.acc-msg,
+.external-import-ok,
+.android-update-latest { color: #424846; }
+#panelHome .stat-balance { color: var(--ink); }
+.bottom-nav .tab.active > span:last-child { color: var(--ink); }

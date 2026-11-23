@@ -164,6 +164,172 @@ function fundResultMarkup(project, totals) {
   return `<span class="fund-result ${tone}"><span>${label}</span><strong>${fundMoney(Math.abs(difference))}</strong></span>`;
 }
 
+function isArchivedFund(project) {
+  return project.status === "closed" && project.archived === true;
+}
+
+function sortFundProjects(projects, archive = false) {
+  const order = archive ? "archiveOrder" : "homeOrder";
+  return projects.slice().sort((a, b) => {
+    const aOrder = Number.isSafeInteger(a[order]) ? a[order] : -1;
+    const bOrder = Number.isSafeInteger(b[order]) ? b[order] : -1;
+    return aOrder - bOrder || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+}
+
+function setFundArchiveFlag(projects, id, archived) {
+  const project = projects.find(item => String(item.id) === String(id));
+  if (!project || project.status !== "closed") throw new Error("只有已全部赎回的基金可以归档。");
+  if (isArchivedFund(project) === archived) return projects;
+  return projects.map(item => item === project ? { ...item, archived } : item);
+}
+
+function reorderFundProjects(projects, archive, movingId, targetId, after) {
+  const sorted = sortFundProjects(archive ? projects.filter(isArchivedFund) : projects, archive);
+  const visible = sorted.filter(project => isArchivedFund(project) === archive);
+  const moving = visible.find(project => String(project.id) === String(movingId));
+  const target = visible.find(project => String(project.id) === String(targetId));
+  if (!moving || !target || moving === target) return projects;
+  const updated = visible.filter(project => project !== moving);
+  updated.splice(updated.indexOf(target) + Number(after), 0, moving);
+  if (updated.every((project, index) => project === visible[index])) return projects;
+  const field = archive ? "archiveOrder" : "homeOrder";
+  let visibleIndex = 0;
+  const positions = new Map(sorted.map((project, index) =>
+    [!archive && isArchivedFund(project) ? project : updated[visibleIndex++], index]));
+  return projects.map(project => positions.has(project) && project[field] !== positions.get(project)
+    ? { ...project, [field]: positions.get(project) } : project);
+}
+
+function fundArchiveTotal(projects, records = dataState.records) {
+  return projects.filter(isArchivedFund).reduce((sum, project) => sum + fundTotals(project, records).differenceCents, 0);
+}
+
+function fundSignedResult(cents) {
+  const tone = cents > 0 ? "gain" : cents < 0 ? "loss" : "even";
+  const label = cents > 0 ? "盈利" : cents < 0 ? "亏损" : "持平";
+  const sign = cents > 0 ? "+" : cents < 0 ? "−" : "";
+  return { tone, label, amount: sign + fundMoney(Math.abs(cents)) };
+}
+
+async function updateFundPresentation(change, messageId, onSaved) {
+  if (fundUi.presentationBusy) return;
+  fundUi.presentationBusy = true;
+  try {
+    const update = () => {
+      const projects = dataState.fundProjects || [];
+      const next = change(projects);
+      if (next === projects) return;
+      appStorage.set(fundProjectsKey(dataState.currentBookId), JSON.stringify(next));
+      dataState.fundProjects = next;
+    };
+    if (window.PwaFunds) await window.PwaFunds.commit(update);
+    else update();
+    showFundMessage(messageId, "");
+    onSaved();
+  } catch (error) {
+    showFundMessage(messageId, "保存失败，请重新打开基金页面后重试。", true);
+  } finally {
+    fundUi.presentationBusy = false;
+  }
+}
+
+function renderFundArchive() {
+  const list = document.getElementById("fundArchiveList");
+  if (!list) return;
+  const projects = dataState.fundProjects || [];
+  const archived = sortFundProjects(projects.filter(isArchivedFund), true);
+  const total = fundSignedResult(fundArchiveTotal(projects));
+  document.getElementById("fundArchiveTotal").innerHTML =
+    `<span>归档总盈亏</span><strong class="fund-archive-amount ${total.tone}">${total.amount}</strong>`;
+  document.getElementById("fundArchiveEmpty").hidden = archived.length > 0;
+  list.innerHTML = archived.map(project => {
+    const result = fundSignedResult(fundTotals(project).differenceCents);
+    return `<button class="fund-archive-row" type="button" data-fund-archived="${esc(project.id)}" data-fund-sort-id="${esc(project.id)}">
+      <span>${esc(project.fundName)}</span><strong class="fund-archive-amount ${result.tone}" aria-label="${result.label} ${result.amount}">${result.label} ${result.amount}</strong>
+    </button>`;
+  }).join("");
+}
+
+function bindFundReorder(list, archive) {
+  let drag = null;
+  let ignoreClick = null;
+  function setTarget() {
+    const offset = drag.y - drag.startY + window.scrollY - drag.startScroll;
+    drag.item.style.setProperty("--fund-drag-offset", offset + "px");
+    const items = [...list.querySelectorAll("[data-fund-sort-id]")].filter(item => item !== drag.item);
+    const target = items.find(item => drag.y < item.getBoundingClientRect().bottom) || items.at(-1);
+    drag.target?.classList.remove("fund-drop-before", "fund-drop-after");
+    if (!target) return;
+    const bounds = target.getBoundingClientRect();
+    drag.target = target;
+    drag.after = drag.y > bounds.top + bounds.height / 2;
+    target.classList.add(drag.after ? "fund-drop-after" : "fund-drop-before");
+  }
+  function end(event, save) {
+    if (!drag) return;
+    const current = drag;
+    drag = null;
+    clearTimeout(current.timer);
+    clearInterval(current.scrollTimer);
+    if (!current.active) return;
+    current.item.classList.remove("fund-reordering");
+    current.item.style.removeProperty("--fund-drag-offset");
+    current.target?.classList.remove("fund-drop-before", "fund-drop-after");
+    ignoreClick = { id: current.item.dataset.fundSortId, until: Date.now() + 450 };
+    if (event?.cancelable) event.preventDefault();
+    if (save && current.item.isConnected && current.target?.isConnected && dataState.currentBookId === current.bookId) {
+      const messageId = archive ? "fundArchiveMsg" : "fundHomeMsg";
+      void updateFundPresentation(projects => reorderFundProjects(projects, archive, current.item.dataset.fundSortId,
+        current.target.dataset.fundSortId, current.after), messageId, archive ? renderFundArchive : renderInvestmentPlans);
+    }
+  }
+  list.addEventListener("touchstart", event => {
+    if (drag) end(null, false);
+    const item = event.target.closest("[data-fund-sort-id]");
+    if (!item || event.touches.length !== 1 || fundUi.presentationBusy) return;
+    ignoreClick = null;
+    const { clientX: x, clientY: y } = event.touches[0];
+    drag = { item, x, y, startY: y, startScroll: window.scrollY, bookId: dataState.currentBookId };
+    drag.timer = setTimeout(() => {
+      if (!item.isConnected || dataState.currentBookId !== drag.bookId) return end(null, false);
+      drag.active = true;
+      item.classList.add("fund-reordering");
+      drag.scrollTimer = setInterval(() => {
+        if (!item.isConnected || dataState.currentBookId !== drag.bookId) return end(null, false);
+        const step = drag.y < 65 ? -10 : drag.y > window.innerHeight - 95 ? 10 : 0;
+        if (step) {
+          window.scrollBy(0, step);
+          setTarget();
+        }
+      }, 30);
+    }, 380);
+  }, { passive: true });
+  list.addEventListener("touchmove", event => {
+    if (!drag) return;
+    if (event.touches.length !== 1) return end(null, false);
+    const { clientX: x, clientY: y } = event.touches[0];
+    if (!drag.active) {
+      if (Math.hypot(x - drag.x, y - drag.y) > 8) end(null, false);
+      return;
+    }
+    if (event.cancelable) event.preventDefault();
+    drag.y = y;
+    setTarget();
+  }, { passive: false });
+  list.addEventListener("touchend", event => end(event, true), { passive: false });
+  list.addEventListener("touchcancel", event => end(event, false));
+  list.addEventListener("contextmenu", event => {
+    if (drag) event.preventDefault();
+  });
+  list.addEventListener("click", event => {
+    if (ignoreClick && Date.now() < ignoreClick.until && event.detail !== 0 && event.target.closest("[data-fund-sort-id]")?.dataset.fundSortId === ignoreClick.id) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
+}
+
 function fundProjectRecords(project) {
   return (dataState.records || []).filter(record => String(record.fundProjectId || "") === String(project.id));
 }
@@ -444,11 +610,14 @@ function setFundView(view) {
   closeFundPickers();
   if (view !== "transaction") fundUi.recordEdit = null;
   fundUi.view = view;
-  ["fundHome", "fundFormPage", "fundDetailPage", "fundRedeemPage", "fundSettingsPage", "fundAdjustPage", "fundTransactionPage"].forEach((id, index) => {
+  const pages = { home: "fundHome", archive: "fundArchivePage", form: "fundFormPage", detail: "fundDetailPage",
+    redeem: "fundRedeemPage", settings: "fundSettingsPage", adjust: "fundAdjustPage", transaction: "fundTransactionPage" };
+  for (const [key, id] of Object.entries(pages)) {
     const node = document.getElementById(id);
-    if (node) node.hidden = ["home", "form", "detail", "redeem", "settings", "adjust", "transaction"][index] !== view;
-  });
+    if (node) node.hidden = key !== view;
+  }
   if (view === "home") renderInvestmentPlans();
+  if (view === "archive") renderFundArchive();
   if (view === "detail") renderFundDetail();
   if (view === "redeem") renderFundRedeem();
   if (view === "settings") renderFundSettings();
@@ -459,7 +628,8 @@ function setFundView(view) {
 }
 
 function fundBack() {
-  if (fundUi.recordBusy) return;
+  if (fundUi.recordBusy || fundUi.presentationBusy) return;
+  if (document.getElementById("fundArchiveActions")?.open) return document.getElementById("fundArchiveActions").close();
   if (["redeem", "settings", "adjust", "transaction"].includes(fundUi.view)) setFundView("detail");
   else if (fundUi.view === "form" && fundUi.editId) {
     fundUi.editId = null;
@@ -561,18 +731,21 @@ function renderFundMonthDays() {
 function renderInvestmentPlans() {
   const list = document.getElementById("fundProjectList");
   if (!list) return;
-  const projects = [...(dataState.fundProjects || [])].sort((a, b) =>
-    String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  document.getElementById("fundEmpty").hidden = projects.length > 0;
+  const projects = sortFundProjects(dataState.fundProjects || []);
+  const visible = projects.filter(project => !isArchivedFund(project));
+  const archiveCount = document.getElementById("fundArchiveCount");
+  if (archiveCount) archiveCount.textContent = `${projects.length - visible.length} 项`;
+  if (fundUi.view === "archive") renderFundArchive();
+  document.getElementById("fundEmpty").hidden = visible.length > 0;
   const investedCents = projects.reduce((sum, project) => sum + fundTotals(project).investedCents, 0);
   const withdrawnCents = projects.reduce((sum, project) => sum + fundTotals(project).withdrawnCents, 0);
   document.getElementById("fundSummary").innerHTML =
     `<div><span>累计投入本金</span><strong>${fundMoney(investedCents)}</strong></div><div><span>已取出到账</span><strong>${fundMoney(withdrawnCents)}</strong></div>`;
-  list.innerHTML = projects.map(project => {
+  list.innerHTML = visible.map(project => {
     const totals = fundTotals(project);
     const type = project.mode === "recurring" ? "基金定投" : "基金投资";
     const status = fundStatusMarkup(project, totals);
-    return `<button class="fund-project-card" type="button" data-fund-detail="${esc(project.id)}">
+    return `<button class="fund-project-card" type="button" data-fund-detail="${esc(project.id)}" data-fund-sort-id="${esc(project.id)}">
       <span class="fund-project-top"><strong>${esc(project.fundName)}</strong><em>${type}</em></span>
       <span class="fund-project-platform">${esc(project.platform)} · 专属基金账户 · ${status}</span>
       <span class="fund-project-stats"><span>投入本金 <b>${fundMoney(totals.investedCents)}</b></span><span>已取出 <b>${fundMoney(totals.withdrawnCents)}</b></span></span>
@@ -610,8 +783,10 @@ function renderFundDetail() {
   const next = project.mode === "recurring" && project.status === "open" && project.scheduleStatus === "active"
     ? `<p class="fund-detail-meta">下次定投：${esc(fundNextDate(project))}</p>` : "";
   const toggle = project.mode === "recurring" && project.status === "open" && project.scheduleStatus !== "ended"
-    ? `<button class="fund-text-button" type="button" data-fund-action="toggle">${project.scheduleStatus === "active" ? "暂停定投" : "继续定投"}</button>` : "";
+    ? `<button class="fund-action-button fund-action-emphasis" type="button" data-fund-action="toggle">${project.scheduleStatus === "active" ? "暂停定投" : "继续定投"}</button>` : "";
   const result = fundResultMarkup(project, totals);
+  const archive = project.status === "closed" && !isArchivedFund(project)
+    ? '<button class="fund-action-button fund-action-emphasis" type="button" data-fund-action="archive-fund">归档基金</button>' : "";
   document.getElementById("fundDetailContent").innerHTML = `
     <div class="fund-detail-hero"><span class="fund-type-label">${project.mode === "recurring" ? "基金定投" : "基金投资"} · ${status}</span>
       <h2>${esc(project.fundName)}</h2><p>${esc(project.platform)} · 专属基金账户</p>
@@ -622,10 +797,10 @@ function renderFundDetail() {
     ${(project.mode === "one-time" || project.originalCostCents > 0)
       ? `<p class="fund-detail-meta">${project.mode === "recurring" ? "原始总成本" : "投资总原始成本"}：<strong>${fundMoney(project.originalCostCents)}</strong>（建账前已投入）</p>` : ""}
     ${result}
-    ${project.status === "open" ? `<div class="fund-detail-actions"><button class="btn-primary" type="button" data-fund-action="redeem">赎回</button>${toggle}</div>` : ""}
+    <div class="fund-secondary-actions">${toggle || archive}<button class="fund-action-button" type="button" data-fund-action="settings">账户设置</button></div>
+    ${project.status === "open" ? '<div class="fund-detail-actions"><button class="btn-primary fund-glass-redeem" type="button" data-fund-action="redeem">赎回</button></div>' : ""}
     ${project.mode === "one-time" && project.status === "open"
       ? `<button class="fund-adjust-entry" type="button" data-fund-action="adjust">＋ 追加投资</button>` : ""}
-    <button class="fund-text-button" type="button" data-fund-action="settings">账户设置</button>
     <p class="fund-hint">账户余额是本金流转账面数，不代表基金实时市值。部分赎回暂不计算收益；全部赎回后统一结算。</p>
     <div id="fundDetailMsg" class="form-msg" role="status" aria-live="polite"></div>
     <h3 class="fund-section-title">资金记录</h3>
@@ -964,7 +1139,20 @@ function bindInvestmentPlanEvents() {
   monthMenu.innerHTML = Array.from({ length: 31 }, (_, index) =>
     `<button type="button" data-fund-day="${index + 1}" aria-pressed="false">${index + 1} 日</button>`).join("") +
     '<button type="button" class="fund-day-done" data-fund-day-done>完成</button>';
+  const archiveActions = document.getElementById("fundArchiveActions");
+  bindFundReorder(document.getElementById("fundProjectList"), false);
+  bindFundReorder(document.getElementById("fundArchiveList"), true);
   panel.addEventListener("click", async event => {
+    const archived = event.target.closest("[data-fund-archived]");
+    if (archived) {
+      const project = fundProjectById(archived.dataset.fundArchived);
+      if (!project || !isArchivedFund(project) || fundUi.presentationBusy) return;
+      document.getElementById("fundArchiveActionTitle").textContent = project.fundName;
+      archiveActions.dataset.projectId = String(project.id);
+      archiveActions.dataset.bookId = String(dataState.currentBookId);
+      archiveActions.showModal();
+      return;
+    }
     const open = event.target.closest("[data-fund-open]");
     if (open) return openFundCreate(open.dataset.fundOpen);
     const back = event.target.closest("[data-fund-back]");
@@ -1014,6 +1202,18 @@ function bindInvestmentPlanEvents() {
       return;
     }
     const action = event.target.closest("[data-fund-action]")?.dataset.fundAction;
+    if (action === "open-archive") return setFundView("archive");
+    if (action === "cancel-archive") return archiveActions.close();
+    if (action === "restore-archive") {
+      const { projectId, bookId } = archiveActions.dataset;
+      archiveActions.close();
+      if (String(dataState.currentBookId) !== bookId) return;
+      return updateFundPresentation(projects => setFundArchiveFlag(projects, projectId, false), "fundArchiveMsg", renderFundArchive);
+    }
+    if (action === "archive-fund") {
+      const id = fundUi.selectedId;
+      return updateFundPresentation(projects => setFundArchiveFlag(projects, id, true), "fundDetailMsg", () => setFundView("home"));
+    }
     if (action === "redeem") return setFundView("redeem");
     if (action === "adjust") return setFundView("adjust");
     if (action === "settings") return setFundView("settings");

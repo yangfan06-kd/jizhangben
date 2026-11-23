@@ -82,7 +82,7 @@ nav.bottom-nav .bottom-record-tab .bottom-plus-icon {
 .pwa-backup [hidden], #pwaBackupReminder[hidden] { display: none; }
 #pwaBackupConfirmFile[hidden] { display: none; }
 .pwa-offline { font-size: .8125rem; line-height: 1.6; margin: 8px 0 12px; color: #4d5651; }
-.pwa-offline summary { cursor: pointer; padding: 6px 0; color: #176d52; }
+.pwa-offline summary { cursor: pointer; padding: 6px 0; color: #424846; }
 .pwa-offline p { margin: 8px 0; }
 .pwa-offline [hidden] { display: none; }
 .pwa-update-section {
@@ -100,7 +100,7 @@ nav.bottom-nav .bottom-record-tab .bottom-plus-icon {
   overflow-wrap: anywhere;
 }
 .pwa-update-section summary::-webkit-details-marker { display: none; }
-.pwa-update-state { margin-inline-start: auto; color: #4b655b; text-align: end; }
+.pwa-update-state { margin-inline-start: auto; color: #515755; text-align: end; }
 .pwa-update-arrow { flex: none; font-size: 1.25rem; line-height: 1; }
 .pwa-update-section details[open] .pwa-update-arrow { transform: rotate(90deg); }
 .pwa-update-section .pwa-backup-actions { padding-bottom: 10px; }
@@ -119,4 +119,13 @@ nav.bottom-nav .bottom-record-tab .bottom-plus-icon {
 #pwaResourceFailure button { display: block; min-height: 44px; margin-top: 12px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
+}
+
+nav.bottom-nav::before {
+  inset: 0 8px max(4px, env(safe-area-inset-bottom, 0px));
+  border: 1px solid #e1e7e3;
+  border-radius: 22px;
+  background: #fff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }

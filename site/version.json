@@ -1,7 +1,7 @@
 {
-    "versionCode":  114,
-    "versionName":  "2.13",
-    "notes":  "记账时间改为默认当前时间 + 应用内滚轮选择；日期和时间并排显示，其他交互不变。",
-    "publishedAt":  "2026-11-20T15:18:51Z",
-    "apk":  "download/jizhangben-v2.13.apk"
+  "versionCode": 119,
+  "versionName": "2.18",
+  "notes": "基金支持归档、移出归档和长按排序，归档页新增总盈亏。优化基金文字和常用按钮。",
+  "publishedAt": "2026-11-23T11:01:18Z",
+  "apk": "download/jizhangben-v2.18.apk"
 }

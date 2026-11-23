@@ -535,3 +535,80 @@ test("failure while reading the pre-commit snapshot does not leave an unsaved co
   assert.throws(()=>runtime.run('correctFundRecord(9,1,{bookId:1,void:true,pauseSchedule:true})'), /模拟读取失败/);
   assert.equal(runtime.run('JSON.stringify([dataState.records,dataState.fundProjects])'),before);
 });
+
+test("archiving stores only presentation metadata and uses final signed fund totals", async () => {
+  const runtime = createRuntime();
+  const result = await runtime.run(`
+    (async () => {
+      dataState.currentBookId = 1;
+      dataState.fundProjects = [
+        { id: 1, status: "closed", originalCostCents: 10000, createdAt: "2026-11-19" },
+        { id: 2, status: "closed", originalCostCents: 10000, createdAt: "2026-11-18" },
+        { id: 3, status: "open", originalCostCents: 5000, createdAt: "2026-11-17" }
+      ];
+      dataState.records = [
+        { id: 10, fundProjectId: 1, fundAction: "withdrawal", amountCents: 11840, amount: 118.4 },
+        { id: 11, fundProjectId: 2, fundAction: "withdrawal", amountCents: 9390, amount: 93.9 },
+        { id: 12, fundProjectId: 1, fundAction: "settlement", amountCents: 1840, amount: 18.4 }
+      ];
+      dataState.accounts = [{ id: 1, name: "钱包", kind: "资金", initialCents: 10000 }];
+      save(); saveAccounts(); saveFundProjects();
+      const recordsBefore = appStorage.get(recordsKey(1));
+      const accountsBefore = appStorage.get(accountsKey(1));
+      const entriesBefore = JSON.stringify(dataState.records);
+      const result = {};
+      showFundMessage = () => {};
+      for (const id of [1, 2]) {
+        await updateFundPresentation(projects => setFundArchiveFlag(projects, id, true), "", () => {});
+      }
+      loadFundProjects();
+      result.total = fundArchiveTotal(dataState.fundProjects);
+      result.archived = dataState.fundProjects.filter(isArchivedFund).map(project => project.id);
+      try { setFundArchiveFlag(dataState.fundProjects, 3, true); }
+      catch { result.rejectOpen = true; }
+      let committed = false;
+      window.PwaFunds = { commit: async change => { committed = true; change(); } };
+      await updateFundPresentation(projects => setFundArchiveFlag(projects, 1, false), "", () => {});
+      loadFundProjects();
+      result.totalAfterRestore = fundArchiveTotal(dataState.fundProjects);
+      result.pwaCommit = committed;
+      result.restoredStatus = fundProjectById(1).status;
+      result.recordsIdentical = entriesBefore === JSON.stringify(dataState.records) && recordsBefore === appStorage.get(recordsKey(1));
+      result.accountsIdentical = accountsBefore === appStorage.get(accountsKey(1));
+      return JSON.stringify(result);
+    })()
+  `);
+  assert.deepEqual(JSON.parse(result), {
+    total: 1230, archived: [1, 2], rejectOpen: true, totalAfterRestore: -610,
+    pwaCommit: true, restoredStatus: "closed", recordsIdentical: true, accountsIdentical: true
+  });
+});
+
+test("fund lists persist independent manual orders and restore the home position", () => {
+  const runtime = createRuntime();
+  const result = runtime.run(`
+    (() => {
+      const orig = [
+        { id: 1, status: "closed", createdAt: "2026-11-23", archived: true },
+        { id: 2, status: "open", createdAt: "2026-11-22" },
+        { id: 3, status: "closed", createdAt: "2026-11-21", archived: true },
+        { id: 4, status: "open", createdAt: "2026-11-20" }
+      ];
+      const homeMoved = reorderFundProjects(orig, false, 4, 2, false);
+      const archiveMoved = reorderFundProjects(homeMoved, true, 3, 1, false);
+      const restored = setFundArchiveFlag(archiveMoved, 1, false);
+      const ids = (projects, archived) => sortFundProjects(projects.filter(p => isArchivedFund(p) === archived), archived).map(p => p.id);
+      return JSON.stringify({
+        initial: ids(orig, false), home: ids(archiveMoved, false), archive: ids(archiveMoved, true),
+        restored: ids(restored, false), afterRestore: ids(restored, true),
+        unchangedOriginal: orig.every(project => project.homeOrder === undefined && project.archiveOrder === undefined),
+        noOp: reorderFundProjects(archiveMoved, true, 3, 1, false) === archiveMoved,
+        noCrossList: reorderFundProjects(archiveMoved, false, 3, 2, false) === archiveMoved
+      });
+    })()
+  `);
+  assert.deepEqual(JSON.parse(result), {
+    initial: [2, 4], home: [4, 2], archive: [3, 1], restored: [1, 4, 2],
+    afterRestore: [3], unchangedOriginal: true, noOp: true, noCrossList: true
+  });
+});

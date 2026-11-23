@@ -245,7 +245,6 @@
   <section class="card investment-panel" id="panelInvestment" style="display:none;">
     <div class="fund-view" id="fundHome">
       <div class="page-head"><button class="page-back page-back-home" type="button"><span aria-hidden="true">‹</span><span>基金</span></button></div>
-      <p class="fund-intro">查看每只基金的投入与取出，在专属页面完成记账。</p>
       <div id="fundSummary" class="fund-summary"></div>
       <div class="fund-entry-grid">
         <button class="fund-entry" type="button" data-fund-open="recurring"><strong>基金定投</strong><span>按交易日自动记录</span><b aria-hidden="true">›</b></button>
@@ -256,7 +255,24 @@
       <h3 class="fund-section-title">我的基金账户</h3>
       <div id="fundProjectList"></div>
       <p id="fundEmpty" class="fund-empty">还没有基金账户，可从上方选择一种方式开始。</p>
+      <button class="fund-archive-entry" type="button" data-fund-action="open-archive">
+        <strong>基金归档</strong><span id="fundArchiveCount"></span><span aria-hidden="true">›</span>
+      </button>
+      <div id="fundHomeMsg" class="form-msg" role="status" aria-live="polite"></div>
       <p class="fund-footnote">这里只记录本机账目，不会向支付宝、微信或基金公司发起真实交易；具体成交日以代销或直销平台为准。</p>
+    </div>
+
+    <div class="fund-view" id="fundArchivePage" hidden>
+      <div class="page-head"><button class="page-back" type="button" data-fund-back="home"><span aria-hidden="true">‹</span><span>基金归档</span></button></div>
+      <div id="fundArchiveTotal" class="fund-archive-total"></div>
+      <div id="fundArchiveList" class="fund-archive-list"></div>
+      <p id="fundArchiveEmpty" class="fund-empty" hidden>暂无归档基金</p>
+      <div id="fundArchiveMsg" class="form-msg" role="status" aria-live="polite"></div>
+      <dialog id="fundArchiveActions" class="fund-archive-actions" aria-labelledby="fundArchiveActionTitle">
+        <h3 id="fundArchiveActionTitle"></h3>
+        <button type="button" class="fund-action-button" data-fund-action="restore-archive">移出归档</button>
+        <button type="button" class="fund-action-button" data-fund-action="cancel-archive">取消</button>
+      </dialog>
     </div>
 
     <div class="fund-view" id="fundFormPage" hidden>
